@@ -1,6 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Attendance } from 'src/entities/attendance.entity';
+import { Group } from 'src/entities/groupe.entity';
 import { Repository } from 'typeorm';
 import { MarkAttendanceDto } from './mark-attendance.dto';
 
@@ -8,36 +9,54 @@ import { MarkAttendanceDto } from './mark-attendance.dto';
 @Injectable()
 export class AttendanceService {
   constructor(
-    @InjectRepository(Attendance) 
-    private attendanceRepo: Repository<Attendance>,
+    @InjectRepository(Attendance) private attendanceRepo: Repository<Attendance>,
+    @InjectRepository(Group) private groupRepo: Repository<Group>,
   ) {}
 
-  async markAttendance(dto: MarkAttendanceDto) {
-    // 1. O'sha guruh va o'sha kungi mavjud davomatni o'chiramiz (Duplicate bo'lmasligi uchun)
+  // 1. O'qituvchi uchun davomat sahifasini shakllantirish
+  async getAttendanceSheet(groupId: string, date: string) {
+    const group = await this.groupRepo.findOne({
+      where: { id: groupId },
+      relations: ['students'],
+      select: {
+        id: true,
+        students: { id: true, fullName: true }
+      }
+    });
+
+    if (!group) throw new NotFoundException('Guruh topilmadi');
+
+    const existingAttendance = await this.attendanceRepo.find({
+      where: { group: { id: groupId }, date }
+    });
+
+    return group.students.map(student => {
+      const att = existingAttendance.find(a => a.student.id === student.id);
+      return {
+        studentId: student.id,
+        fullName: student.fullName,
+        isPresent: att ? att.isPresent : false
+      };
+    });
+  }
+
+  // 2. Davomatni saqlash yoki yangilash (Bulk)
+  async markBulk(dto: MarkAttendanceDto) {
+    // Eskisini o'chirish (Agar kech qolganlarni update qilsangiz, yangisi yoziladi)
     await this.attendanceRepo.delete({
       group: { id: dto.groupId },
       date: dto.date,
     });
 
-    // 2. Yangi davomat yozuvlarini massiv qilib yaratamiz
-    const records = dto.students.map((s) =>
+    const records = dto.students.map(s => 
       this.attendanceRepo.create({
-        group: { id: dto.groupId },
-        student: { id: s.studentId },
         date: dto.date,
         isPresent: s.isPresent,
-      }),
+        group: { id: dto.groupId },
+        student: { id: s.studentId }
+      })
     );
 
-    // 3. Bazaga ommaviy saqlaymiz (Bulk Save)
     return await this.attendanceRepo.save(records);
-  }
-
-  // Guruhning ma'lum kungi davomatini ko'rish
-  async getByGroupAndDate(groupId: string, date: string) {
-    return await this.attendanceRepo.find({
-      where: { group: { id: groupId }, date },
-      relations: ['student'],
-    });
   }
 }
