@@ -7,6 +7,11 @@ export class CreateGroupDto {
   @IsNotEmpty()
   name: string;
 
+  @ApiProperty({ example: ['Dushanba', 'Chorshanba', 'Juma'] })
+  @IsArray()
+  @IsString({ each: true }) // Har bir element string bo'lishi shart
+  days: string[];
+
   @ApiProperty({ example: '14:00' })
   @IsString()
   @IsNotEmpty()
