@@ -4,7 +4,6 @@ import { Repository, Like, ILike } from 'typeorm';
 import { User, UserRole } from '../entities/user.entity';
 import { CreateUserDto, UpdateUserDto } from './users.dto';
 import * as bcrypt from 'bcrypt';
-import { log } from 'node:console';
 
 @Injectable()
 export class UsersService {

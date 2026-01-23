@@ -1,11 +1,23 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsArray, IsEnum, IsNotEmpty, IsNumber, IsString, IsUUID } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsNotEmpty,
+  IsNumber,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 
 export class CreateGroupDto {
   @ApiProperty({ example: 'Node.js Backend' })
   @IsString()
   @IsNotEmpty()
   name: string;
+
+  @ApiProperty({ example: ['Dushanba', 'Chorshanba', 'Juma'] })
+  @IsArray()
+  @IsString({ each: true }) // Har bir element string bo'lishi shart
+  days: string[];
 
   @ApiProperty({ example: '14:00' })
   @IsString()

@@ -8,8 +8,6 @@ import { AuthModule } from './auth/auth.module';
 import { GroupsModule } from './groups/groups.module';
 import { AttendanceModule } from './attendance/attendance.module';
 
-
-
 @Module({
   imports: [
     ConfigModule.forRoot(),
