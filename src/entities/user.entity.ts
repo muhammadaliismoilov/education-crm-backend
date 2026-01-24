@@ -10,6 +10,7 @@ import {
 import { Group } from './groupe.entity';
 import { Payment } from './payment.entity';
 import { Attendance } from './attendance.entity';
+import { SalaryPayout } from './salaryPayout.entity';
 
 export enum UserRole {
   ADMIN = 'admin',
@@ -39,6 +40,12 @@ export class User {
 
   @Column({ type: 'integer', default: null })
   salaryPercentage: number;
+
+  @Column({ default: true })
+  isActive: boolean; // O'quvchi markazdan ketgan bo'lsa, bu false bo'ladi
+
+  @OneToMany(() => SalaryPayout, (payout) => payout.teacher)
+  payouts: SalaryPayout[]; // O'qituvchining barcha oyliklar tari
 
   @OneToMany(() => Group, (group) => group.teacher)
   teachingGroups: Group[];
