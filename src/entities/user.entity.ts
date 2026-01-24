@@ -59,6 +59,9 @@ export class User {
   @OneToMany(() => Attendance, (attendance) => attendance.student)
   attendances: Attendance[];
 
+  @Column({ type: 'text', nullable: true, select: false })
+  refreshToken: string | null; // Faqat string emas, string yoki null bo'lishi mumkin deb ko'rsatamiz
+
   @CreateDateColumn({ name: 'createdAt' })
   createdAt: Date;
 

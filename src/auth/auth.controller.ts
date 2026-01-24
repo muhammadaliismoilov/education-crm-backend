@@ -1,27 +1,47 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Get, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Post, Body, Res, UseGuards, Req } from '@nestjs/common';
 import { AuthService } from './auth.service';
+import type { Response, Request } from 'express';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { LoginDto } from './login.dto';
-import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-@ApiTags('Auth - Tizimga kirish') // Swaggerda bo'lim nomi
+
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login va Parol orqali token olish' })
-  @ApiResponse({ status: 200, description: 'Muvaffaqiyatli kirish, JWT qaytariladi' })
-  @ApiResponse({ status: 401, description: 'Login yoki parol xato' })
-  async login(@Body() loginDto: LoginDto) {
-    return this.authService.login(loginDto);
+  async login(@Body() loginDto: LoginDto, @Res({ passthrough: true }) res: Response) {
+    const { accessToken, refreshToken, user } = await this.authService.login(loginDto);
+
+    // Access Tokenni cookie-ga joylaymiz
+    res.cookie('access_token', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000,
+    });
+
+    // Refresh Tokenni cookie-ga joylaymiz
+    res.cookie('refresh_token', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return { message: 'Xush kelibsiz!', user , accessToken };
   }
 
-  @Get('me')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth() 
-  @ApiOperation({ summary: 'Joriy foydalanuvchi ma\'lumotlarini olish' })
-  async getProfile(@Req() req) {
-    return req.user;
+  @Post('logout')
+  @UseGuards(JwtAuthGuard) // Kim chiqayotganini bilishimiz uchun
+  async logout(@Req() req: any, @Res({ passthrough: true }) res: Response) {
+    // 1. Bazadagi tokenni o'chirish
+    await this.authService.logout(req.user.id);
+
+    // 2. Brauzerdagi cookie-larni tozalash
+    res.clearCookie('access_token');
+    res.clearCookie('refresh_token');
+
+    return { message: 'Tizimdan chiqildi' };
   }
 }
