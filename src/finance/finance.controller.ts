@@ -2,16 +2,20 @@ import { Controller, Get, Post, Param, Body, UseGuards, ParseUUIDPipe, Query } f
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { FinanceService } from './finance.service';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { Roles } from 'src/common/guards/roles.decarator';
+import { RolesGuard } from 'src/common/guards/roles.guard';
+import { UserRole } from 'src/entities/user.entity';
 
 
 @ApiTags('Moliya va Oyliklar (Finance)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard,RolesGuard)
 @Controller('finance')
 export class FinanceController {
   constructor(private readonly financeService: FinanceService) {}
 
   @Get('teacher-salary/:teacherId')
+@Roles(UserRole.ADMIN, UserRole.TEACHER) // String o'rniga Enum ishlatganingiz xavfsizroq
   @ApiOperation({ summary: 'O\'qituvchining joriy oylik maoshini hisoblab ko\'rish' })
   @ApiParam({ name: 'teacherId', description: 'O\'qituvchining UUID-si' })
   async getSalary(@Param('teacherId', ParseUUIDPipe) teacherId: string) {
@@ -19,6 +23,7 @@ export class FinanceController {
   }
 
   @Post('pay-salary')
+  @Roles('admin')
   @ApiOperation({ summary: 'O\'qituvchiga oylik berish va bazaga yozish' })
   @ApiResponse({ status: 201, description: 'Oylik muvaffaqiyatli to\'landi.' })
   async paySalary(
@@ -29,6 +34,7 @@ export class FinanceController {
   }
 
   @Get('payout-history')
+  @Roles('admin','teacher')
   @ApiOperation({ summary: 'Barcha berilgan oyliklar tarixi' })
   @ApiQuery({ name: 'teacherId', required: false })
   async getHistory(@Query('teacherId') teacherId?: string) {
