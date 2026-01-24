@@ -10,10 +10,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
   ) {
-    super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+   super({
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (request: any) => {
+          return request?.cookies?.access_token; // Cookie'dan tokenni o'qiymiz
+        },
+      ]),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET || 'super_secret_key_2026', // .env bilan bir xil bolishi shart
+      secretOrKey: 'birikkiuch', // Service bilan bir xil bo'lishi shart
     });
   }
 
