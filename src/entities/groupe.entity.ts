@@ -11,6 +11,7 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Attendance } from './attendance.entity';
+import { Payment } from './payment.entity';
 
 @Entity('groups')
 export class Group {
@@ -35,6 +36,9 @@ export class Group {
   @ManyToMany(() => User, (user) => user.enrolledGroups)
   @JoinTable()
   students: User[];
+
+  @OneToMany(() => Payment, (payment) => payment.group)
+  payments: Payment[];
 
   @OneToMany(() => Attendance, (attendance) => attendance.group)
   attendances: Attendance[];

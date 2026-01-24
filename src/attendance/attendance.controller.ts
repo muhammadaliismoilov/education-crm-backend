@@ -1,5 +1,5 @@
 import { Controller, Post, Body, Get, Query, UseGuards, ParseUUIDPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AttendanceService } from './attendance.service';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { MarkAttendanceDto } from './mark-attendance.dto';
@@ -10,20 +10,21 @@ import { MarkAttendanceDto } from './mark-attendance.dto';
 @UseGuards(JwtAuthGuard)
 @Controller('attendance')
 export class AttendanceController {
-  constructor(private readonly service: AttendanceService) {}
+  constructor(private readonly attendanceService: AttendanceService) {}
 
-  @Post('bulk')
-  @ApiOperation({ summary: 'Guruh uchun ommaviy davomat qilish' })
-  createBulk(@Body() dto: MarkAttendanceDto) {
-    return this.service.markAttendance(dto);
-  }
-
-  @Get('history')
-  @ApiOperation({ summary: 'Guruhning ma\'lum kungi davomatini olish' })
-  getHistory(
+  @Get('sheet')
+  @ApiOperation({ summary: 'Davomat olish uchun guruh talabalar ro\'yxatini olish' })
+  @ApiQuery({ name: 'date', example: '2026-01-23' })
+  getSheet(
     @Query('groupId', ParseUUIDPipe) groupId: string,
     @Query('date') date: string,
   ) {
-    return this.service.getByGroupAndDate(groupId, date);
+    return this.attendanceService.getAttendanceSheet(groupId, date);
+  }
+
+  @Post('bulk')
+  @ApiOperation({ summary: 'Davomatni ommaviy saqlash yoki yangilash' })
+  markBulk(@Body() dto: MarkAttendanceDto) {
+    return this.attendanceService.markBulk(dto);
   }
 }
