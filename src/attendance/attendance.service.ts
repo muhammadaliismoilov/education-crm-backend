@@ -42,7 +42,7 @@ export class AttendanceService {
       return {
         studentId: student.id,
         fullName: student.fullName,
-        isPresent: att ? att.isPresent : false,
+        isPresent: att ? att.isPresent : true,
       };
     });
   }
