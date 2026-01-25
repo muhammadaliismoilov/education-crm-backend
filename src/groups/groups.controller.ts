@@ -32,14 +32,14 @@ export class GroupsController {
   constructor(private readonly groupsService: GroupsService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN)
+  // @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Yangi o‘quv guruhi yaratish' })
   create(@Body() dto: CreateGroupDto) {
     return this.groupsService.create(dto);
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  // @Roles(UserRole.ADMIN, UserRole.TEACHER)
   @ApiOperation({ summary: 'Barcha guruhlarni qidirish va sahifalab olish' })
   @ApiQuery({
     name: 'search',
@@ -52,14 +52,14 @@ export class GroupsController {
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
-  @ApiOperation({ summary: 'Guruh ma’lumotlari va talabalar ro‘yxatini olish' })
+  // @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Guruh ma’lumotlari va talabalar ro‘yxatini olish' ,description:"Guruh ID si" })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.groupsService.getGroupDetails(id);
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  // @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Guruh sozlamalarini (vaqt, o‘qituvchi, narx) tahrirlash',
   })
@@ -68,14 +68,14 @@ export class GroupsController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  // @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Guruhni arxivga o‘tkazish (Soft-delete)' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.groupsService.remove(id);
   }
 
   @Post(':groupId/add-student/:studentId')
-  @Roles(UserRole.ADMIN)
+  // @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Talabani guruh a’zolari qatoriga qo‘shish' })
   addStudent(
     @Param('groupId', ParseUUIDPipe) gId: string,
@@ -85,7 +85,7 @@ export class GroupsController {
   }
 
   @Delete(':groupId/remove-student/:studentId')
-  @Roles(UserRole.ADMIN)
+  // @Roles(UserRole.ADMIN)
   @ApiOperation({
     summary: 'Talabani guruh a’zolari ro‘yxatidan chiqarish (chetlatish)',
   })

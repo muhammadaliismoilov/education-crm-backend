@@ -7,7 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from './user.entity';
-import { Group } from './groupe.entity';
+import { Group } from './group.entity';
 
 @Entity('attendance')
 export class Attendance {
@@ -15,7 +15,7 @@ export class Attendance {
   id: string;
 
   @Column({ type: 'date' })
-  date: string; // Masalan: "2026-01-20"
+  date: string;
 
   @Column({ default: false })
   isPresent: boolean;
@@ -26,9 +26,9 @@ export class Attendance {
   @ManyToOne(() => User, (user) => user.attendances, { onDelete: 'CASCADE' })
   student: User;
 
-  @CreateDateColumn({ name: 'createdAt' })
+  @CreateDateColumn()
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updatedAt' })
+  @UpdateDateColumn()
   updatedAt: Date;
 }

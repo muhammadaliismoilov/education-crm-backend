@@ -7,7 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from './user.entity';
-import { Group } from './groupe.entity'; // Guruh bilan bog'lash uchun
+import { Group } from './group.entity'; // Guruh bilan bog'lash uchun
 
 @Entity('payments')
 export class Payment {
@@ -17,7 +17,7 @@ export class Payment {
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   amount: number;
 
-  @Column({ type: 'date' })
+  @Column({ type: 'date',nullable: true })
   paymentDate: string; // Dizayndagi "To'lov qilayotgan kun" (Inputdan keladi)
 
   @ManyToOne(() => User, (user) => user.payments, { onDelete: 'CASCADE' })

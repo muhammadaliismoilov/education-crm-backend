@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Group } from 'src/entities/groupe.entity';
+import { Group } from 'src/entities/group.entity';
 import { User, UserRole } from 'src/entities/user.entity';
 
 import { Repository, ILike } from 'typeorm';
@@ -85,22 +85,27 @@ export class GroupsService {
     await this.groupRepo.softRemove(group); // Soft delete ishlatish
     return { message: 'Guruh arxivlandi' };
   }
+async addStudentToGroup(groupId: string, studentId: string) {
+  // 1. Guruh va student mavjudligini tekshiring
+  const group = await this.groupRepo.findOne({ 
+    where: { id: groupId }, 
+    relations: ['students'] 
+  });
+  if (!group) throw new NotFoundException('Guruh topilmadi');
 
-  async addStudentToGroup(groupId: string, studentId: string) {
-    const group = await this.getGroupDetails(groupId);
-    const student = await this.userRepo.findOne({
-      where: { id: studentId, role: UserRole.STUDENT },
-    });
+  // 2. Takroriy qo'shishni oldini olish
+  const isAlreadyIn = group.students.some(s => s.id === studentId);
+  if (isAlreadyIn) throw new BadRequestException('O\'quvchi allaqachon guruhda bor');
 
-    if (!student) throw new NotFoundException('Student topilmadi');
+  // 3. To'g'ridan-to'g'ri bog'lovchi jadvalga yozish (Eng xavfsiz yo'l)
+  await this.groupRepo
+    .createQueryBuilder()
+    .relation(Group, 'students')
+    .of(groupId)
+    .add(studentId);
 
-    const isAlreadyIn = group.students.some((s) => s.id === studentId);
-    if (isAlreadyIn)
-      throw new BadRequestException("O'quvchi allaqachon guruhda bor");
-
-    group.students.push(student);
-    return await this.groupRepo.save(group);
-  }
+  return { message: "Student guruhga qo'shildi" };
+}
 
   /**
    * Talabani guruhdan chetlatish

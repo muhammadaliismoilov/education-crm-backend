@@ -12,7 +12,7 @@ import {
   DeleteDateColumn,
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-import { Group } from './groupe.entity';
+import { Group } from './group.entity';
 import { Payment } from './payment.entity';
 import { Attendance } from './attendance.entity';
 import { SalaryPayout } from './salaryPayout.entity';
@@ -58,7 +58,7 @@ export class User {
   teachingGroups: Group[];
 
   @ManyToMany(() => Group, (group) => group.students)
-  @JoinTable({ name: 'student_groups' }) // ManyToMany uchun bu jadval bo'lishi shart!
+  // @JoinTable({ name: 'student_groups' }) // ManyToMany uchun bu jadval bo'lishi shart!
   enrolledGroups: Group[];
 
   @OneToMany(() => Payment, (payment) => payment.student)

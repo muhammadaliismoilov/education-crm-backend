@@ -3,7 +3,7 @@ import { IsNotEmpty, IsString, MinLength } from 'class-validator';
 
 export class LoginDto {
   @ApiProperty({ 
-    example: 'admin', 
+    example: 'admins', 
     description: 'Foydalanuvchi logini' 
   })
   @IsString({ message: 'Login satr bo\'lishi kerak' })
@@ -11,7 +11,7 @@ export class LoginDto {
   login: string;
 
   @ApiProperty({ 
-    example: 'admin777', 
+    example: 'adminadmin', 
     description: 'Foydalanuvchi paroli' 
   })
   @IsString({ message: 'Parol satr bo\'lishi kerak' })
