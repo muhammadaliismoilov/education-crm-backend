@@ -6,7 +6,8 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Group } from 'src/entities/groupe.entity';
 import { User, UserRole } from 'src/entities/user.entity';
-import { ILike, Repository } from 'typeorm';
+
+import { Repository, ILike } from 'typeorm';
 import { CreateGroupDto, UpdateGroupDto } from './create-group.dto';
 
 @Injectable()
@@ -16,7 +17,6 @@ export class GroupsService {
     @InjectRepository(User) private userRepo: Repository<User>,
   ) {}
 
-  // CREATE
   async create(dto: CreateGroupDto) {
     await this.checkTeacherAvailability(dto.teacherId, dto.days, dto.startTime);
 
@@ -27,102 +27,50 @@ export class GroupsService {
     return await this.groupRepo.save(group);
   }
 
-  private async checkTeacherAvailability(
-    teacherId: string,
-    days: string[],
-    startTime: string,
-    excludeGroupId?: string,
-  ) {
-    // 1. O'qituvchining barcha guruhlarini olish
-    const existingGroups = await this.groupRepo.find({
-      where: { teacher: { id: teacherId } },
-    });
+  async findAll(search?: string, page = 1, limit = 10) {
+    const query = this.groupRepo
+      .createQueryBuilder('group')
+      .leftJoinAndSelect('group.teacher', 'teacher')
+      .loadRelationCountAndMap('group.studentsCount', 'group.students'); // O'quvchilar sonini sanash
 
-    for (const group of existingGroups) {
-      // Update bo'layotgan bo'lsa, o'zini o'zi bilan solishtirmaslik uchun
-      if (excludeGroupId && group.id === excludeGroupId) continue;
-
-      // Kunlar ustma-ust tushishini tekshirish
-      const commonDays = group.days.filter((day) => days.includes(day));
-
-      if (commonDays.length > 0) {
-        // Vaqtni raqamga o'tkazamiz (masalan "14:00" -> 14.0)
-        const newStart = this.timeToNumber(startTime);
-        const existingStart = this.timeToNumber(group.startTime);
-
-        // 2 soatlik intervalni tekshirish
-        const diff = Math.abs(newStart - existingStart);
-
-        if (diff < 2) {
-          throw new BadRequestException(
-            `Bu o'qituvchining ${commonDays.join(', ')} kunlari soat ${group.startTime} da "${group.name}" guruhi bor. ` +
-              `Siz darsni soat ${this.numberToTime(existingStart + 2)} dan keyin qo'yishingiz mumkin.`,
-          );
-        }
-      }
+    if (search) {
+      query.andWhere('group.name ILike :search', { search: `%${search}%` });
     }
+
+    const [items, total] = await query
+      .orderBy('group.createdAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      items,
+      meta: {
+        totalItems: total,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+      },
+    };
   }
 
-  // "14:30" -> 14.5 formatiga o'tkazish
-  private timeToNumber(time: string): number {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours + minutes / 60;
-  }
-
-  // 16.5 -> "16:30" formatiga o'tkazish
-  private numberToTime(num: number): string {
-    const hours = Math.floor(num);
-    const minutes = Math.round((num - hours) * 60);
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-  }
-
-  // READ (All)
-  async findAll(search?: string) {
-    return await this.groupRepo.find({
-      where: search ? { name: ILike(`%${search}%`) } : {},
-      relations: ['teacher'],
-      order: { name: 'ASC' },
-    });
-  }
-
-  // READ (One)
   async getGroupDetails(id: string) {
     const group = await this.groupRepo.findOne({
       where: { id },
       relations: ['teacher', 'students'],
-      select: {
-        id: true,
-        name: true,
-        days: true,
-        startTime: true,
-        price: true,
-        teacher: {
-          id: true,
-          fullName: true,
-          phone: true,
-        },
-        students: {
-          id: true,
-          fullName: true,
-          salaryPercentage: true, // Studentning salaryPercentage'i
-        },
-      },
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
     return group;
   }
 
-  // UPDATE (PATCH)
   async update(id: string, dto: UpdateGroupDto) {
     const group = await this.getGroupDetails(id);
 
-    // Agar vaqt yoki kun o'zgarsa, qayta tekshiramiz
     if (dto.startTime || dto.days || dto.teacherId) {
       await this.checkTeacherAvailability(
         dto.teacherId || group.teacher.id,
         dto.days || group.days,
         dto.startTime || group.startTime,
-        id, // joriy guruh ID-sini o'tkazib yuboramiz
+        id,
       );
     }
 
@@ -132,38 +80,81 @@ export class GroupsService {
     return await this.groupRepo.save(group);
   }
 
-  // DELETE
   async remove(id: string) {
     const group = await this.getGroupDetails(id);
-    await this.groupRepo.remove(group);
-    return { message: "Guruh muvaffaqiyatli o'chirildi" };
+    await this.groupRepo.softRemove(group); // Soft delete ishlatish
+    return { message: 'Guruh arxivlandi' };
   }
 
-  // ADD STUDENT
   async addStudentToGroup(groupId: string, studentId: string) {
     const group = await this.getGroupDetails(groupId);
-
     const student = await this.userRepo.findOne({
       where: { id: studentId, role: UserRole.STUDENT },
     });
+
     if (!student) throw new NotFoundException('Student topilmadi');
 
-    const isExist = group.students.find((s) => s.id === studentId);
-    if (!isExist) {
-      group.students.push(student);
-      await this.groupRepo.save(group);
-    }
+    const isAlreadyIn = group.students.some((s) => s.id === studentId);
+    if (isAlreadyIn)
+      throw new BadRequestException("O'quvchi allaqachon guruhda bor");
 
-    return { message: "Student guruhga muvaffaqiyatli qo'shildi" };
+    group.students.push(student);
+    return await this.groupRepo.save(group);
   }
 
-  // REMOVE STUDENT FROM GROUP (Guruhdan o'quvchini chiqarib yuborish)
+  /**
+   * Talabani guruhdan chetlatish
+   */
   async removeStudentFromGroup(groupId: string, studentId: string) {
     const group = await this.getGroupDetails(groupId);
 
-    group.students = group.students.filter((s) => s.id !== studentId);
+    // Talaba guruhda borligini tekshirish
+    const studentIndex = group.students.findIndex((s) => s.id === studentId);
+
+    if (studentIndex === -1) {
+      throw new NotFoundException('Bu talaba ushbu guruhda topilmadi');
+    }
+
+    // Talabani massivdan olib tashlash
+    group.students.splice(studentIndex, 1);
     await this.groupRepo.save(group);
 
-    return { message: "Student guruhdan o'chirildi" };
+    return { message: 'Talaba guruhdan muvaffaqiyatli chetlatildi' };
+  }
+
+  // --- Yordamchi metodlar (Private) ---
+
+  private async checkTeacherAvailability(
+    teacherId: string,
+    days: string[],
+    startTime: string,
+    excludeId?: string,
+  ) {
+    const teacherGroups = await this.groupRepo.find({
+      where: { teacher: { id: teacherId } },
+    });
+
+    const newStart = this.timeToNumber(startTime);
+
+    for (const group of teacherGroups) {
+      if (excludeId && group.id === excludeId) continue;
+
+      const hasCommonDay = group.days.some((day) => days.includes(day));
+      if (hasCommonDay) {
+        const existingStart = this.timeToNumber(group.startTime);
+        const diff = Math.abs(newStart - existingStart);
+
+        if (diff < 2) {
+          throw new BadRequestException(
+            `O'qituvchi bu vaqtda band. "${group.name}" guruhi bor (${group.startTime}).`,
+          );
+        }
+      }
+    }
+  }
+
+  private timeToNumber(time: string): number {
+    const [h, m] = time.split(':').map(Number);
+    return h + m / 60;
   }
 }
