@@ -48,6 +48,17 @@ export class User {
 
   @Column({ default: true })
   isActive: boolean;
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    default: 0,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value),
+    },
+  })
+  balance: number;
 
   // --- Bog'liqliklar ---
 
@@ -58,7 +69,6 @@ export class User {
   teachingGroups: Group[];
 
   @ManyToMany(() => Group, (group) => group.students)
-  // @JoinTable({ name: 'student_groups' }) // ManyToMany uchun bu jadval bo'lishi shart!
   enrolledGroups: Group[];
 
   @OneToMany(() => Payment, (payment) => payment.student)

@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Attendance } from '../entities/attendance.entity';
 import { Group } from '../entities/group.entity';
@@ -6,11 +10,11 @@ import { DataSource, Repository } from 'typeorm';
 import { MarkAttendanceDto } from './mark-attendance.dto';
 import { UpdateSingleAttendanceDto } from './update-single-attendance.dto';
 
-
 @Injectable()
 export class AttendanceService {
   constructor(
-    @InjectRepository(Attendance) private attendanceRepo: Repository<Attendance>,
+    @InjectRepository(Attendance)
+    private attendanceRepo: Repository<Attendance>,
     @InjectRepository(Group) private groupRepo: Repository<Group>,
     private dataSource: DataSource,
   ) {}
@@ -18,7 +22,7 @@ export class AttendanceService {
   async getAttendanceSheet(groupId: string, date: string) {
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
-      relations: ['students'],
+      relations: ['students'], // Talabalarni yuklaymiz
     });
 
     if (!group) throw new NotFoundException('Guruh topilmadi');
@@ -28,14 +32,31 @@ export class AttendanceService {
       relations: ['student'],
     });
 
-    return group.students.map((student) => {
+    // Guruhdagi umumiy to'lov qilganlar sonini hisoblash (balansi > 0 bo'lganlar)
+    const paidStudentsCount = group.students.filter(
+      (s) => s.balance > 0,
+    ).length;
+
+    const studentsList = group.students.map((student) => {
       const att = existingAttendance.find((a) => a.student.id === student.id);
       return {
         studentId: student.id,
         fullName: student.fullName,
         isPresent: att ? att.isPresent : true,
+        balance: student.balance,
+        hasPaid: student.balance > 0,
       };
     });
+
+    return {
+      groupInfo: {
+        id: group.id,
+        name: group.name,
+        paidStudentsCount, // Dizayndagi "To'lov qilganlar: 10ta" qismi uchun
+        totalStudents: group.students.length,
+      },
+      students: studentsList,
+    };
   }
 
   async markBulk(dto: MarkAttendanceDto) {
@@ -49,15 +70,18 @@ export class AttendanceService {
     await queryRunner.startTransaction();
 
     try {
-      await queryRunner.manager.delete(Attendance, { group: { id: groupId }, date });
+      await queryRunner.manager.delete(Attendance, {
+        group: { id: groupId },
+        date,
+      });
 
-      const records = students.map((s) => 
+      const records = students.map((s) =>
         this.attendanceRepo.create({
           date,
           isPresent: s.isPresent,
           group: { id: groupId },
           student: { id: s.studentId },
-        })
+        }),
       );
 
       await queryRunner.manager.save(Attendance, records);
@@ -65,7 +89,9 @@ export class AttendanceService {
       return { success: true, message: 'Davomat saqlandi' };
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      throw new BadRequestException('Davomatni saqlashda xatolik: ' + err.message);
+      throw new BadRequestException(
+        'Davomatni saqlashda xatolik: ' + err.message,
+      );
     } finally {
       await queryRunner.release();
     }
