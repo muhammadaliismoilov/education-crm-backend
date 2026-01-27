@@ -1,57 +1,53 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Query,
-  UseGuards,
-  UsePipes,
-  ValidationPipe,
-} from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiQuery,
-  ApiBearerAuth,
-  ApiResponse,
-} from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { PaymentsService } from './payment.service';
-import { CreatePaymentDto } from './payment.dto';
+import { Controller, Post, Get, Patch, Delete, Body, Param, Query, UseGuards, ParseUUIDPipe } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
+import { PaymentService } from './payment.service';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { UserRole } from '../entities/user.entity';
+import { Roles } from 'src/common/guards/roles.decarator';
+import { CreatePaymentDto, UpdatePaymentDto } from './payment.dto';
 
-@ApiTags("To'lovlar (Payments)")
+@ApiTags('To‘lovlar (Payments)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('payments')
-export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+export class PaymentController {
+  constructor(private readonly paymentService: PaymentService) {}
 
   @Post()
-  @UsePipes(new ValidationPipe({ whitelist: true }))
-  @ApiOperation({ summary: "Yangi to'lovni amalga oshirish" })
-  @ApiResponse({
-    status: 201,
-    description: "To'lov muvaffaqiyatli saqlandi.",
-  })
-  @ApiResponse({
-    status: 400,
-    description: "Yuborilgan ma'lumotlar xato (Validation error).",
-  })
+  // @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Yangi to‘lov yaratish' })
   create(@Body() dto: CreatePaymentDto) {
-    return this.paymentsService.create(dto);
+    return this.paymentService.create(dto);
   }
 
   @Get()
-  @ApiOperation({ summary: "To'lovlar ro'yxatini pagination bilan olish" })
-  @ApiQuery({ name: 'page', required: false, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, example: 10 })
-  @ApiQuery({ name: 'search', required: false })
-  findAll(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-    @Query('search') search?: string,
-  ) {
-    // String bo'lib keladigan querylarni numberga o'tkazish muhim
-    return this.paymentsService.findAll(+page, +limit, search);
+  // @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Barcha to‘lovlarni filtrlash va sahifalab olish' })
+  @ApiQuery({ name: 'search', required: false, description: 'Talaba ismi bo‘yicha' })
+  @ApiQuery({ name: 'page', required: false })
+  findAll(@Query('search') search?: string, @Query('page') page?: number) {
+    return this.paymentService.findAll(search, Number(page) || 1);
+  }
+
+  @Get(':id')
+  // @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Bitta to‘lov ma’lumotini olish' })
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.paymentService.findOne(id);
+  }
+
+  @Patch(':id')
+  // @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'To‘lovni tahrirlash' })
+  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePaymentDto) {
+    return this.paymentService.update(id, dto);
+  }
+
+  @Delete(':id')
+  // @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'To‘lovni o‘chirish' })
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.paymentService.remove(id);
   }
 }
