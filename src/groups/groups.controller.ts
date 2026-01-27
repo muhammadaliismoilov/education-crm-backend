@@ -20,67 +20,84 @@ import {
 import { GroupsService } from './groups.service';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { CreateGroupDto, UpdateGroupDto } from './create-group.dto';
+import { RolesGuard } from 'src/common/guards/roles.guard';
+import { UserRole } from 'src/entities/user.entity';
+import { Roles } from 'src/common/guards/roles.decarator';
 
 @ApiTags('Guruhlar (Groups)')
 @ApiBearerAuth()
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('groups')
 export class GroupsController {
   constructor(private readonly groupsService: GroupsService) {}
 
   @Post()
-  @ApiOperation({ summary: 'Yangi guruh yaratish' })
-  @ApiResponse({ status: 201, description: 'Guruh muvaffaqiyatli yaratildi.' })
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Yangi o‘quv guruhi yaratish' })
   create(@Body() dto: CreateGroupDto) {
     return this.groupsService.create(dto);
   }
 
   @Get()
-  @ApiOperation({
-    summary: "Barcha guruhlarni olish va nomi bo'yicha qidirish",
-  })
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Barcha guruhlarni qidirish va sahifalab olish' })
   @ApiQuery({
     name: 'search',
     required: false,
-    description: "Guruh nomi bo'yicha qidiruv",
+    description: 'Guruh nomi bo‘yicha qidiruv',
   })
-  findAll(@Query('search') search?: string) {
-    return this.groupsService.findAll(search);
+  @ApiQuery({ name: 'page', required: false, description: 'Sahifa raqami' })
+  findAll(@Query('search') search?: string, @Query('page') page?: number) {
+    return this.groupsService.findAll(search, Number(page) || 1);
   }
 
   @Get(':id')
-  @ApiOperation({ summary: "Guruh ma'lumotlarini ID bo'yicha olish" })
-  getGroupDetails(@Param('id', ParseUUIDPipe) id: string) {
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: 'Guruh ma’lumotlari va talabalar ro‘yxatini olish' })
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.groupsService.getGroupDetails(id);
   }
 
   @Patch(':id')
-  @ApiOperation({ summary: "Guruh ma'lumotlarini tahrirlash" })
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Guruh sozlamalarini (vaqt, o‘qituvchi, narx) tahrirlash',
+  })
   update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateGroupDto) {
     return this.groupsService.update(id, dto);
   }
 
   @Delete(':id')
-  @ApiOperation({ summary: "Guruhni o'chirish" })
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Guruhni arxivga o‘tkazish (Soft-delete)' })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.groupsService.remove(id);
   }
 
   @Post(':groupId/add-student/:studentId')
-  @ApiOperation({ summary: "Studentni guruhga qo'shish" })
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: 'Talabani guruh a’zolari qatoriga qo‘shish' })
   addStudent(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
-    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Param('groupId', ParseUUIDPipe) gId: string,
+    @Param('studentId', ParseUUIDPipe) sId: string,
   ) {
-    return this.groupsService.addStudentToGroup(groupId, studentId);
+    return this.groupsService.addStudentToGroup(gId, sId);
   }
 
   @Delete(':groupId/remove-student/:studentId')
-  @ApiOperation({ summary: 'Studentni guruhdan chiqarib yuborish' })
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Talabani guruh a’zolari ro‘yxatidan chiqarish (chetlatish)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Talaba guruhdan muvaffaqiyatli olib tashlandi',
+  })
+  @ApiResponse({ status: 404, description: 'Guruh yoki talaba topilmadi' })
   removeStudent(
-    @Param('groupId', ParseUUIDPipe) groupId: string,
-    @Param('studentId', ParseUUIDPipe) studentId: string,
+    @Param('groupId', ParseUUIDPipe) gId: string,
+    @Param('studentId', ParseUUIDPipe) sId: string,
   ) {
-    return this.groupsService.removeStudentFromGroup(groupId, studentId);
+    return this.groupsService.removeStudentFromGroup(gId, sId);
   }
 }
