@@ -1,9 +1,14 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Attendance } from 'src/entities/attendance.entity';
-import { Group } from 'src/entities/groupe.entity';
-import { Repository } from 'typeorm';
+import { Attendance } from '../entities/attendance.entity';
+import { Group } from '../entities/group.entity';
+import { DataSource, Repository } from 'typeorm';
 import { MarkAttendanceDto } from './mark-attendance.dto';
+import { UpdateSingleAttendanceDto } from './update-single-attendance.dto';
 
 @Injectable()
 export class AttendanceService {
@@ -11,68 +16,105 @@ export class AttendanceService {
     @InjectRepository(Attendance)
     private attendanceRepo: Repository<Attendance>,
     @InjectRepository(Group) private groupRepo: Repository<Group>,
+    private dataSource: DataSource,
   ) {}
 
-  // 1. O'qituvchi uchun davomat sahifasini shakllantirish
   async getAttendanceSheet(groupId: string, date: string) {
-   const group = await this.groupRepo.findOne({
-    where: { id: groupId },
-    relations: ['students', 'teacher'], // teacher-ni ham qo'shdik
-    select: {
-      id: true,
-      name: true,      // "Informatika"
-      days: true,      // "DU-CHOR-JUMA"
-      startTime: true, // "14:00-16:00"
-      teacher: {
-        fullName: true,
-        phone: true
-      },
-      students: { id: true, fullName: true }
-    }
-  });
+    const group = await this.groupRepo.findOne({
+      where: { id: groupId },
+      relations: ['students'], // Talabalarni yuklaymiz
+    });
 
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
     const existingAttendance = await this.attendanceRepo.find({
       where: { group: { id: groupId }, date },
+      relations: ['student'],
     });
 
-    return group.students.map((student) => {
+    // Guruhdagi umumiy to'lov qilganlar sonini hisoblash (balansi > 0 bo'lganlar)
+    const paidStudentsCount = group.students.filter(
+      (s) => s.balance > 0,
+    ).length;
+
+    const studentsList = group.students.map((student) => {
       const att = existingAttendance.find((a) => a.student.id === student.id);
       return {
         studentId: student.id,
         fullName: student.fullName,
         isPresent: att ? att.isPresent : true,
+        balance: student.balance,
+        hasPaid: student.balance > 0,
       };
     });
+
+    return {
+      groupInfo: {
+        id: group.id,
+        name: group.name,
+        paidStudentsCount, // Dizayndagi "To'lov qilganlar: 10ta" qismi uchun
+        totalStudents: group.students.length,
+      },
+      students: studentsList,
+    };
   }
 
-  // 2. Davomatni saqlash yoki yangilash (Bulk)
   async markBulk(dto: MarkAttendanceDto) {
-    // 1. Guruh borligini tekshirish
-    const group = await this.groupRepo.findOne({ where: { id: dto.groupId } });
-    if (!group) {
-      throw new NotFoundException(
-        `ID-si ${dto.groupId} bo'lgan guruh topilmadi!`,
-      );
-    }
+    const { groupId, date, students } = dto;
 
-    // 2. Eskisini o'chirish
-    await this.attendanceRepo.delete({
-      group: { id: dto.groupId },
-      date: dto.date,
+    const group = await this.groupRepo.findOne({ where: { id: groupId } });
+    if (!group) throw new NotFoundException('Guruh topilmadi');
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.delete(Attendance, {
+        group: { id: groupId },
+        date,
+      });
+
+      const records = students.map((s) =>
+        this.attendanceRepo.create({
+          date,
+          isPresent: s.isPresent,
+          group: { id: groupId },
+          student: { id: s.studentId },
+        }),
+      );
+
+      await queryRunner.manager.save(Attendance, records);
+      await queryRunner.commitTransaction();
+      return { success: true, message: 'Davomat saqlandi' };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      throw new BadRequestException(
+        'Davomatni saqlashda xatolik: ' + err.message,
+      );
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  async updateSingleAttendance(dto: UpdateSingleAttendanceDto) {
+    const { groupId, date, studentId, isPresent } = dto;
+
+    let attendance = await this.attendanceRepo.findOne({
+      where: { group: { id: groupId }, date, student: { id: studentId } },
     });
 
-    // 3. Saqlash...
-    const records = dto.students.map((s) =>
-      this.attendanceRepo.create({
-        date: dto.date,
-        isPresent: s.isPresent,
-        group: { id: dto.groupId },
-        student: { id: s.studentId },
-      }),
-    );
+    if (attendance) {
+      attendance.isPresent = isPresent;
+    } else {
+      attendance = this.attendanceRepo.create({
+        group: { id: groupId },
+        date,
+        student: { id: studentId },
+        isPresent,
+      });
+    }
 
-    return await this.attendanceRepo.save(records);
+    return await this.attendanceRepo.save(attendance);
   }
 }

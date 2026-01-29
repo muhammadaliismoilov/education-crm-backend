@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 
@@ -9,10 +9,11 @@ import { GroupsModule } from './groups/groups.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { PaymentModule } from './payment/payment.module';
 import { StatsModule } from './stats/stats.module';
+import { LoggerMiddleware } from './common/middleware/logger.middleware';
 
 @Module({
   imports: [
-    ConfigModule.forRoot(),
+    ConfigModule.forRoot({ isGlobal: true }), // Barcha modullarda env ishlatish uchun
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,
@@ -21,7 +22,7 @@ import { StatsModule } from './stats/stats.module';
       password: process.env.DB_PASS,
       database: process.env.DB_NAME,
       autoLoadEntities: true,
-      synchronize: true, // Productionda false qiling!
+      synchronize:  true , //process.env.NODE_ENV !== 'production', // Xavfsizlik uchun
     }),
     AuthModule,
     UsersModule,
@@ -32,4 +33,8 @@ import { StatsModule } from './stats/stats.module';
     StatsModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(LoggerMiddleware).forRoutes('*'); // Barcha yo'nalishlarni log qilish
+  }
+}

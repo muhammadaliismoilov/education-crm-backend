@@ -8,6 +8,7 @@ import {
   OneToMany,
   UpdateDateColumn,
   CreateDateColumn,
+  DeleteDateColumn,
 } from 'typeorm';
 import { User } from './user.entity';
 import { Attendance } from './attendance.entity';
@@ -27,14 +28,25 @@ export class Group {
   @Column()
   startTime: string;
 
-  @Column({ type: 'decimal' })
+  @Column({
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    transformer: {
+      to: (value: number) => value,
+      from: (value: string) => parseFloat(value), // Stringni numberga o'tkazadi
+    },
+  })
   price: number;
+
+  @Column({ default: true })
+  isActive: boolean;
 
   @ManyToOne(() => User, (user) => user.teachingGroups)
   teacher: User;
 
   @ManyToMany(() => User, (user) => user.enrolledGroups)
-  @JoinTable()
+  @JoinTable({ name: 'group_students' }) // Bog'lovchi jadval nomi aniq bo'lishi kerak
   students: User[];
 
   @OneToMany(() => Payment, (payment) => payment.group)
@@ -43,9 +55,12 @@ export class Group {
   @OneToMany(() => Attendance, (attendance) => attendance.group)
   attendances: Attendance[];
 
-  @CreateDateColumn({ name: 'createdAt' })
+  @CreateDateColumn()
   createdAt: Date;
 
-  @UpdateDateColumn({ name: 'updatedAt' })
+  @UpdateDateColumn()
   updatedAt: Date;
+
+  @DeleteDateColumn({ select: false })
+  deletedAt: Date;
 }
