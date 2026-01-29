@@ -12,8 +12,8 @@ import { Roles } from 'src/common/guards/roles.decarator';
 
 
 @ApiTags('Foydalanuvchilar (Users)')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard)
+// @ApiBearerAuth()
+// @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
