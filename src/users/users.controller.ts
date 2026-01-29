@@ -23,7 +23,8 @@ export class UsersController {
   @ApiOperation({ summary: 'Yangi foydalanuvchi qo\'shish' })
   async create(@Body() dto: CreateUserDto) {
     return await this.usersService.create(dto);
-  }
+  } 
+  
 
   @Get()
   // @Roles(UserRole.ADMIN, UserRole.TEACHER)
