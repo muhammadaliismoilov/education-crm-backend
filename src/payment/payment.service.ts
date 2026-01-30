@@ -1,10 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, ILike } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 import { User } from '../entities/user.entity';
 import { CreatePaymentDto, UpdatePaymentDto } from './payment.dto';
-
 
 @Injectable()
 export class PaymentService {
@@ -26,7 +29,12 @@ export class PaymentService {
         group: { id: dto.groupId },
       });
       const saved = await queryRunner.manager.save(payment);
-      await queryRunner.manager.increment(User, { id: dto.studentId }, 'balance', dto.amount);
+      await queryRunner.manager.increment(
+        User,
+        { id: dto.studentId },
+        'balance',
+        dto.amount,
+      );
       await queryRunner.commitTransaction();
       return saved;
     } catch (err) {
@@ -39,7 +47,8 @@ export class PaymentService {
 
   // 2. Find All with Search and Pagination
   async findAll(search?: string, page = 1, limit = 10) {
-    const query = this.paymentRepo.createQueryBuilder('payment')
+    const query = this.paymentRepo
+      .createQueryBuilder('payment')
       .leftJoinAndSelect('payment.student', 'student')
       .leftJoinAndSelect('payment.group', 'group');
 
@@ -83,7 +92,12 @@ export class PaymentService {
     try {
       if (dto.amount && dto.amount !== payment.amount) {
         const diff = dto.amount - payment.amount;
-        await queryRunner.manager.increment(User, { id: payment.student.id }, 'balance', diff);
+        await queryRunner.manager.increment(
+          User,
+          { id: payment.student.id },
+          'balance',
+          diff,
+        );
       }
       Object.assign(payment, dto);
       const updated = await queryRunner.manager.save(payment);
@@ -105,7 +119,12 @@ export class PaymentService {
     await queryRunner.startTransaction();
 
     try {
-      await queryRunner.manager.decrement(User, { id: payment.student.id }, 'balance', payment.amount);
+      await queryRunner.manager.decrement(
+        User,
+        { id: payment.student.id },
+        'balance',
+        payment.amount,
+      );
       await queryRunner.manager.remove(payment);
       await queryRunner.commitTransaction();
       return { message: 'To‘lov o‘chirildi va balans tahrirlandi' };

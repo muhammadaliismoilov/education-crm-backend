@@ -37,13 +37,13 @@ export class User {
   @Column({ unique: true })
   login: string;
 
-  @Column({ select: false }) // API javoblarida parolni yashirish (Xavfsizlik)
+  @Column({ select: false }) 
   password: string;
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.STUDENT })
   role: UserRole;
 
-  @Column({ type: 'int', nullable: true }) // Default null uchun integer to'g'ri turda
+  @Column({ type: 'int', nullable: true }) 
   salaryPercentage: number;
 
   @Column({ default: true })
@@ -87,9 +87,8 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @DeleteDateColumn({ select: false }) // Soft delete uchun maxsus ustun
-  deletedAt: Date; // Agar bu null bo'lsa, foydalanuvchi "tirik"
-
+  @DeleteDateColumn({ select: false }) 
+  deletedAt: Date; 
   // --- Avtomatlashtirish (Hooks) ---
 
   @BeforeInsert()

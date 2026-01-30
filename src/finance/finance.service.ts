@@ -4,13 +4,12 @@
 // import { User, UserRole } from 'src/entities/user.entity';
 // import { Repository } from 'typeorm';
 
-
 // @Injectable()
 // export class FinanceService {
 //   constructor(
-//     @InjectRepository(User) 
+//     @InjectRepository(User)
 //     private userRepo: Repository<User>,
-//     @InjectRepository(SalaryPayout) 
+//     @InjectRepository(SalaryPayout)
 //     private payoutRepo: Repository<SalaryPayout>,
 //   ) {}
 
@@ -30,7 +29,7 @@
 //       const income = (group.students?.length || 0) * (group.price || 0);
 //       const share = (income * (teacher.salaryPercentage || 0)) / 100;
 //       totalEarned += share;
-      
+
 //       return {
 //         groupName: group.name,
 //         students: group.students?.length || 0,
@@ -84,7 +83,11 @@
 //   }
 // }
 
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { User, UserRole } from '../entities/user.entity';
@@ -96,55 +99,59 @@ import { PaySalaryDto } from './dto/finance.dto';
 export class FinanceService {
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
-    @InjectRepository(SalaryPayout) private payoutRepo: Repository<SalaryPayout>,
-    @InjectRepository(Attendance) private attendanceRepo: Repository<Attendance>,
+    @InjectRepository(SalaryPayout)
+    private payoutRepo: Repository<SalaryPayout>,
+    @InjectRepository(Attendance)
+    private attendanceRepo: Repository<Attendance>,
     private dataSource: DataSource,
   ) {}
 
- 
-async calculateTeacherSalary(teacherId: string, month: string) {
-  const teacher = await this.userRepo.findOne({
-    where: { id: teacherId, role: UserRole.TEACHER },
-    relations: ['teachingGroups'],
-  });
+  async calculateTeacherSalary(teacherId: string, month: string) {
+    const teacher = await this.userRepo.findOne({
+      where: { id: teacherId, role: UserRole.TEACHER },
+      relations: ['teachingGroups'],
+    });
 
-  if (!teacher) throw new NotFoundException('O\'qituvchi topilmadi');
-  
-  // Foiz null bo'lsa 0 deb hisoblash yoki xato berish
-  const percentage = teacher.salaryPercentage ?? 0;
-  if (percentage === 0) throw new BadRequestException('O\'qituvchi foizi belgilanmagan');
+    if (!teacher) throw new NotFoundException("O'qituvchi topilmadi");
 
-  let totalSalary = 0;
- const details: Array<{
+    // Foiz null bo'lsa 0 deb hisoblash yoki xato berish
+    const percentage = teacher.salaryPercentage ?? 0;
+    if (percentage === 0)
+      throw new BadRequestException("O'qituvchi foizi belgilanmagan");
+
+    let totalSalary = 0;
+    const details: Array<{
       groupName: string;
       studentAttendances: number;
       groupTotalIncome: number;
       teacherEarned: number;
     }> = [];
 
-  for (const group of teacher.teachingGroups) {
-    const attendanceCount = await this.attendanceRepo
-      .createQueryBuilder('attendance')
-      .where('attendance.groupId = :groupId', { groupId: group.id })
-      .andWhere('CAST(attendance.date AS TEXT) LIKE :month', { month: `${month}%` })
-      .andWhere('attendance.isPresent = true')
-      .getCount();
+    for (const group of teacher.teachingGroups) {
+      const attendanceCount = await this.attendanceRepo
+        .createQueryBuilder('attendance')
+        .where('attendance.groupId = :groupId', { groupId: group.id })
+        .andWhere('CAST(attendance.date AS TEXT) LIKE :month', {
+          month: `${month}%`,
+        })
+        .andWhere('attendance.isPresent = true')
+        .getCount();
 
-    const groupIncome = attendanceCount * Number(group.price); // Decimal to Number
-    const teacherShare = (groupIncome * percentage) / 100;
+      const groupIncome = attendanceCount * Number(group.price); // Decimal to Number
+      const teacherShare = (groupIncome * percentage) / 100;
 
-    totalSalary += teacherShare;
-    details.push({
-      groupName: group.name,
-      studentAttendances: attendanceCount,
-      groupTotalIncome: groupIncome,
-      teacherEarned: teacherShare,
-    });
+      totalSalary += teacherShare;
+      details.push({
+        groupName: group.name,
+        studentAttendances: attendanceCount,
+        groupTotalIncome: groupIncome,
+        teacherEarned: teacherShare,
+      });
+    }
+
+    return { teacherName: teacher.fullName, month, totalSalary, details };
   }
-
-  return { teacherName: teacher.fullName, month, totalSalary, details  };
-}
-// 1. Oylik to'lash (Create)
+  // 1. Oylik to'lash (Create)
   async paySalary(dto: PaySalaryDto) {
     const { teacherId, month, amount } = dto;
     const queryRunner = this.dataSource.createQueryRunner();
@@ -153,9 +160,10 @@ async calculateTeacherSalary(teacherId: string, month: string) {
 
     try {
       const existing = await queryRunner.manager.findOne(SalaryPayout, {
-        where: { teacher: { id: teacherId }, forMonth: month }
+        where: { teacher: { id: teacherId }, forMonth: month },
       });
-      if (existing) throw new BadRequestException('Bu oy uchun oylik allaqachon to\'langan');
+      if (existing)
+        throw new BadRequestException("Bu oy uchun oylik allaqachon to'langan");
 
       const payout = queryRunner.manager.create(SalaryPayout, {
         amount,
@@ -176,7 +184,8 @@ async calculateTeacherSalary(teacherId: string, month: string) {
 
   // 2. Barcha to'langan oyliklarni olish (Get All)
   async findAll(searchMonth?: string) {
-    const query = this.payoutRepo.createQueryBuilder('payout')
+    const query = this.payoutRepo
+      .createQueryBuilder('payout')
       .leftJoinAndSelect('payout.teacher', 'teacher')
       .orderBy('payout.createdAt', 'DESC');
 
@@ -193,7 +202,7 @@ async calculateTeacherSalary(teacherId: string, month: string) {
       where: { id },
       relations: ['teacher'],
     });
-    if (!payout) throw new NotFoundException('Oylik to\'lovi topilmadi');
+    if (!payout) throw new NotFoundException("Oylik to'lovi topilmadi");
     return payout;
   }
 

@@ -43,17 +43,14 @@ export class UsersController {
   @ApiOperation({ summary: "Foydalanuvchilar ro'yxati (Pagination & Search)" })
   @ApiQuery({ name: 'role', enum: UserRole, required: false })
   @ApiQuery({ name: 'search', required: false })
-  // Swagger-da default qiymatlarni ko'rsatish
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
   async findAll(
     @Query('role') role?: UserRole,
     @Query('search') search?: string,
-    // Metodning o'zida default qiymatlarni berish
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
   ) {
-    // Endi Number(page) || 1 deb yozishga hojat yo'q
     return await this.usersService.findAll(role, search, page, limit);
   }
 

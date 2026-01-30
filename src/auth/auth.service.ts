@@ -3,7 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
-import { ConfigService } from '@nestjs/config'; // Qo'shildi
+import { ConfigService } from '@nestjs/config'; 
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -11,7 +11,7 @@ export class AuthService {
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
     private jwtService: JwtService,
-    private configService: ConfigService, // Inject qilindi
+    private configService: ConfigService,
   ) {}
 
   async login(loginDto: any) {
@@ -26,7 +26,6 @@ export class AuthService {
 
     const payload = { sub: user.id, role: user.role };
 
-    // Secret-larni .env dan olamiz
     const accessToken = this.jwtService.sign(payload, {
       secret: this.configService.get<string>('JWT_SECRET'),
       expiresIn: '15m',

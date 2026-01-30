@@ -5,38 +5,34 @@ import { Between, Repository } from 'typeorm';
 
 @Injectable()
 export class StatsService {
-  constructor(
-    @InjectRepository(User) private userRepo: Repository<User>,
-  ) {}
+  constructor(@InjectRepository(User) private userRepo: Repository<User>) {}
 
   async getYearlyStats(year: number) {
-    // 1. Massiv tipini aniq ko'rsatamiz: "never" xatoligini yo'qotadi
     const stats: { month: string; arrived: number; left: number }[] = [];
 
     for (let month = 0; month < 12; month++) {
       const startDate = new Date(year, month, 1);
-      const endDate = new Date(year, month + 1, 0, 23, 59, 59); // Kun oxirigacha
+      const endDate = new Date(year, month + 1, 0, 23, 59, 59);
 
-      // 2. Role qiymatini enum sifatida beramiz: "UserRole" xatoligini yo'qotadi
       const arrived = await this.userRepo.count({
         where: {
-          role: UserRole.STUDENT, // Agar enum bo'lsa shunday, bo'lmasa 'student' as UserRole
-          createdAt: Between(startDate, endDate)
-        }
+          role: UserRole.STUDENT,
+          createdAt: Between(startDate, endDate),
+        },
       });
 
       const left = await this.userRepo.count({
         where: {
           role: UserRole.STUDENT,
           isActive: false,
-          updatedAt: Between(startDate, endDate)
-        }
+          updatedAt: Between(startDate, endDate),
+        },
       });
 
       stats.push({
         month: startDate.toLocaleString('uz', { month: 'long' }),
         arrived,
-        left
+        left,
       });
     }
 

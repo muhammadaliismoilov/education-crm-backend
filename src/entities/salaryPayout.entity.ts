@@ -1,5 +1,12 @@
-import { Column, CreateDateColumn, Entity, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
-import { User } from "./user.entity";
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
+import { User } from './user.entity';
 
 @Entity('salaryPayouts')
 export class SalaryPayout {
@@ -7,20 +14,20 @@ export class SalaryPayout {
   id: string;
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
-  amount: number; // Berilgan oylik miqdori
+  amount: number;
 
   @Column()
-  forMonth: string; // Masalan: "2026-01" (Yanvar oyi uchun)
+  forMonth: string;
 
   @ManyToOne(() => User, (user) => user.payouts)
   teacher: User;
 
   @CreateDateColumn()
-  paidAt: Date; // Pul berilgan haqiqiy vaqt
+  paidAt: Date;
 
-   @CreateDateColumn({ name: 'createdAt' })
-    createdAt: Date;
-  
-    @UpdateDateColumn({ name: 'updatedAt' })
-    updatedAt: Date;
+  @CreateDateColumn({ name: 'createdAt' })
+  createdAt: Date;
+
+  @UpdateDateColumn({ name: 'updatedAt' })
+  updatedAt: Date;
 }

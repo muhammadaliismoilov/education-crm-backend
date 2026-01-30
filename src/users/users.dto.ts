@@ -26,13 +26,16 @@ export class CreateUserDto {
     message: "Raqam +998XXXXXXXXX formatida bo'lishi kerak",
   })
   phone: string;
-  @ApiProperty({ example: 'ali_dev' })
+
+  @ApiProperty({ example: 'educrm' })
   @IsString()
+  @IsNotEmpty({ message: "Login bo'sh bo'lmasligi kerak" })
   @MinLength(4, { message: "Login kamida 4 ta belgidan iborat bo'lishi kerak" })
   login: string;
 
   @ApiProperty({ example: 'password123' })
   @IsString()
+  @IsNotEmpty({ message: "Parol bo'sh bo'lmasligi kerak" })
   @MinLength(6, { message: "Parol kamida 6 ta belgidan iborat bo'lishi kerak" })
   password: string;
 
@@ -44,7 +47,7 @@ export class CreateUserDto {
   @IsNumber()
   @IsOptional()
   @Min(0)
-  @Max(100) // O'qituvchi ulushi 100% dan oshmasligi kerak
+  @Max(100) 
   salaryPercentage?: number;
 }
 

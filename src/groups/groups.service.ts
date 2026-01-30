@@ -85,31 +85,30 @@ export class GroupsService {
     await this.groupRepo.softRemove(group); // Soft delete ishlatish
     return { message: 'Guruh arxivlandi' };
   }
-async addStudentToGroup(groupId: string, studentId: string) {
-  // 1. Guruh va student mavjudligini tekshiring
-  const group = await this.groupRepo.findOne({ 
-    where: { id: groupId }, 
-    relations: ['students'] 
-  });
-  if (!group) throw new NotFoundException('Guruh topilmadi');
+  async addStudentToGroup(groupId: string, studentId: string) {
+    // 1. Guruh va student mavjudligini tekshiring
+    const group = await this.groupRepo.findOne({
+      where: { id: groupId },
+      relations: ['students'],
+    });
+    if (!group) throw new NotFoundException('Guruh topilmadi');
 
-  // 2. Takroriy qo'shishni oldini olish
-  const isAlreadyIn = group.students.some(s => s.id === studentId);
-  if (isAlreadyIn) throw new BadRequestException('O\'quvchi allaqachon guruhda bor');
+    // 2. Takroriy qo'shishni oldini olish
+    const isAlreadyIn = group.students.some((s) => s.id === studentId);
+    if (isAlreadyIn)
+      throw new BadRequestException("O'quvchi allaqachon guruhda bor");
 
-  // 3. To'g'ridan-to'g'ri bog'lovchi jadvalga yozish (Eng xavfsiz yo'l)
-  await this.groupRepo
-    .createQueryBuilder()
-    .relation(Group, 'students')
-    .of(groupId)
-    .add(studentId);
+    // 3. To'g'ridan-to'g'ri bog'lovchi jadvalga yozish (Eng xavfsiz yo'l)
+    await this.groupRepo
+      .createQueryBuilder()
+      .relation(Group, 'students')
+      .of(groupId)
+      .add(studentId);
 
-  return { message: "Student guruhga qo'shildi" };
-}
+    return { message: "Student guruhga qo'shildi" };
+  }
 
-  /**
-   * Talabani guruhdan chetlatish
-   */
+  // Talabani guruhdan chetlatish
   async removeStudentFromGroup(groupId: string, studentId: string) {
     const group = await this.getGroupDetails(groupId);
 

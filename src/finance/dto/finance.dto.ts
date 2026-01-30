@@ -2,9 +2,9 @@ import { ApiProperty } from '@nestjs/swagger';
 import { IsNotEmpty, IsNumber, IsString, IsUUID, Matches, Min } from 'class-validator';
 
 export class PaySalaryDto {
-  @ApiProperty({ example: 'teacherid ' })
+  @ApiProperty({ example: 'teacherID' })
   @IsUUID()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: "O'qituvchi ID bo'sh bo'lmasligi kerak" })
   teacherId: string;
 
   @ApiProperty({ example: '2026-01', description: 'Oylik qaysi oy uchun berilayotgani' })

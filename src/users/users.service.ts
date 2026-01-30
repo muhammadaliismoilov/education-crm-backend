@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -18,7 +22,9 @@ export class UsersService {
     });
 
     if (isExisting) {
-      throw new ConflictException('Ushbu login yoki telefon raqami allaqachon mavjud');
+      throw new ConflictException(
+        'Ushbu login yoki telefon raqami allaqachon mavjud',
+      );
     }
 
     const newUser = this.userRepo.create(dto);
@@ -56,18 +62,18 @@ export class UsersService {
   }
 
   async findOne(id: string): Promise<User> {
-    const user = await this.userRepo.findOne({ 
+    const user = await this.userRepo.findOne({
       where: { id },
-      relations: ['enrolledGroups', 'teachingGroups'] 
+      relations: ['enrolledGroups', 'teachingGroups'],
     });
-    
+
     if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
     return user;
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<User> {
     const user = await this.findOne(id);
-    
+
     // Patch mantiqi: Faqat kelgan maydonlarni o'zgartiramiz
     Object.assign(user, dto);
     return await this.userRepo.save(user);

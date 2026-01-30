@@ -13,11 +13,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
    super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         (request: any) => {
-          return request?.cookies?.access_token; // Cookie'dan tokenni o'qiymiz
+          return request?.cookies?.access_token;
         },
       ]),
       ignoreExpiration: false,
-      secretOrKey: 'birikkiuch', // Service bilan bir xil bo'lishi shart
+      secretOrKey: process.env.JWT_SECRET, 
     });
   }
 
