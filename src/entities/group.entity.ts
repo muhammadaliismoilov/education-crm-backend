@@ -13,6 +13,7 @@ import {
 import { User } from './user.entity';
 import { Attendance } from './attendance.entity';
 import { Payment } from './payment.entity';
+import { Student } from './students.entity';
 
 @Entity('groups')
 export class Group {
@@ -32,10 +33,10 @@ export class Group {
     type: 'decimal',
     precision: 12,
     scale: 2,
-    transformer: {
-      to: (value: number) => value,
-      from: (value: string) => parseFloat(value), // Stringni numberga o'tkazadi
-    },
+    // transformer: {
+    //   to: (value: number) => value,
+    //   from: (value: string) => parseFloat(value), // Stringni numberga o'tkazadi
+    // },
   })
   price: number;
 
@@ -45,9 +46,9 @@ export class Group {
   @ManyToOne(() => User, (user) => user.teachingGroups)
   teacher: User;
 
-  @ManyToMany(() => User, (user) => user.enrolledGroups)
+  @ManyToMany(() => Student, (student) => student.enrolledGroups)
   @JoinTable({ name: 'group_students' }) // Bog'lovchi jadval nomi aniq bo'lishi kerak
-  students: User[];
+  students: Student[];
 
   @OneToMany(() => Payment, (payment) => payment.group)
   payments: Payment[];

@@ -39,7 +39,7 @@ export class CreateUserDto {
   @MinLength(6, { message: "Parol kamida 6 ta belgidan iborat bo'lishi kerak" })
   password: string;
 
-  @ApiProperty({ enum: UserRole, default: UserRole.STUDENT })
+  @ApiProperty({ enum: UserRole, default: UserRole.TEACHER })
   @IsEnum(UserRole, { message: "Noto'g'ri rol tanlandi" })
   role: UserRole;
 
@@ -51,4 +51,10 @@ export class CreateUserDto {
   salaryPercentage?: number;
 }
 
-export class UpdateUserDto extends PartialType(CreateUserDto) {}
+export class UpdateUserDto extends PartialType(CreateUserDto) {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  // Parol yangilanishi ixtiyoriy, lekin bo'sh bo'lmasligi kerak
+  password?: string;
+}

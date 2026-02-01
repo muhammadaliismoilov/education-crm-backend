@@ -16,15 +16,15 @@ export class StatsService {
 
       const arrived = await this.userRepo.count({
         where: {
-          role: UserRole.STUDENT,
+          // role: UserRole.STUDENT,
           createdAt: Between(startDate, endDate),
         },
       });
 
       const left = await this.userRepo.count({
         where: {
-          role: UserRole.STUDENT,
-          isActive: false,
+          // role: UserRole.STUDENT,
+          // isActive: false,
           updatedAt: Between(startDate, endDate),
         },
       });
