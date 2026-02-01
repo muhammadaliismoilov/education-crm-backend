@@ -52,7 +52,7 @@ export class AttendanceService {
       groupInfo: {
         id: group.id,
         name: group.name,
-        paidStudentsCount, // Dizayndagi "To'lov qilganlar: 10ta" qismi uchun
+        paidStudentsCount, 
         totalStudents: group.students.length,
       },
       students: studentsList,

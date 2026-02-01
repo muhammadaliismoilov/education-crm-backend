@@ -53,7 +53,10 @@ export class GroupsController {
 
   @Get(':id')
   // @Roles(UserRole.ADMIN, UserRole.TEACHER)
-  @ApiOperation({ summary: 'Guruh ma’lumotlari va talabalar ro‘yxatini olish' ,description:"Guruh ID si" })
+  @ApiOperation({
+    summary: 'Guruh ma’lumotlari va talabalar ro‘yxatini olish',
+    description: 'Guruh ID si',
+  })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.groupsService.getGroupDetails(id);
   }

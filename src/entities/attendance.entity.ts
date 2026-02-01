@@ -8,8 +8,9 @@ import {
 } from 'typeorm';
 import { User } from './user.entity';
 import { Group } from './group.entity';
+import { Student } from './students.entity';
 
-@Entity('attendance')
+@Entity('attendances')
 export class Attendance {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -23,8 +24,8 @@ export class Attendance {
   @ManyToOne(() => Group, (group) => group.attendances, { onDelete: 'CASCADE' })
   group: Group;
 
-  @ManyToOne(() => User, (user) => user.attendances, { onDelete: 'CASCADE' })
-  student: User;
+  @ManyToOne(() => Student, (student) => student.attendances, { onDelete: 'CASCADE' })
+  student: Student;
 
   @CreateDateColumn()
   createdAt: Date;

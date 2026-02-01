@@ -3,6 +3,7 @@ import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
+import { ConfigService } from '@nestjs/config'; 
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class AuthService {
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
     private jwtService: JwtService,
+    private configService: ConfigService,
   ) {}
 
   async login(loginDto: any) {
@@ -25,16 +27,15 @@ export class AuthService {
     const payload = { sub: user.id, role: user.role };
 
     const accessToken = this.jwtService.sign(payload, {
-      secret: 'birikkiuch',
+      secret: this.configService.get<string>('JWT_SECRET'),
       expiresIn: '15m',
     });
 
     const refreshToken = this.jwtService.sign(payload, {
-      secret: 'to`rtbesholti',
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
       expiresIn: '7d',
     });
 
-    // Endi xato bermaydi, chunki entity-da refreshToken bor
     await this.userRepo.update(user.id, { refreshToken: refreshToken });
 
     return {
@@ -45,7 +46,6 @@ export class AuthService {
   }
 
   async logout(userId: string) {
-  // Bazadan tokenni o'chirish
-  return await this.userRepo.update(userId, { refreshToken: null });
-}
+    return await this.userRepo.update(userId, { refreshToken: null });
+  }
 }

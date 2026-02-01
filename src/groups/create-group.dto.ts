@@ -11,7 +11,7 @@ import {
 export class CreateGroupDto {
   @ApiProperty({ example: 'Node.js Backend' })
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: "Guruh nomi bo'sh bo'lmasligi kerak" })
   name: string;
 
   @ApiProperty({ example: ['Dushanba', 'Chorshanba', 'Juma'] })
@@ -21,17 +21,18 @@ export class CreateGroupDto {
 
   @ApiProperty({ example: '14:00' })
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: "Boshlanish vaqti bo'sh bo'lmasligi kerak" })
   startTime: string;
 
   @ApiProperty({ example: 800000 })
   @IsNumber()
+  @IsNotEmpty({ message: "Narx bo'sh bo'lmasligi kerak" })
   price: number;
 
-  @ApiProperty({ example: 'teacherid' })
+  @ApiProperty({ example: 'teacherID' })
   @IsUUID()
-  @IsNotEmpty()
-  teacherId: string; // O'qituvchi ID-si endi UUID
+  @IsNotEmpty({ message: "O'qituvchi ID bo'sh bo'lmasligi kerak" })
+  teacherId: string;
 }
 
 export class UpdateGroupDto extends PartialType(CreateGroupDto) {}

@@ -1,6 +1,11 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import * as bcrypt from 'bcrypt';
 
 import { CreateUserDto, UpdateUserDto } from './users.dto';
 import { User, UserRole } from 'src/entities/user.entity';
@@ -18,7 +23,9 @@ export class UsersService {
     });
 
     if (isExisting) {
-      throw new ConflictException('Ushbu login yoki telefon raqami allaqachon mavjud');
+      throw new ConflictException(
+        'Ushbu login yoki telefon raqami allaqachon mavjud',
+      );
     }
 
     const newUser = this.userRepo.create(dto);
@@ -56,21 +63,30 @@ export class UsersService {
   }
 
   async findOne(id: string): Promise<User> {
-    const user = await this.userRepo.findOne({ 
+    const user = await this.userRepo.findOne({
       where: { id },
-      relations: ['enrolledGroups', 'teachingGroups'] 
+      relations: [ 'teachingGroups'],
     });
-    
+
     if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
     return user;
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<User> {
-    const user = await this.findOne(id);
+    // 1. Foydalanuvchi borligini tekshiramiz
+    const user = await this.userRepo.findOne({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('Foydalanuvchi topilmadi');
+    }
     
-    // Patch mantiqi: Faqat kelgan maydonlarni o'zgartiramiz
-    Object.assign(user, dto);
-    return await this.userRepo.save(user);
+    if (dto.password) {
+      const salt = await bcrypt.genSalt(10);
+      dto.password = await bcrypt.hash(dto.password, salt);
+    }
+
+    await this.userRepo.update(id, dto);
+
+    return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {

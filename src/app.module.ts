@@ -3,17 +3,18 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 
 import { UsersModule } from './users/users.module';
-import { FinanceModule } from './finance/finance.module';
+import { SalaryModule } from './salarys/salary.module';
 import { AuthModule } from './auth/auth.module';
 import { GroupsModule } from './groups/groups.module';
 import { AttendanceModule } from './attendance/attendance.module';
 import { PaymentModule } from './payment/payment.module';
 import { StatsModule } from './stats/stats.module';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
+import { StudentsModule } from './students/students.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }), // Barcha modullarda env ishlatish uchun
+    ConfigModule.forRoot({ isGlobal: true }), 
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,
@@ -26,11 +27,13 @@ import { LoggerMiddleware } from './common/middleware/logger.middleware';
     }),
     AuthModule,
     UsersModule,
+    StudentsModule,
     GroupsModule,
     AttendanceModule,
-    FinanceModule,
+    SalaryModule,
     PaymentModule,
     StatsModule,
+    
   ],
 })
 export class AppModule implements NestModule {

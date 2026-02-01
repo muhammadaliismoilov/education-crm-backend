@@ -3,8 +3,6 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToMany,
-  ManyToMany,
-  JoinTable, // Bog'liqlik jadvali uchun shart
   UpdateDateColumn,
   CreateDateColumn,
   BeforeInsert,
@@ -13,14 +11,13 @@ import {
 } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Group } from './group.entity';
-import { Payment } from './payment.entity';
-import { Attendance } from './attendance.entity';
 import { SalaryPayout } from './salaryPayout.entity';
 
+// Faqat xodimlar rollari qoldi
 export enum UserRole {
   ADMIN = 'admin',
   TEACHER = 'teacher',
-  STUDENT = 'student',
+  
 }
 
 @Entity('users')
@@ -37,46 +34,23 @@ export class User {
   @Column({ unique: true })
   login: string;
 
-  @Column({ select: false }) // API javoblarida parolni yashirish (Xavfsizlik)
+  @Column({ select: false }) 
   password: string;
 
-  @Column({ type: 'enum', enum: UserRole, default: UserRole.STUDENT })
+  @Column({ type: 'enum', enum: UserRole, default: UserRole.TEACHER })
   role: UserRole;
 
-  @Column({ type: 'int', nullable: true }) // Default null uchun integer to'g'ri turda
-  salaryPercentage: number;
+  @Column({ type: 'int', nullable: true }) 
+  salaryPercentage: number; // Faqat o'qituvchilar uchun foiz stavkasi
 
-  @Column({ default: true })
-  isActive: boolean;
-  
-  @Column({
-    type: 'decimal',
-    precision: 12,
-    scale: 2,
-    default: 0,
-    transformer: {
-      to: (value: number) => value,
-      from: (value: string) => parseFloat(value),
-    },
-  })
-  balance: number;
 
   // --- Bog'liqliklar ---
 
-  @OneToMany(() => SalaryPayout, (payout) => payout.teacher)
-  payouts: SalaryPayout[];
-
   @OneToMany(() => Group, (group) => group.teacher)
-  teachingGroups: Group[];
+  teachingGroups: Group[]; // O'qituvchining dars beradigan guruhlari
 
-  @ManyToMany(() => Group, (group) => group.students)
-  enrolledGroups: Group[];
-
-  @OneToMany(() => Payment, (payment) => payment.student)
-  payments: Payment[];
-
-  @OneToMany(() => Attendance, (attendance) => attendance.student)
-  attendances: Attendance[];
+  @OneToMany(() => SalaryPayout, (payout) => payout.teacher)
+  payouts: SalaryPayout[]; // O'qituvchiga qilingan oylik to'lovlar
 
   @Column({ type: 'text', nullable: true, select: false })
   refreshToken: string | null;
@@ -87,17 +61,16 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @DeleteDateColumn({ select: false }) // Soft delete uchun maxsus ustun
-  deletedAt: Date; // Agar bu null bo'lsa, foydalanuvchi "tirik"
+  @DeleteDateColumn({ select: false }) 
+  deletedAt: Date; 
 
-  // --- Avtomatlashtirish (Hooks) ---
+  // --- Hooks ---
 
   @BeforeInsert()
   @BeforeUpdate()
   async hashPassword() {
-    // Agar parol yangilangan bo'lsa yoki yangi bo'lsa hash qiladi
     if (this.password && !this.password.startsWith('$2b$')) {
-      this.password = await bcrypt.hash(this.password, 10);
+      this.password = await bcrypt.hash(this.password, 10); // Parolni xavfsiz saqlash
     }
   }
 }

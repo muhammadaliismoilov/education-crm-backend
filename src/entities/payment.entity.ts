@@ -6,9 +6,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { User } from './user.entity';
-import { Group } from './group.entity'; // Guruh bilan bog'lash uchun
-
+import { Group } from './group.entity'; 
+import { Student } from './students.entity';
 @Entity('payments')
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
@@ -18,13 +17,13 @@ export class Payment {
   amount: number;
 
   @Column({ type: 'date',nullable: true })
-  paymentDate: string; // Dizayndagi "To'lov qilayotgan kun" (Inputdan keladi)
+  paymentDate: string; 
 
-  @ManyToOne(() => User, (user) => user.payments, { onDelete: 'CASCADE' })
-  student: User;
+  @ManyToOne(() => Student, (student) => student.payments, { onDelete: 'CASCADE' })
+  student: Student;
 
   @ManyToOne(() => Group, (group) => group.payments, { onDelete: 'SET NULL' })
-  group: Group; // Dizayndagi "Yo'nalish" ustuni uchun
+  group: Group; 
 
   @CreateDateColumn({ name: 'createdAt' })
   createdAt: Date;

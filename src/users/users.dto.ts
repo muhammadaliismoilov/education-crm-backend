@@ -26,17 +26,20 @@ export class CreateUserDto {
     message: "Raqam +998XXXXXXXXX formatida bo'lishi kerak",
   })
   phone: string;
-  @ApiProperty({ example: 'ali_dev' })
+
+  @ApiProperty({ example: 'educrm' })
   @IsString()
+  @IsNotEmpty({ message: "Login bo'sh bo'lmasligi kerak" })
   @MinLength(4, { message: "Login kamida 4 ta belgidan iborat bo'lishi kerak" })
   login: string;
 
   @ApiProperty({ example: 'password123' })
   @IsString()
+  @IsNotEmpty({ message: "Parol bo'sh bo'lmasligi kerak" })
   @MinLength(6, { message: "Parol kamida 6 ta belgidan iborat bo'lishi kerak" })
   password: string;
 
-  @ApiProperty({ enum: UserRole, default: UserRole.STUDENT })
+  @ApiProperty({ enum: UserRole, default: UserRole.TEACHER })
   @IsEnum(UserRole, { message: "Noto'g'ri rol tanlandi" })
   role: UserRole;
 
@@ -44,8 +47,14 @@ export class CreateUserDto {
   @IsNumber()
   @IsOptional()
   @Min(0)
-  @Max(100) // O'qituvchi ulushi 100% dan oshmasligi kerak
+  @Max(100) 
   salaryPercentage?: number;
 }
 
-export class UpdateUserDto extends PartialType(CreateUserDto) {}
+export class UpdateUserDto extends PartialType(CreateUserDto) {
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  // Parol yangilanishi ixtiyoriy, lekin bo'sh bo'lmasligi kerak
+  password?: string;
+}

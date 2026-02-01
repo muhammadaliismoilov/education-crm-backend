@@ -21,20 +21,20 @@ export class CreatePaymentDto {
     description: 'To‘lov sanasi (YYYY-MM-DD)',
   })
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: "To'lov sanasi bo'sh bo'lmasligi kerak" })
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: "Sana YYYY-MM-DD formatida bo'lishi kerak",
   })
   paymentDate: string;
 
-  @ApiProperty({ example: 'user-uuid-here' })
+  @ApiProperty({ example: 'userID' })
   @IsUUID()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: "Student ID bo'sh bo'lmasligi kerak" })
   studentId: string;
 
-  @ApiProperty({ example: 'group-uuid-here' })
+  @ApiProperty({ example: 'groupID' })
   @IsUUID()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: "Group ID bo'sh bo'lmasligi kerak" })
   groupId: string;
 }
 
