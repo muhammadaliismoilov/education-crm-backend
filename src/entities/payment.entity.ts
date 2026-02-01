@@ -6,8 +6,8 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
 } from 'typeorm';
-import { User } from './user.entity';
 import { Group } from './group.entity'; 
+import { Student } from './students.entity';
 @Entity('payments')
 export class Payment {
   @PrimaryGeneratedColumn('uuid')
@@ -19,8 +19,8 @@ export class Payment {
   @Column({ type: 'date',nullable: true })
   paymentDate: string; 
 
-  @ManyToOne(() => User, (user) => user.payments, { onDelete: 'CASCADE' })
-  student: User;
+  @ManyToOne(() => Student, (student) => student.payments, { onDelete: 'CASCADE' })
+  student: Student;
 
   @ManyToOne(() => Group, (group) => group.payments, { onDelete: 'SET NULL' })
   group: Group; 

@@ -18,19 +18,20 @@ import {
   ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
-import { FinanceService } from './finance.service';
+import { SalaryService } from './salary.service';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { Roles } from 'src/common/guards/roles.decarator';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { UserRole } from 'src/entities/user.entity';
-import { PaySalaryDto } from './dto/finance.dto';
+import { PaySalaryDto } from './salary.dto';
+
 
 @ApiTags('Oyliklar (Salary)')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('salary')
-export class FinanceController {
-  constructor(private readonly salaryService: FinanceService) {}
+export class SalaryController {
+  constructor(private readonly salaryService: SalaryService) {}
 
   @Get('calculate')
   @Roles(UserRole.ADMIN)

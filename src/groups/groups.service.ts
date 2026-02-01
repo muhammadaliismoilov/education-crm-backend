@@ -5,16 +5,16 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Group } from 'src/entities/group.entity';
-import { User, UserRole } from 'src/entities/user.entity';
 
 import { Repository, ILike } from 'typeorm';
 import { CreateGroupDto, UpdateGroupDto } from './create-group.dto';
+import { Student } from 'src/entities/students.entity';
 
 @Injectable()
 export class GroupsService {
   constructor(
     @InjectRepository(Group) private groupRepo: Repository<Group>,
-    @InjectRepository(User) private userRepo: Repository<User>,
+    @InjectRepository(Student) private studentRepo: Repository<Student>,
   ) {}
 
   async create(dto: CreateGroupDto) {
