@@ -65,7 +65,7 @@ export class UsersService {
   async findOne(id: string): Promise<User> {
     const user = await this.userRepo.findOne({
       where: { id },
-      relations: [ 'teachingGroups'],
+      relations: ['teachingGroups'],
     });
 
     if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
@@ -78,7 +78,7 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('Foydalanuvchi topilmadi');
     }
-    
+
     if (dto.password) {
       const salt = await bcrypt.genSalt(10);
       dto.password = await bcrypt.hash(dto.password, salt);
@@ -94,6 +94,35 @@ export class UsersService {
     // Soft Remove - ma'lumot bazada qoladi, lekin deletedAt belgilanadi
     await this.userRepo.softRemove(user);
   }
+async findAllDeleted(search?: string, page = 1, limit = 10) {
+  // withDeleted() hammasini olib keladi
+  const query = this.userRepo.createQueryBuilder('user').withDeleted();
+
+  // FAQAT o'chirilganlarni saralab olamiz
+  query.andWhere('user.deletedAt IS NOT NULL');
+
+  if (search) {
+    query.andWhere(
+      '(user.fullName ILike :search OR user.phone ILike :search OR user.login ILike :search)',
+      { search: `%${search}%` },
+    );
+  }
+
+  const [items, total] = await query
+    .orderBy('user.deletedAt', 'DESC')
+    .skip((page - 1) * limit)
+    .take(limit)
+    .getManyAndCount();
+
+  return {
+    data: items,
+    meta: {
+      totalItems: total,
+      currentPage: page,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+}
 
   async restore(id: string): Promise<User> {
     await this.userRepo.restore(id);

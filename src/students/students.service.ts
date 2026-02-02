@@ -117,4 +117,43 @@ export class StudentsService {
     await this.studentRepo.softRemove(student);
     return { success: true, message: "O'quvchi muvaffaqiyatli arxivlandi" };
   }
+
+  async findAllDeleted(search?: string, page = 1, limit = 10) {
+    const query = this.studentRepo
+      .createQueryBuilder('student')
+      .withDeleted(); // O'chirilganlarni ham olish uchun
+
+      query.andWhere('student.deletedAt IS NOT NULL');
+      
+    if (search) {
+      query.andWhere(
+        '(student.fullName ILike :search OR student.phone ILike :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const [items, total] = await query
+      .andWhere('student.deletedAt IS NOT NULL') // Faqat o'chirilganlar
+      .orderBy('student.deletedAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      items,
+      meta: {
+        totalItems: total,
+        totalPages: Math.ceil(total / limit),
+        currentPage: page,
+      },
+    };
+  } 
+
+  async restore(id: string) {
+    await this.studentRepo.restore(id);
+    const restoredStudent = await this.findOne(id);
+    return restoredStudent;
+  }
+
+
 }
