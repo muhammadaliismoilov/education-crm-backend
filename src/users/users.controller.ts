@@ -82,6 +82,20 @@ export class UsersController {
     };
   }
 
+  @Get('all/deleted')
+  // @Roles(UserRole.ADMIN)
+  @ApiOperation({ summary: "O'chirilgan foydalanuvchilar ro'yxati" })
+  @ApiQuery({ name: 'search', required: false })
+  @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  async findAllDeleted(
+    @Query('search') search?: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+  ) {
+    return await this.usersService.findAllDeleted(search, page, limit);
+  }
+
   @Post(':id/restore')
   // @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: "O'chirilgan foydalanuvchini tiklash" })

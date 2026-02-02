@@ -20,9 +20,9 @@ import { StudentsService } from './students.service';
 import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 
-@ApiTags('Students') // Swaggerda bo'lim nomi
-@ApiBearerAuth() // JWT token talab qilinishi
-@UseGuards(JwtAuthGuard) // Himoya qatlami
+@ApiTags('Students')
+@ApiBearerAuth() 
+@UseGuards(JwtAuthGuard) 
 @Controller('students')
 export class StudentsController {
   constructor(private readonly studentsService: StudentsService) {}
@@ -68,5 +68,24 @@ export class StudentsController {
   remove(@Param('id') id: string) {
     // O'quvchini bazadan o'chirmasdan arxivlaydi
     return this.studentsService.remove(id);
+  }
+  
+  @Get('all/deleted/students')
+  @ApiOperation({ summary: "Barcha arxivlangan studentlarni olish" })
+  @ApiQuery({ name: 'search', required: false, description: "Ism yoki telefon bo'yicha qidiruv" })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  findAllDeleted(
+    @Query('search') search?: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+  ) {
+    return this.studentsService.findAllDeleted(search, page, limit);
+  }
+
+  @Post('restore/student/:id')
+  @ApiOperation({ summary: "Arxivlangan studentni tiklash" })
+  restore(@Param('id') id: string) {
+    return this.studentsService.restore(id);
   }
 }
