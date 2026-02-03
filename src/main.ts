@@ -35,8 +35,10 @@ async function bootstrap() {
 
   // 5. CORS sozlamalari (Frontend ulanishi uchun)
   app.enableCors({
-    origin: true, // Keyinchalik aniq domain qo'yiladi
+    origin: ['https://crm-oquv-markaz.vercel.app', 'http://localhost:5173'],
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
+    allowedHeaders: 'Content-Type, Accept, Authorization',
   });
 
   // 6. Swagger sozlamalari
