@@ -8,12 +8,13 @@ import { DataSource, Repository, ILike } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 import { User } from '../entities/user.entity';
 import { CreatePaymentDto, UpdatePaymentDto } from './payment.dto';
+import { Student } from 'src/entities/students.entity';
 
 @Injectable()
 export class PaymentService {
   constructor(
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
-    @InjectRepository(User) private userRepo: Repository<User>,
+    @InjectRepository(Student) private studentRepo: Repository<Student>,
     private dataSource: DataSource,
   ) {}
 
@@ -30,7 +31,7 @@ export class PaymentService {
       });
       const saved = await queryRunner.manager.save(payment);
       await queryRunner.manager.increment(
-        User,
+        Student,
         { id: dto.studentId },
         'balance',
         dto.amount,
@@ -93,7 +94,7 @@ export class PaymentService {
       if (dto.amount && dto.amount !== payment.amount) {
         const diff = dto.amount - payment.amount;
         await queryRunner.manager.increment(
-          User,
+          Student,
           { id: payment.student.id },
           'balance',
           diff,
@@ -120,7 +121,7 @@ export class PaymentService {
 
     try {
       await queryRunner.manager.decrement(
-        User,
+        Student,
         { id: payment.student.id },
         'balance',
         payment.amount,

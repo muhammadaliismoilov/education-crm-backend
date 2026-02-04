@@ -27,7 +27,7 @@ export class CreatePaymentDto {
   })
   paymentDate: string;
 
-  @ApiProperty({ example: 'userID' })
+  @ApiProperty({ example:'studentID' })
   @IsUUID()
   @IsNotEmpty({ message: "Student ID bo'sh bo'lmasligi kerak" })
   studentId: string;
