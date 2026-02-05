@@ -61,7 +61,7 @@ export class UsersController {
     return await this.usersService.findOne(id);
   }
 
-  @Patch(':id') // PUT o'rniga PATCH ishlatamiz
+  @Patch(':id') 
   // @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Foydalanuvchini qisman tahrirlash' })
   async update(
