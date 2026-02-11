@@ -22,7 +22,7 @@ export class AuthController {
     // Tokenlarni cookie-ga joylaymiz
     this.setCookies(res, accessToken, refreshToken);
 
-    return { message: 'Xush kelibsiz!', user, accessToken };
+    return { message: 'Xush kelibsiz!', user, accessToken ,refreshToken};
   }
 
 @Post('refresh')
