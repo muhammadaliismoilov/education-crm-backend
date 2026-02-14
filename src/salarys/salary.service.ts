@@ -22,49 +22,83 @@ export class SalaryService {
   ) {}
 
   async calculateTeacherSalary(teacherId: string, month: string) {
-    const teacher = await this.userRepo.findOne({
-      where: { id: teacherId, role: UserRole.TEACHER },
-      relations: ['teachingGroups'],
+  const teacher = await this.userRepo.findOne({
+    where: { id: teacherId, role: UserRole.TEACHER },
+    relations: ['teachingGroups'], // Har bir guruhning 'days' va 'price' ma'lumoti kelishi kerak
+  });
+
+  if (!teacher) throw new NotFoundException("O'qituvchi topilmadi");
+
+  const percentage = teacher.salaryPercentage ?? 0;
+  let totalSalary = 0;
+  const details: {
+    groupName: string;
+    groupDays: number[];
+    totalLessonsInMonth: number;
+    perLessonRate: number;
+    attendanceCount: number;
+    teacherEarned: number;
+  }[] = [];
+
+  for (const group of teacher.teachingGroups) {
+    // 1. Dinamik dars kunlari: Guruhning o'zidan olingan kunlar (masalan: [2, 4, 6] yoki [1, 4])
+    // Agar bazada 'days' bo'sh bo'lsa, xatolik chiqmasligi uchun default [1, 3, 5] qo'shdik
+    const groupDaysRaw = group.days && group.days.length > 0 ? group.days : [1, 3, 5];
+    const groupDays: number[] = groupDaysRaw.map((d: string | number) => Number(d));
+    
+    // 2. Aynan shu guruh kunlari asosida oydagi darslar sonini sanaymiz
+    const lessonsInMonth = this.countSpecificDaysInMonth(month, groupDays);
+
+    // 3. Bitta darsning o'quvchi uchun dinamik narxi
+    const perLessonRate = lessonsInMonth > 0 ? Number(group.price) / lessonsInMonth : 0;
+
+    // 4. Shu oyda o'qituvchi yo'qlama qilgan jami "keldi"lar soni
+    const attendanceCount = await this.attendanceRepo
+      .createQueryBuilder('attendance')
+      .where('attendance.groupId = :groupId', { groupId: group.id })
+      .andWhere('CAST(attendance.date AS TEXT) LIKE :month', { month: `${month}%` })
+      .andWhere('attendance.isPresent = true')
+      .getCount();
+
+    // 5. O'qituvchining ulushini hisoblash
+    const teacherSharePerStudent = (perLessonRate * percentage) / 100;
+    const teacherEarned = attendanceCount * teacherSharePerStudent;
+
+    totalSalary += teacherEarned;
+    details.push({
+      groupName: group.name,
+      groupDays: groupDays, // Qaysi kunlari dars ekanligi (tekshirish uchun)
+      totalLessonsInMonth: lessonsInMonth,
+      perLessonRate: Math.round(perLessonRate),
+      attendanceCount: attendanceCount,
+      teacherEarned: Math.round(teacherEarned),
     });
+  }
 
-    if (!teacher) throw new NotFoundException("O'qituvchi topilmadi");
+  return { 
+    teacherName: teacher.fullName, 
+    month, 
+    totalSalary: Math.round(totalSalary), 
+    details 
+  };
+}
 
-    // Foiz null bo'lsa 0 deb hisoblash yoki xato berish
-    const percentage = teacher.salaryPercentage ?? 0;
-    if (percentage === 0)
-      throw new BadRequestException("O'qituvchi foizi belgilanmagan");
+  // Yordamchi funksiya: Oy ichidagi dars kunlarini sanash
+  private countSpecificDaysInMonth(
+    monthStr: string,
+    daysToCount: number[],
+  ): number {
+    const [year, month] = monthStr.split('-').map(Number);
+    const date = new Date(year, month - 1, 1);
+    let count = 0;
 
-    let totalSalary = 0;
-    const details: Array<{
-      groupName: string;
-      studentAttendances: number;
-      groupTotalIncome: number;
-      teacherEarned: number;
-    }> = [];
-
-    for (const group of teacher.teachingGroups) {
-      const attendanceCount = await this.attendanceRepo
-        .createQueryBuilder('attendance')
-        .where('attendance.groupId = :groupId', { groupId: group.id })
-        .andWhere('CAST(attendance.date AS TEXT) LIKE :month', {
-          month: `${month}%`,
-        })
-        .andWhere('attendance.isPresent = true')
-        .getCount();
-
-      const groupIncome = attendanceCount * Number(group.price); // Decimal to Number
-      const teacherShare = (groupIncome * percentage) / 100;
-
-      totalSalary += teacherShare;
-      details.push({
-        groupName: group.name,
-        studentAttendances: attendanceCount,
-        groupTotalIncome: groupIncome,
-        teacherEarned: teacherShare,
-      });
+    while (date.getMonth() === month - 1) {
+      if (daysToCount.includes(date.getDay())) {
+        count++;
+      }
+      date.setDate(date.getDate() + 1);
     }
-
-    return { teacherName: teacher.fullName, month, totalSalary, details };
+    return count;
   }
   // 1. Oylik to'lash (Create)
   async paySalary(dto: PaySalaryDto) {
