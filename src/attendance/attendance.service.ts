@@ -52,7 +52,7 @@ export class AttendanceService {
       groupInfo: {
         id: group.id,
         name: group.name,
-        paidStudentsCount, 
+        paidStudentsCount,
         totalStudents: group.students.length,
       },
       students: studentsList,
@@ -116,5 +116,105 @@ export class AttendanceService {
     }
 
     return await this.attendanceRepo.save(attendance);
+  }
+
+  async getGroupMonthlyAttendance(groupId: string, month?: string) {
+    // Format tekshirish (YYYY-MM)
+    if (month && !/^\d{4}-\d{2}$/.test(month)) {
+      throw new BadRequestException(
+        'Month formati noto‘g‘ri. To‘g‘ri format: YYYY-MM (masalan: 2026-02)',
+      );
+    }
+    // 1️⃣ Oyni aniqlash (YYYY-MM)
+    const targetMonth = month ?? new Date().toISOString().slice(0, 7);
+
+    const startDate = new Date(`${targetMonth}-01`);
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + 1);
+
+    // 2️⃣ Guruhni olish
+    const group = await this.groupRepo.findOne({
+      where: { id: groupId },
+      relations: ['students'],
+      order: { students: { fullName: 'ASC' } },
+    });
+
+    if (!group) {
+      throw new NotFoundException('Guruh topilmadi');
+    }
+
+    // 3️⃣ Oydagi barcha attendance yozuvlari
+    const attendanceRecords = await this.attendanceRepo
+      .createQueryBuilder('attendance')
+      .leftJoinAndSelect('attendance.student', 'student')
+      .leftJoinAndSelect('attendance.group', 'group')
+      .where('attendance.groupId = :groupId', { groupId })
+      .andWhere('attendance.date >= :startDate', { startDate })
+      .andWhere('attendance.date < :endDate', { endDate })
+      .orderBy('attendance.date', 'ASC')
+      .getMany();
+
+    // 4️⃣ Unikal Sana + Vaqt columnlar
+    const distinctColumns = Array.from(
+      new Set(
+        attendanceRecords.map(
+          (r) =>
+            `${typeof r.date === 'string' ? r.date.slice(0, 10) : (r.date as Date).toISOString().slice(0, 10)} ${r.group?.startTime || ''}`,
+        ),
+      ),
+    ).sort();
+
+    // 5️⃣ Tez qidirish uchun Map
+    const attendanceMap = new Map<string, boolean>();
+
+    attendanceRecords.forEach((rec) => {
+      if (rec.student) {
+        const date =
+          typeof rec.date === 'string'
+            ? rec.date.slice(0, 10)
+            : (rec.date as Date).toISOString().slice(0, 10);
+        const time = rec.group?.startTime || '';
+        const key = `${rec.student.id}_${date}_${time}`;
+        attendanceMap.set(key, rec.isPresent);
+      }
+    });
+
+    // 6️⃣ Pivot table qurish
+    const reportData = group.students.map((student) => {
+      let totalPresent = 0;
+      const dailyStatus: Record<string, number | null> = {};
+
+      distinctColumns.forEach((col) => {
+        const [date, time] = col.split(' ');
+        const key = `${student.id}_${date}_${time || ''}`;
+
+        if (attendanceMap.has(key)) {
+          const isPresent = attendanceMap.get(key);
+          dailyStatus[col] = isPresent ? 1 : 0;
+
+          if (isPresent) totalPresent++;
+        } else {
+          dailyStatus[col] = null;
+        }
+      });
+
+      return {
+        studentId: student.id,
+        fullName: student.fullName,
+        totalPresent,
+        attendance: dailyStatus,
+      };
+    });
+
+    return {
+      groupInfo: {
+        id: group.id,
+        name: group.name,
+        totalStudents: group.students.length,
+      },
+      month: targetMonth,
+      columns: distinctColumns,
+      students: reportData,
+    };
   }
 }
