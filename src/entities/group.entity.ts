@@ -29,6 +29,8 @@ export class Group {
   @Column()
   startTime: string;
 
+  // endDate qoshishi karak
+
   @Column({
     type: 'decimal',
     precision: 12,

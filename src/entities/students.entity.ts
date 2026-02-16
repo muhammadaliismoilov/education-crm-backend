@@ -33,6 +33,8 @@ export class Student {
   @Column({ nullable: true })
   direction: string; // Yo'nalish
 
+  //pasport  seria malumotlari yoki tugilganlik haqidagiguvohnoma  malumotlarni kiritsh karak 
+
   @Column({ nullable: true })
   photo: string; // Rasm 3x4
 

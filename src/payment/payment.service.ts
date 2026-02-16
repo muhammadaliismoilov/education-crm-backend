@@ -4,9 +4,8 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, ILike } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
-import { User } from '../entities/user.entity';
 import { CreatePaymentDto, UpdatePaymentDto } from './payment.dto';
 import { Student } from 'src/entities/students.entity';
 
@@ -17,6 +16,12 @@ export class PaymentService {
     @InjectRepository(Student) private studentRepo: Repository<Student>,
     private dataSource: DataSource,
   ) {}
+
+  //paymentda  student  kurs narxini  toliq tolasa   qarzdorlik yoq bolishi karak
+  // aga qsmman tolasa frontda 300ming toladi 200ming qarzdor deb chiqb turushi karak
+
+
+  /// xisobotlaar qismida  har oyda qancha daromad qilingani  va qancha pul oqituvchilarga tolangani va tolov qilgan va supdqarzdor oquvchilar korinb turushu kearak
 
   // 1. Create with Balance Sync
   async create(dto: CreatePaymentDto) {
