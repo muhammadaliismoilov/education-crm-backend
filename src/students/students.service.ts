@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { Student } from 'src/entities/students.entity';
+import { DocumentType, Student } from 'src/entities/students.entity';
 import { Group } from 'src/entities/group.entity';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 
@@ -30,12 +30,25 @@ export class StudentsService {
       throw new NotFoundException("Bir yoki bir nechta tanlangan guruhlar topilmadi");
     }
 
+    // const student = this.studentRepo.create({
+    //   ...studentData,
+    //   // DTO dagi groupName ni direction ustuniga saqlaymiz
+    //   direction: dto.direction || (groups.length > 0 ? groups[0].name : undefined),
+    //   enrolledGroups: groups,
+    // });
     const student = this.studentRepo.create({
-      ...studentData,
-      // DTO dagi groupName ni direction ustuniga saqlaymiz
+      fullName: studentData.fullName,
+      phone: studentData.phone,
+      parentName: studentData.parentName,
+      parentPhone: studentData.parentPhone,
+      documentNumber: studentData.documentNumber,
+      pinfl: studentData.pinfl,
+      birthDate:studentData.birthDate,
+      documentType: studentData.documentType as DocumentType, 
       direction: dto.direction || (groups.length > 0 ? groups[0].name : undefined),
       enrolledGroups: groups,
     });
+    
 
     return await this.studentRepo.save(student);
   }

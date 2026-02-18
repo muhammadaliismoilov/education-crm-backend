@@ -29,7 +29,8 @@ export class Group {
   @Column()
   startTime: string;
 
-  // endDate qoshishi karak
+  @Column()
+  endTime: string;
 
   @Column({
     type: 'decimal',

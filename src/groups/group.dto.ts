@@ -24,6 +24,11 @@ export class CreateGroupDto {
   @IsNotEmpty({ message: "Boshlanish vaqti bo'sh bo'lmasligi kerak" })
   startTime: string;
 
+  @ApiProperty({ example: '16:00' })
+  @IsString()
+  @IsNotEmpty({ message: "Tugash vaqti bo'sh bo'lmasligi kerak" })
+  endTime: string;
+
   @ApiProperty({ example: 800000 })
   @IsNumber()
   @IsNotEmpty({ message: "Narx bo'sh bo'lmasligi kerak" })
