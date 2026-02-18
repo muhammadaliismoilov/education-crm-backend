@@ -49,8 +49,6 @@ export class Student {
   @Column({ nullable: true })
   direction: string; // Yo'nalish
 
-
-
   @Column({ nullable: true })
   photo: string; // Rasm 3x4
 
