@@ -7,7 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Group } from 'src/entities/group.entity';
 
 import { Repository, ILike } from 'typeorm';
-import { CreateGroupDto, UpdateGroupDto } from './create-group.dto';
+import { CreateGroupDto, UpdateGroupDto } from './group.dto';
 import { Student } from 'src/entities/students.entity';
 
 @Injectable()

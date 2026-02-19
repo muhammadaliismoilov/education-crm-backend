@@ -13,7 +13,6 @@ import { Student } from 'src/entities/students.entity';
 export class PaymentService {
   constructor(
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
-    @InjectRepository(Student) private studentRepo: Repository<Student>,
     private dataSource: DataSource,
   ) {}
 

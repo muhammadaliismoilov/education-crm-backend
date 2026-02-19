@@ -21,6 +21,58 @@ export class SalaryService {
     private dataSource: DataSource,
   ) {}
 
+  async getEstimatedSalaries(month?: string) {
+    // 1. Agar oy berilmasa, joriy oyni (YYYY-MM) formatida olamiz
+    const targetMonth = month ?? new Date().toISOString().slice(0, 7);
+    
+    // 2. Tizimdagi barcha faol o'qituvchilarni olamiz
+    const teachers = await this.userRepo.find({
+      where: { role: UserRole.TEACHER },
+    });
+
+    const report: {
+      teacherId: string;
+      teacherName: string;
+      calculatedSalary: number;
+      month: string;
+      details: {
+        groupName: string;
+        groupDays: number[];
+        totalLessonsInMonth: number;
+        perLessonRate: number;
+        attendanceCount: number;
+        teacherEarned: number;
+      }[];
+    }[] = [];
+
+    for (const teacher of teachers) {
+      // 3. Har bir o'qituvchi uchun davomat asosida oylikni hisoblaymiz
+      // Bu metod bazaga yozmaydi, faqat hisob-kitob natijasini qaytaradi
+      const salaryData = await this.calculateTeacherSalary(
+        teacher.id,
+        targetMonth
+      );
+
+      // Faqat oyligi 0 dan baland bo'lganlarni ro'yxatga qo'shamiz
+      if (salaryData.totalSalary > 0) {
+        report.push({
+          teacherId: teacher.id,
+          teacherName: teacher.fullName,
+          calculatedSalary: salaryData.totalSalary,
+          month: targetMonth,
+          details: salaryData.details // Guruhlar kesimidagi batafsil ma'lumot
+        });
+      }
+    }
+
+    return {
+      timestamp: new Date().toISOString(),
+      month: targetMonth,
+      teachersCount: report.length,
+      data: report
+    };
+  }
+
  async calculateTeacherSalary(teacherId: string, month: string) {
   // 1. Ma'lumotlarni yuklash: teacher va uning barcha teachingGroups munosabatlari
   const teacher = await this.userRepo.findOne({
