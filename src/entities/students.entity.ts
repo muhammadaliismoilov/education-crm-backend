@@ -3,7 +3,6 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
-  JoinTable,
   ManyToMany,
   OneToMany,
   PrimaryGeneratedColumn,
@@ -12,6 +11,11 @@ import {
 import { Group } from './group.entity';
 import { Payment } from './payment.entity';
 import { Attendance } from './attendance.entity';
+
+export enum DocumentType {
+  PASSPORT = 'passport',
+  BIRTH_CERTIFICATE = 'birth_certificate',
+}
 
 @Entity('students')
 export class Student {
@@ -30,10 +34,20 @@ export class Student {
   @Column({ nullable: true })
   parentPhone: string; // Ota-onasi nomeri
 
+  @Column({ type: 'enum', enum: DocumentType, default:DocumentType.BIRTH_CERTIFICATE, nullable: true })
+  documentType: DocumentType; // Masalan: 'PASSPORT' yoki 'BIRTH_CERTIFICATE'
+
+  @Column({ unique: true, nullable: true })
+  documentNumber: string; // Seriya va raqam birga: 'AB1234567'
+
+  @Column({ unique: true, length: 14, nullable: true })
+  pinfl: string; // 14 xonali JSHSHIR - bu eng aniq identifikator
+
+  @Column({ type: 'date', nullable: true })
+  birthDate: Date; // Talabaning tug'ilgan sanasi
+
   @Column({ nullable: true })
   direction: string; // Yo'nalish
-
-  //pasport  seria malumotlari yoki tugilganlik haqidagiguvohnoma  malumotlarni kiritsh karak 
 
   @Column({ nullable: true })
   photo: string; // Rasm 3x4

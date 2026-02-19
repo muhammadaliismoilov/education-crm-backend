@@ -25,13 +25,23 @@ import { RolesGuard } from 'src/common/guards/roles.guard';
 import { UserRole } from 'src/entities/user.entity';
 import { PaySalaryDto } from './salary.dto';
 
-
 @ApiTags('Oyliklar (Salary)')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('salary')
 export class SalaryController {
   constructor(private readonly salaryService: SalaryService) {}
+
+  @Get('estimated-all')
+  @ApiOperation({
+    summary: 'Barcha o‘qituvchilarning real-vaqtdagi hisoblanayotgan oyliklari',
+    description:
+      'Bu API bazaga ma’lumot yozmaydi, faqat joriy davomat asosida hisoblab beradi.',
+  })
+  @ApiQuery({ name: 'month', required: false, example: '2026-02' })
+  async getAllEstimated(@Query('month') month?: string) {
+    return this.salaryService.getEstimatedSalaries(month);
+  }
 
   @Get('calculate')
   @Roles(UserRole.ADMIN)
