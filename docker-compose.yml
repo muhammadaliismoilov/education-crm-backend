@@ -1,15 +1,60 @@
+# services:
+#   api:
+#     build: .
+#     container_name: crm_api
+#     restart: always
+#     ports:
+#       - "3000:3000"
+#     env_file:
+#       - .env
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#       redis: 
+#         condition: service_started
+
+#   postgres:
+#     image: postgres:15
+#     container_name: crm_db
+#     restart: always
+#     environment:
+#       POSTGRES_USER: ${DB_USER:-admin}
+#       POSTGRES_PASSWORD: ${DB_PASS:-password123}
+#       POSTGRES_DB: ${DB_NAME:-education_crm}
+#     volumes:
+#       - crm_postgres_data:/var/lib/postgresql/data
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-education_crm}"]
+#       interval: 5s
+#       timeout: 5s
+#       retries: 10
+
+# redis:
+#     image: redis:alpine
+#     container_name: crm_redis
+#     restart: always
+#     ports:
+#       - "6379:6379" 
+
+# volumes:
+#   crm_postgres_data:
+
+version: '3.8'
+
 services:
   api:
     build: .
     container_name: crm_api
     restart: always
     ports:
-      - "3000:3000" # NestJS porti
+      - "3000:3000"
     env_file:
       - .env
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_started
 
   postgres:
     image: postgres:15
@@ -31,6 +76,8 @@ services:
     image: redis:alpine
     container_name: crm_redis
     restart: always
+    ports:
+      - "6379:6379"
 
 volumes:
   crm_postgres_data:

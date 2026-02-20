@@ -19,38 +19,42 @@ export class PaymentService {
   //paymentda  student  kurs narxini  toliq tolasa   qarzdorlik yoq bolishi karak
   // aga qsmman tolasa frontda 300ming toladi 200ming qarzdor deb chiqb turushi karak
 
-
   /// xisobotlaar qismida  har oyda qancha daromad qilingani  va qancha pul oqituvchilarga tolangani va tolov qilgan va supdqarzdor oquvchilar korinb turushu kearak
 
-  // 1. Create with Balance Sync
+  // 1. To'lov yaratish va Balansni sinxronlash
   async create(dto: CreatePaymentDto) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
+
     try {
       const payment = queryRunner.manager.create(Payment, {
         ...dto,
         student: { id: dto.studentId },
         group: { id: dto.groupId },
       });
+
       const saved = await queryRunner.manager.save(payment);
+
+      // Talaba balansini oshiramiz
       await queryRunner.manager.increment(
         Student,
         { id: dto.studentId },
         'balance',
-        dto.amount,
+        Number(dto.amount),
       );
+
       await queryRunner.commitTransaction();
       return saved;
     } catch (err) {
       await queryRunner.rollbackTransaction();
-      throw new BadRequestException(err.message);
+      throw new BadRequestException("To'lovni saqlashda xato: " + err.message);
     } finally {
       await queryRunner.release();
     }
   }
 
-  // 2. Find All with Search and Pagination
+  // 2. Ro'yxatni olish (Qarz mantiqi bilan)
   async findAll(search?: string, page = 1, limit = 10) {
     const query = this.paymentRepo
       .createQueryBuilder('payment')
@@ -67,8 +71,24 @@ export class PaymentService {
       .take(limit)
       .getManyAndCount();
 
+    // Rasmda ko'rsatilgan qarz mantiqini qo'shamiz
+    const formattedItems = items.map((payment) => {
+      const coursePrice = Number(payment.group?.price || 0);
+      const paidAmount = Number(payment.amount || 0);
+
+      // Qarz = Kurs narxi - To'langan summa
+      const debt = coursePrice - paidAmount;
+
+      return {
+        ...payment,
+        coursePrice,
+        debt, // Frontend buni -300,000 kabi ko'rsatishi uchun
+        isFullyPaid: debt <= 0,
+      };
+    });
+
     return {
-      items,
+      items: formattedItems,
       meta: {
         totalItems: total,
         totalPages: Math.ceil(total / limit),
@@ -77,7 +97,7 @@ export class PaymentService {
     };
   }
 
-  // 3. Find One
+
   async findOne(id: string) {
     const payment = await this.paymentRepo.findOne({
       where: { id },
@@ -87,7 +107,41 @@ export class PaymentService {
     return payment;
   }
 
-  // 4. Update (Summa o'zgarsa balans ham o'zgaradi)
+  // Chek uchun ma'lumotlarni shakllantirish
+  async getReceiptData(paymentId: string) {
+    const payment = await this.paymentRepo.findOne({
+      where: { id: paymentId },
+      relations: ['student', 'group'],
+    });
+
+    if (!payment) throw new NotFoundException('To‘lov topilmadi');
+
+    const coursePrice = Number(payment.group?.price || 0);
+    const paidAmount = Number(payment.amount);
+    const debt = coursePrice - paidAmount;
+
+    return {
+      receiptNumber: payment.id.split('-')[0].toUpperCase(), // Qisqa chek raqami
+      date: payment.createdAt.toLocaleString('sv-SE'),
+      student: {
+        fullName: payment.student.fullName,
+        phone: payment.student.phone,
+        currentBalance: payment.student.balance,
+      },
+      group: {
+        name: payment.group.name,
+        price: coursePrice,
+      },
+      payment: {
+        amount: paidAmount,
+        debt: debt > 0 ? debt : 0, // Agar qarz bo'lsa
+        overpayment: debt < 0 ? Math.abs(debt) : 0, // Agar ortiqcha to'lov bo'lsa
+      },
+      centerName: "Ali Edu CRM Center", // O'quv markaz nomi
+    };
+  }
+
+  // 3. To'lovni tahrirlash (Farq hisobi bilan)
   async update(id: string, dto: UpdatePaymentDto) {
     const payment = await this.findOne(id);
     const queryRunner = this.dataSource.createQueryRunner();
@@ -95,8 +149,13 @@ export class PaymentService {
     await queryRunner.startTransaction();
 
     try {
-      if (dto.amount && dto.amount !== payment.amount) {
-        const diff = dto.amount - payment.amount;
+      if (
+        dto.amount !== undefined &&
+        Number(dto.amount) !== Number(payment.amount)
+      ) {
+        const diff = Number(dto.amount) - Number(payment.amount);
+
+        // Faqat farqni balansga qo'shamiz/ayiramiz
         await queryRunner.manager.increment(
           Student,
           { id: payment.student.id },
@@ -104,8 +163,10 @@ export class PaymentService {
           diff,
         );
       }
+
       Object.assign(payment, dto);
       const updated = await queryRunner.manager.save(payment);
+
       await queryRunner.commitTransaction();
       return updated;
     } catch (err) {
@@ -116,7 +177,7 @@ export class PaymentService {
     }
   }
 
-  // 5. Delete (To'lov o'chirilsa balansdan ayiriladi)
+  // 4. To'lovni o'chirish (Balansni qaytarish)
   async remove(id: string) {
     const payment = await this.findOne(id);
     const queryRunner = this.dataSource.createQueryRunner();
@@ -124,15 +185,21 @@ export class PaymentService {
     await queryRunner.startTransaction();
 
     try {
+      // O'chirilayotgan to'lovni balansdan ayiramiz
       await queryRunner.manager.decrement(
         Student,
         { id: payment.student.id },
         'balance',
-        payment.amount,
+        Number(payment.amount),
       );
+
       await queryRunner.manager.remove(payment);
       await queryRunner.commitTransaction();
-      return { message: 'To‘lov o‘chirildi va balans tahrirlandi' };
+
+      return {
+        success: true,
+        message: 'To‘lov o‘chirildi va balans to‘g‘rilandi',
+      };
     } catch (err) {
       await queryRunner.rollbackTransaction();
       throw new BadRequestException(err.message);
@@ -140,4 +207,5 @@ export class PaymentService {
       await queryRunner.release();
     }
   }
+
 }
