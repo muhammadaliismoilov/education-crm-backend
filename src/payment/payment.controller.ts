@@ -30,6 +30,12 @@ export class PaymentController {
     return this.paymentService.findAll(search, Number(page) || 1);
   }
 
+  @Get(':id/receipt')
+  @ApiOperation({ summary: 'To’lov cheki ma’lumotlarini olish' })
+  async getReceipt(@Param('id') id: string) {
+    return this.paymentService.getReceiptData(id);
+  }
+
   @Get(':id')
   // @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Bitta to‘lov ma’lumotini olish' })
