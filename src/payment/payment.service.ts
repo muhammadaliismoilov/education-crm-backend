@@ -2,24 +2,23 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 import { CreatePaymentDto, UpdatePaymentDto } from './payment.dto';
 import { Student } from 'src/entities/students.entity';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import type { Cache } from 'cache-manager';
 
 @Injectable()
 export class PaymentService {
   constructor(
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private dataSource: DataSource,
   ) {}
-
-  //paymentda  student  kurs narxini  toliq tolasa   qarzdorlik yoq bolishi karak
-  // aga qsmman tolasa frontda 300ming toladi 200ming qarzdor deb chiqb turushi karak
-
-  /// xisobotlaar qismida  har oyda qancha daromad qilingani  va qancha pul oqituvchilarga tolangani va tolov qilgan va supdqarzdor oquvchilar korinb turushu kearak
 
   // 1. To'lov yaratish va Balansni sinxronlash
   async create(dto: CreatePaymentDto) {
@@ -43,7 +42,7 @@ export class PaymentService {
         'balance',
         Number(dto.amount),
       );
-
+      await (this.cacheManager.stores as any).reset();
       await queryRunner.commitTransaction();
       return saved;
     } catch (err) {
@@ -97,7 +96,6 @@ export class PaymentService {
     };
   }
 
-
   async findOne(id: string) {
     const payment = await this.paymentRepo.findOne({
       where: { id },
@@ -137,7 +135,7 @@ export class PaymentService {
         debt: debt > 0 ? debt : 0, // Agar qarz bo'lsa
         overpayment: debt < 0 ? Math.abs(debt) : 0, // Agar ortiqcha to'lov bo'lsa
       },
-      centerName: "Ali Edu CRM Center", // O'quv markaz nomi
+      centerName: 'Ali Edu CRM Center', // O'quv markaz nomi
     };
   }
 
@@ -207,5 +205,4 @@ export class PaymentService {
       await queryRunner.release();
     }
   }
-
 }

@@ -1,7 +1,7 @@
 import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, In } from 'typeorm';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Repository } from 'typeorm';
+import { CACHE_MANAGER, CacheKey } from '@nestjs/cache-manager';
 import { Payment } from '../entities/payment.entity';
 import { Group } from '../entities/group.entity';
 import { Attendance } from '../entities/attendance.entity';
@@ -9,7 +9,6 @@ import { Student } from 'src/entities/students.entity';
 import type { Cache } from 'cache-manager';
 import * as ExcelJS from 'exceljs';
 import * as express from 'express';
-import { MoreThan } from 'typeorm';
 
 @Injectable()
 export class ReportsService {
@@ -26,32 +25,45 @@ export class ReportsService {
    * 1. MOLIYAVIY TAHLIL (Redis Kesh bilan)
    */
   async getFinancialOverview(startDate: Date, endDate: Date) {
-    const cacheKey = `finance_${startDate.getTime()}_${endDate.getTime()}`;
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+
+    const cacheKey = `finance_${start.getTime()}_${end.getTime()}`;
     const cached = await this.cacheManager.get(cacheKey);
     if (cached) return cached;
 
-    const payments = await this.paymentRepo.find({
-      where: { createdAt: Between(startDate, endDate) },
-    });
+    // 1. To'lovlar va ularga bog'liq guruh narxlarini hisoblaymiz
+    const paymentsData = await this.paymentRepo
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.group', 'g')
+      .where('p.createdAt BETWEEN :start AND :end', { start, end })
+      .getMany();
 
-    const totalIncome = payments.reduce((sum, p) => sum + Number(p.amount), 0);
-
-    const studentsWithDebt = await this.studentRepo.find({
-      where: { balance: Between(-100000000, -1) },
-    });
-    const totalPending = Math.abs(
-      studentsWithDebt.reduce((sum, s) => sum + Number(s.balance), 0),
+    // Jami tushgan pul
+    const totalIncome = paymentsData.reduce(
+      (sum, p) => sum + Number(p.amount),
+      0,
     );
+
+    // 2. Qarzni hisoblash: Har bir to'lov bo'yicha (Guruh narxi - To'langan summa)
+    // Faqat qarz qolgan (isFullyPaid: false) to'lovlarni hisobga olamiz
+    const totalPending = paymentsData.reduce((sum, p) => {
+      const coursePrice = Number(p.group?.price || 0);
+      const paidAmount = Number(p.amount);
+      const debt = coursePrice > paidAmount ? coursePrice - paidAmount : 0;
+      return sum + debt;
+    }, 0);
 
     const result = {
       totalIncome,
-      totalPending,
+      totalPending, // Endi bu yerda 300,000 (800k - 500k) chiqadi
       currency: "so'm",
       generatedAt: new Date(),
     };
 
-    // 15 daqiqa keshga saqlash
-    await this.cacheManager.set(cacheKey, result, 900000);
+    await this.cacheManager.set(cacheKey, result, 60);
     return result;
   }
 
@@ -131,70 +143,90 @@ export class ReportsService {
   /**
    * 3. TALABALAR DINAMIKASI (Kesh bilan)
    */
-  async getGrowthReport(startDate: Date, endDate: Date) {
-    const cacheKey = `growth_${startDate.getTime()}_${endDate.getTime()}`;
-    const cached = await this.cacheManager.get(cacheKey);
-    if (cached) return cached;
+  // async getGrowthReport(startDate: Date, endDate: Date) {
+  //   const cacheKey = `growth_${startDate.getTime()}_${endDate.getTime()}`;
+  //   const cached = await this.cacheManager.get(cacheKey);
+  //   if (cached) return cached;
 
-    const [newStudents, leftStudents] = await Promise.all([
-      this.studentRepo.count({
-        where: { createdAt: Between(startDate, endDate) },
-      }),
-      this.studentRepo.count({
-        where: { deletedAt: Between(startDate, endDate) },
-        withDeleted: true,
-      }),
-    ]);
+  //   const [newStudents, leftStudents] = await Promise.all([
+  //     this.studentRepo.count({
+  //       where: { createdAt: Between(startDate, endDate) },
+  //     }),
+  //     this.studentRepo.count({
+  //       where: { deletedAt: Between(startDate, endDate) },
+  //       withDeleted: true,
+  //     }),
+  //   ]);
 
-    const result = {
-      newStudents,
-      leftStudents,
-      netGrowth: newStudents - leftStudents,
-    };
-    await this.cacheManager.set(cacheKey, result, 900000);
-    return result;
-  }
+  //   const result = {
+  //     newStudents,
+  //     leftStudents,
+  //     netGrowth: newStudents - leftStudents,
+  //   };
+  //   await this.cacheManager.set(cacheKey, result, 60);
+  //   return result;
+  // }
 
   /**
    * 4. O'QITUVCHILAR SAMARADORLIGI (QueryBuilder bilan optimallashgan)
    */
-  async getTeacherPerformance() {
-    const cacheKey = 'teacher_performance';
-    const cached = await this.cacheManager.get(cacheKey);
-    if (cached) return cached;
+  async getTeacherPerformance(startDate: Date, endDate: Date) {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
     const data = await this.groupRepo
       .createQueryBuilder('g')
-      .leftJoinAndSelect('g.teacher', 't')
+      .leftJoin('g.teacher', 't')
       .leftJoin('g.attendances', 'a')
       .select([
-        't.fullName as teacherName',
-        'g.name as groupName',
-        'COUNT(a.id) as totalLessons',
-        'SUM(CASE WHEN a.isPresent = true THEN 1 ELSE 0 END) as attendedLessons',
+        't.id as teacher_id',
+        't.fullName as teacher_name',
+        'g.id as group_id',
+        'g.name as group_name',
+        'COUNT(DISTINCT a.date) as total_lessons',
+        'SUM(CASE WHEN a.isPresent = true THEN 1 ELSE 0 END) as attended_count',
       ])
+      .where('a.date BETWEEN :start AND :end', { start, end })
       .groupBy('t.id, t.fullName, g.id, g.name')
       .getRawMany();
 
-    const result = data.map((item) => ({
-      ...item,
-      attendanceRate:
-        item.totalLessons > 0
-          ? Math.round((item.attendedLessons / item.totalLessons) * 100)
-          : 0,
-    }));
+    const result = await Promise.all(
+      data.map(async (item) => {
+        // MUHIM: 'enrolledGroups' deb nomlangan relationni ishlatamiz
+        // Agar entity-da boshqacha bo'lsa, o'sha nomni qo'ying (masalan: students)
+        const studentCount = await this.studentRepo
+          .createQueryBuilder('student')
+          .leftJoin('student.enrolledGroups', 'group') // Bog'liqlik nomi: enrolledGroups
+          .where('group.id = :groupId', { groupId: item.group_id })
+          .getCount();
 
-    await this.cacheManager.set(cacheKey, result, 3600000); // 1 soat kesh
+        const totalLessons = Number(item.total_lessons) || 0;
+        const attendedCount = Number(item.attended_count) || 0;
+
+        // To'g'ri formula: Jami darslar * Guruhdagi talabalar soni
+        const shouldAttend = totalLessons * studentCount;
+
+        const attendanceRate =
+          shouldAttend > 0
+            ? Math.round((attendedCount / shouldAttend) * 100)
+            : 0;
+
+        return {
+          teacherId: item.teacher_id,
+          teacherName: item.teacher_name,
+          groupName: item.group_name,
+          totalLessons,
+          totalStudents: studentCount,
+          shouldAttend,
+          attendedCount,
+          attendanceRate: attendanceRate > 100 ? 100 : attendanceRate,
+        };
+      }),
+    );
+    const dynamicCacheKey = `teacher_performance_${start.getTime()}_${end.getTime()}`;
+    await this.cacheManager.set(dynamicCacheKey, result, 900000);
     return result;
-  }
-
-  /**
-   * 5. GURUHLAR ANALITIKASI
-   */
-  async getGroupAnalytics() {
-    return this.groupRepo
-      .createQueryBuilder('g')
-      .loadRelationCountAndMap('g.studentCount', 'g.students')
-      .getMany();
   }
 }
