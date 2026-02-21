@@ -27,7 +27,7 @@ export class DashboardController {
 
   @Get('summary')
   @Roles(UserRole.ADMIN) // Faqat ma'lum rollar ko'ra oladi
-  @ApiOperation({ summary: 'Markaziy dashboard statistikasi' })
+  @ApiOperation({ summary: 'Markaziy dashboard statistikasi',description:"Berilgan sana oraligʻida markaziy dashboard uchun jami daromad, qarzdorlik, faol talabalar soni, yangi talabalar soni, davomat foizi va faol guruhlar sonini taqdim etadi. Keshga saqlangan maʼlumotlar 15 daqiqa davomida yangilanmaydi." })
   @ApiQuery({ name: 'startDate', required: false, example: '2026-01-01' })
   @ApiQuery({ name: 'endDate', required: false, example: '2026-12-31' })
   @ApiResponse({
