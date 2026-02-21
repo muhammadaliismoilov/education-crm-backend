@@ -12,5 +12,6 @@ import { Attendance } from 'src/entities/attendance.entity';
   imports: [TypeOrmModule.forFeature([User, Payment,SalaryPayout,Attendance])],
   controllers: [SalaryController],
   providers: [SalaryService],
+  exports:[SalaryService]
 })
 export class SalaryModule {}

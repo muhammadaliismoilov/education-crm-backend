@@ -48,9 +48,11 @@ export class SalaryController {
   @ApiOperation({
     summary: "O'qituvchi oyligini hisoblash (Guruhlar kesimida)",
   })
+  @ApiQuery({ name: 'teacherId', required: true, example: 'teacherId' })
+  @ApiQuery({ name: 'month', required: true, example: '2026-01' })
   async calculate(
     @Query('teacherId') teacherId: string,
-    @Query('month') month: string, // format: 2026-01
+    @Query('month') month: string, 
   ) {
     return this.salaryService.calculateTeacherSalary(teacherId, month);
   }
