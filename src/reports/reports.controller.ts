@@ -15,7 +15,7 @@ export class ReportsController {
 
   @Get('finance')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Moliyaviy tahlil hisoboti' })
+  @ApiOperation({ summary: 'Moliyaviy tahlil hisoboti',description:"Berilgan sana oraligʻida olingan toʻlovlar va qarzdorlar haqida umumiy maʼlumot beradi. Keshga saqlangan maʼlumotlar 15 daqiqa davomida yangilanmaydi." })
   @ApiQuery({ name: 'startDate', required: false, example: '2026-01-01' })
   @ApiQuery({ name: 'endDate', required: false, example: '2026-02-19' })
   async getFinance(
@@ -34,29 +34,32 @@ export class ReportsController {
     return this.reportsService.exportDebtorsToExcel(res);
   }
 
-  @Get('growth')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Talabalar oʻsish dinamikasi' })
-  async getGrowth(
+  // @Get('growth')
+  // @Roles(UserRole.ADMIN)
+  // @ApiOperation({ summary: 'Talabalar oʻsish dinamikasi',description:"Berilgan sana oraligʻida yangi qoʻshilgan talabalar soni va umumiy talabalar sonining oʻsish dinamikasini taqdim etadi." })
+  //  @ApiQuery({ name: 'startDate', required: false, example: '2026-01-01' })
+  // @ApiQuery({ name: 'endDate', required: false, example: '2026-02-19' })
+
+  // async getGrowth(
+  //   @Query('startDate') startDate?: string,
+  //   @Query('endDate') endDate?: string,
+  // ) {
+  //   const { start, end } = this.validateDates(startDate, endDate);
+  //   return this.reportsService.getGrowthReport(start, end);
+  // }
+
+  @Get('teachers-performance')
+  @Roles(UserRole.ADMIN, )
+  @ApiOperation({ summary: "O'qituvchilar dars berish samaradorligi" ,description:"O`qituvchilarning dars berish samaradorligini baholash uchun ularning darslariga qatnashgan talabalar soni, o'rtacha baholari va boshqa ko'rsatkichlarni taqdim etadi."})
+  @ApiQuery({ name: 'startDate', required: false, example: '2026-01-01' })
+  @ApiQuery({ name: 'endDate', required: false, example: '2026-02-19' })
+  
+  async getTeacherPerformance(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
     const { start, end } = this.validateDates(startDate, endDate);
-    return this.reportsService.getGrowthReport(start, end);
-  }
-
-  @Get('teachers-performance')
-  @Roles(UserRole.ADMIN, 'MANAGER')
-  @ApiOperation({ summary: "O'qituvchilar dars berish samaradorligi" })
-  async getTeacherPerformance() {
-    return this.reportsService.getTeacherPerformance();
-  }
-
-  @Get('group-analytics')
-  @Roles(UserRole.ADMIN, 'MANAGER')
-  @ApiOperation({ summary: 'Guruhlar boʻyicha toʻliq tahlil' })
-  async getGroupAnalytics() {
-    return this.reportsService.getGroupAnalytics();
+    return this.reportsService.getTeacherPerformance(start, end);
   }
 
   /**

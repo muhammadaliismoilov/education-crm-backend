@@ -7,8 +7,11 @@ import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { Student } from 'src/entities/students.entity';
 
+
 @Module({
-  imports:[TypeOrmModule.forFeature([Payment,User,Group,Student])],
+  imports: [
+    TypeOrmModule.forFeature([Payment, User, Group, Student]),
+  ],
   controllers: [PaymentController],
   providers: [PaymentService],
 })

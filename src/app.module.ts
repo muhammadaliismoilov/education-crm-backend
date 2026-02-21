@@ -1,6 +1,6 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { SalaryModule } from './salarys/salary.module';
 import { AuthModule } from './auth/auth.module';
@@ -11,11 +11,23 @@ import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { StudentsModule } from './students/students.module';
 import { ReportsModule } from './reports/reports.module';
 import { DashboardModule } from './dashboards/dashboards.module';
+import { CacheModule } from '@nestjs/cache-manager';
+import { redisStore } from 'cache-manager-redis-yet';
 
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }), 
+    CacheModule.registerAsync({
+      isGlobal: true, // BU JUDA MUHIM: Hamma modullar bitta keshni ishlatadi
+      useFactory: async (configService: ConfigService) => ({
+        store: await redisStore({
+          url: `redis://${configService.get('REDIS_HOST') || 'localhost'}:6379`,
+          ttl: 600, // Default 10 minut
+        }),
+      }),
+      inject: [ConfigService],
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DB_HOST,
