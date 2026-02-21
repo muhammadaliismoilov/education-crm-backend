@@ -7,8 +7,10 @@ import { Group } from '../entities/group.entity';
 import { Attendance } from '../entities/attendance.entity';
 import { Student } from 'src/entities/students.entity';
 import type { Cache } from 'cache-manager';
+import { User, UserRole } from 'src/entities/user.entity';
 import * as ExcelJS from 'exceljs';
 import * as express from 'express';
+import { SalaryService } from 'src/salarys/salary.service';
 
 @Injectable()
 export class ReportsService {
@@ -16,6 +18,8 @@ export class ReportsService {
     @InjectRepository(Student) private studentRepo: Repository<Student>,
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
     @InjectRepository(Group) private groupRepo: Repository<Group>,
+    @InjectRepository(User) private userRepo: Repository<User>,
+    private salaryService: SalaryService,
     @InjectRepository(Attendance)
     private attendanceRepo: Repository<Attendance>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
@@ -25,47 +29,79 @@ export class ReportsService {
    * 1. MOLIYAVIY TAHLIL (Redis Kesh bilan)
    */
   async getFinancialOverview(startDate: Date, endDate: Date) {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
 
-    const cacheKey = `finance_${start.getTime()}_${end.getTime()}`;
-    const cached = await this.cacheManager.get(cacheKey);
-    if (cached) return cached;
+  // 1. Redis Keshni tekshirish
+  const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
+  const cached = await this.cacheManager.get(cacheKey);
+  if (cached) return cached;
 
-    // 1. To'lovlar va ularga bog'liq guruh narxlarini hisoblaymiz
-    const paymentsData = await this.paymentRepo
-      .createQueryBuilder('p')
-      .leftJoinAndSelect('p.group', 'g')
-      .where('p.createdAt BETWEEN :start AND :end', { start, end })
-      .getMany();
+  // 2. To'lovlar va qarzni hisoblash
+  const paymentsData = await this.paymentRepo
+    .createQueryBuilder('p')
+    .leftJoinAndSelect('p.group', 'g')
+    .where('p.createdAt BETWEEN :start AND :end', { start, end })
+    .getMany();
 
-    // Jami tushgan pul
-    const totalIncome = paymentsData.reduce(
-      (sum, p) => sum + Number(p.amount),
-      0,
-    );
+  const totalIncome = paymentsData.reduce(
+    (sum, p) => sum + Number(p.amount),
+    0,
+  );
 
-    // 2. Qarzni hisoblash: Har bir to'lov bo'yicha (Guruh narxi - To'langan summa)
-    // Faqat qarz qolgan (isFullyPaid: false) to'lovlarni hisobga olamiz
-    const totalPending = paymentsData.reduce((sum, p) => {
-      const coursePrice = Number(p.group?.price || 0);
-      const paidAmount = Number(p.amount);
-      const debt = coursePrice > paidAmount ? coursePrice - paidAmount : 0;
-      return sum + debt;
-    }, 0);
+  const totalPending = paymentsData.reduce((sum, p) => {
+    const coursePrice = Number(p.group?.price || 0);
+    const paidAmount = Number(p.amount);
+    const debt = coursePrice > paidAmount ? coursePrice - paidAmount : 0;
+    return sum + debt;
+  }, 0);
 
-    const result = {
-      totalIncome,
-      totalPending, // Endi bu yerda 300,000 (800k - 500k) chiqadi
-      currency: "so'm",
-      generatedAt: new Date(),
-    };
+  // 3. O'qituvchilar oyligini optimallashtirilgan (Parallel) hisoblash
+  const teachers = await this.userRepo.find({
+    where: { role: UserRole.TEACHER },
+  });
 
-    await this.cacheManager.set(cacheKey, result, 60);
-    return result;
-  }
+  const monthString = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+
+  // Har bir o'qituvchi uchun so'rovlarni parallel yuboramiz
+  const salaryPromises = teachers.map(teacher => 
+    this.salaryService.calculateTeacherSalary(teacher.id, monthString)
+      .catch(() => ({ totalSalary: 0 })) // Maoshi belgilanmagan bo'lsa xatolikni ushlab 0 qaytaradi
+  );
+
+  const salaryResults = await Promise.all(salaryPromises);
+  
+  // Jami oylik xarajatini yig'amiz
+  const totalTeacherSalaries = salaryResults.reduce(
+    (sum, res) => sum + (res.totalSalary || 0), 
+    0
+  );
+
+  // 4. SOF FOYDA (Net Profit)
+  // Formula: Jami daromad - O'qituvchilar oyligi
+  const netProfit = totalIncome - totalTeacherSalaries;
+
+  const result = {
+    totalIncome,          // Jami tushgan naqd pul
+    totalPending,         // Hali tushmagan qarzlar
+    totalTeacherSalaries, // O'qituvchilarga berilishi kerak bo'lgan jami oylik
+    netProfit,            // Sof foyda (Haqiqiy foyda)
+    currency: "so'm",
+    generatedAt: new Date(),
+    period: {
+      from: start,
+      to: end
+    }
+  };
+
+  // 5. Natijani Redis-ga yozish (15 minutga)
+  await this.cacheManager.set(cacheKey, result, 900000);
+
+  return result;
+}
+
 
   /**
    * 2. QARZDORLAR RO'YXATI (Excel Export bilan)
