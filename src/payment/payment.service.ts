@@ -20,38 +20,59 @@ export class PaymentService {
     private dataSource: DataSource,
   ) {}
 
-  // 1. To'lov yaratish va Balansni sinxronlash
   async create(dto: CreatePaymentDto) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
 
     try {
+      
+      const { studentId, groupId, ...paymentData } = dto;
       const payment = queryRunner.manager.create(Payment, {
-        ...dto,
-        student: { id: dto.studentId },
-        group: { id: dto.groupId },
+        ...paymentData, // Faqat amount va paymentDate boradi
+        student: { id: studentId },
+        group: { id: groupId },
       });
 
       const saved = await queryRunner.manager.save(payment);
 
-      // Talaba balansini oshiramiz
       await queryRunner.manager.increment(
         Student,
-        { id: dto.studentId },
+        { id: studentId },
         'balance',
-        Number(dto.amount),
+        Number(dto.amount), //
       );
-      await (this.cacheManager.stores as any).reset();
-      await queryRunner.commitTransaction();
+
+      await queryRunner.commitTransaction(); //
+
+      // 5. Keshni tozalash (TypeScript xatosini any yordamida aylanib o'tamiz)
+      try {
+        const cache = this.cacheManager as any; //
+
+        if (cache.store && typeof cache.store.reset === 'function') {
+          await cache.store.reset(); //
+        } else if (cache.stores && Array.isArray(cache.stores)) {
+          await cache.reset(); //
+        } else if (typeof cache.reset === 'function') {
+          await cache.reset(); //
+        }
+      } catch (cacheErr) {
+        console.error('Keshni tozalashda xato:', cacheErr.message); //
+      }
+
+      // Chiquvchi ma'lumot o'zgarmadi
       return saved;
     } catch (err) {
-      await queryRunner.rollbackTransaction();
-      throw new BadRequestException("To'lovni saqlashda xato: " + err.message);
+      // Xato bo'lsa orqaga qaytarish
+      await queryRunner.rollbackTransaction(); //
+      throw new BadRequestException("To'lovni saqlashda xato: " + err.message); //
     } finally {
-      await queryRunner.release();
+      // Ulanishni yopish
+      await queryRunner.release(); //
     }
   }
+
+  /// oylik tolobni balancedan ayirb qoyish fumksiyasi kerak
 
   // 2. Ro'yxatni olish (Qarz mantiqi bilan)
   async findAll(search?: string, page = 1, limit = 10) {
