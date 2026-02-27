@@ -1,3 +1,42 @@
+# name: Deploy Education CRM (Docker)
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Copy project to VPS
+#         uses: appleboy/scp-action@v0.1.7
+#         with:
+#           host: ${{ secrets.SERVER_IP }}
+#           username: root
+#           key: ${{ secrets.SSH_PRIVATE_KEY }}
+#           source: "."
+#           target: "/var/www/education-crm" # Loyiha papkasi nomi
+
+#       - name: Deploy with Docker Compose
+#         uses: appleboy/ssh-action@v1.0.3
+#         with:
+#           host: ${{ secrets.SERVER_IP }}
+#           username: root
+#           key: ${{ secrets.SSH_PRIVATE_KEY }}
+#           script: |
+#             cd /var/www/education-crm
+#             docker compose down
+#             docker compose up -d --build
+
+
+
+
+
 name: Deploy Education CRM (Docker)
 
 on:
@@ -20,7 +59,7 @@ jobs:
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           source: "."
-          target: "/var/www/education-crm" # Loyiha papkasi nomi
+          target: "/var/www/education-crm"
 
       - name: Deploy with Docker Compose
         uses: appleboy/ssh-action@v1.0.3
@@ -28,7 +67,10 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          # ✅ Timeout 30 daqiqa — npm install uchun yetarli
+          command_timeout: 30m
           script: |
             cd /var/www/education-crm
             docker compose down
             docker compose up -d --build
+            docker image prune -f
