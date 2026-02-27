@@ -1,26 +1,29 @@
-# 1-bosqich: Qurilish (Build)
-FROM node:18-alpine AS builder
+# 1-bosqich: Build
+FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Kutubxonalarni o'rnatish
 COPY package*.json ./
-RUN npm install
 
-# Kodni nusxalash va build qilish
+# ✅ Cache mount — har build da qayta yuklamaydi (tez!)
+RUN --mount=type=cache,target=/root/.npm \
+    npm install
+
 COPY . .
+
 RUN npm run build
 
-# 2-bosqich: Ishga tushirish (Production)
-FROM node:18-alpine
+# 2-bosqich: Production
+FROM node:20-alpine
 
 WORKDIR /app
 
-# Faqat kerakli kutubxonalarni production uchun o'rnatish
 COPY package*.json ./
-RUN npm install --only=production
 
-# Build bo'lgan kodni builder'dan nusxalab olish
+# ✅ --omit=dev (--only=production eski usul)
+RUN --mount=type=cache,target=/root/.npm \
+    npm install --omit=dev
+
 COPY --from=builder /app/dist ./dist
 
 EXPOSE 3000
