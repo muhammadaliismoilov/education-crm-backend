@@ -82,10 +82,9 @@
 # volumes:
 #   crm_postgres_data:
 
-
 services:
   api:
-    image: education-crm:latest  
+    image: education-crm:latest   # ✅ GitHub Actions build qilgan nom
     container_name: crm_api
     restart: always
     ports:
