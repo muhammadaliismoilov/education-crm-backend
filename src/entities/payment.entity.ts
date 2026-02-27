@@ -25,6 +25,12 @@ export class Payment {
   @ManyToOne(() => Group, (group) => group.payments, { onDelete: 'SET NULL' })
   group: Group; 
 
+  @Column({default:0,nullable:true})
+  advanceBalance:number
+
+  @Column({default:0 , nullable:true})
+  debt:number
+
   @CreateDateColumn({ name: 'createdAt' })
   createdAt: Date;
 
