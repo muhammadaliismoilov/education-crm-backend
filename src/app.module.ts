@@ -13,6 +13,7 @@ import { ReportsModule } from './reports/reports.module';
 import { DashboardModule } from './dashboards/dashboards.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
+import { CronModule } from 'cron/cron.module';
 
 
 @Module({
@@ -47,6 +48,7 @@ import { redisStore } from 'cache-manager-redis-yet';
     PaymentModule,
     ReportsModule,
     DashboardModule,
+    CronModule
     
   ],
 })
