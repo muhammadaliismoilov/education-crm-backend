@@ -1,7 +1,242 @@
+// import { Injectable, Inject, BadRequestException } from '@nestjs/common';
+// import { InjectRepository } from '@nestjs/typeorm';
+// import { Repository } from 'typeorm';
+// import { CACHE_MANAGER, CacheKey } from '@nestjs/cache-manager';
+// import { Payment } from '../entities/payment.entity';
+// import { Group } from '../entities/group.entity';
+// import { Attendance } from '../entities/attendance.entity';
+// import { Student } from 'src/entities/students.entity';
+// import type { Cache } from 'cache-manager';
+// import { User, UserRole } from 'src/entities/user.entity';
+// import * as ExcelJS from 'exceljs';
+// import * as express from 'express';
+// import { SalaryService } from 'src/salarys/salary.service';
+
+// @Injectable()
+// export class ReportsService {
+//   constructor(
+//     @InjectRepository(Student) private studentRepo: Repository<Student>,
+//     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
+//     @InjectRepository(Group) private groupRepo: Repository<Group>,
+//     @InjectRepository(User) private userRepo: Repository<User>,
+//     private salaryService: SalaryService,
+//     @InjectRepository(Attendance)
+//     private attendanceRepo: Repository<Attendance>,
+//     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+//   ) {}
+
+//   /**
+//    * 1. MOLIYAVIY TAHLIL (Redis Kesh bilan)
+//    */
+//   async getFinancialOverview(startDate: Date, endDate: Date) {
+//     const start = new Date(startDate);
+//     start.setHours(0, 0, 0, 0);
+//     const end = new Date(endDate);
+//     end.setHours(23, 59, 59, 999);
+
+//     // 1. Redis Keshni tekshirish
+//     const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
+//     const cached = await this.cacheManager.get(cacheKey);
+//     if (cached) return cached;
+
+//     // 2. To'lovlar va qarzni hisoblash
+//     const paymentsData = await this.paymentRepo
+//       .createQueryBuilder('p')
+//       .leftJoinAndSelect('p.group', 'g')
+//       .where('p.createdAt BETWEEN :start AND :end', { start, end })
+//       .getMany();
+
+//     const totalIncome = paymentsData.reduce(
+//       (sum, p) => sum + Number(p.amount),
+//       0,
+//     );
+
+//     const totalPending = paymentsData.reduce((sum, p) => {
+//       const coursePrice = Number(p.group?.price || 0);
+//       const paidAmount = Number(p.amount);
+//       const debt = coursePrice > paidAmount ? coursePrice - paidAmount : 0;
+//       return sum + debt;
+//     }, 0);
+
+//     // 3. O'qituvchilar oyligini optimallashtirilgan (Parallel) hisoblash
+//     const teachers = await this.userRepo.find({
+//       where: { role: UserRole.TEACHER },
+//     });
+
+//     const monthString = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+
+//     // Har bir o'qituvchi uchun so'rovlarni parallel yuboramiz
+//     const salaryPromises = teachers.map(
+//       (teacher) =>
+//         this.salaryService
+//           .calculateTeacherSalary(teacher.id, monthString)
+//           .catch(() => ({ totalSalary: 0 })), // Maoshi belgilanmagan bo'lsa xatolikni ushlab 0 qaytaradi
+//     );
+
+//     const salaryResults = await Promise.all(salaryPromises);
+
+//     // Jami oylik xarajatini yig'amiz
+//     const totalTeacherSalaries = salaryResults.reduce(
+//       (sum, res) => sum + (res.totalSalary || 0),
+//       0,
+//     );
+
+//     // 4. SOF FOYDA (Net Profit)
+//     // Formula: Jami daromad - O'qituvchilar oyligi
+//     const netProfit = totalIncome - totalTeacherSalaries;
+
+//     const result = {
+//       totalIncome, // Jami tushgan naqd pul
+//       totalPending, // Hali tushmagan qarzlar
+//       totalTeacherSalaries, // O'qituvchilarga berilishi kerak bo'lgan jami oylik
+//       netProfit, // Sof foyda (Haqiqiy foyda)
+//       currency: "so'm",
+//       generatedAt: new Date(),
+//       period: {
+//         from: start,
+//         to: end,
+//       },
+//     };
+
+//     // 5. Natijani Redis-ga yozish (15 minutga)
+//     await this.cacheManager.set(cacheKey, result, 300000);
+
+//     return result;
+//   }
+
+//   /**
+//    * 2. QARZDORLAR RO'YXATI (Excel Export bilan)
+//    */
+//   async exportDebtorsToExcel(res: express.Response) {
+//     const paymentsWithDebt = await this.paymentRepo
+//       .createQueryBuilder('payment')
+//       .leftJoinAndSelect('payment.student', 'student')
+//       .leftJoinAndSelect('payment.group', 'group')
+//       .select(['payment', 'student', 'group'])
+//       .addSelect('(group.price - payment.amount)', 'calculated_debt')
+//       .where('group.price > payment.amount')
+//       .orderBy('payment.createdAt', 'DESC')
+//       .getRawAndEntities();
+
+//     const workbook = new ExcelJS.Workbook();
+//     const worksheet = workbook.addWorksheet('Qarzdorlar');
+
+//     worksheet.columns = [
+//       { header: 'Talaba F.I.SH', key: 'fullName', width: 30 },
+//       { header: 'Telefon', key: 'phone', width: 20 },
+//       { header: 'Guruh', key: 'groupName', width: 20 },
+//       { header: 'Kurs Narxi', key: 'coursePrice', width: 15 },
+//       { header: "To'langan Summa", key: 'paidAmount', width: 15 },
+//       { header: 'Qarz Miqdori', key: 'debt', width: 15 },
+//       { header: 'Toʻlov Sanasi', key: 'date', width: 15 },
+//     ];
+
+//     worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFF' } };
+//     worksheet.getRow(1).fill = {
+//       type: 'pattern',
+//       pattern: 'solid',
+//       fgColor: { argb: 'C0392B' },
+//     };
+
+//     paymentsWithDebt.entities.forEach((payment, index) => {
+//       const rawData = paymentsWithDebt.raw[index];
+//       const debtValue = Number(rawData.calculated_debt);
+
+//       // Sanani formatlash
+//       const pDate = new Date(payment.paymentDate);
+//       // 'en-GB' -> 26/02/2026 formatini beradi
+//       const formattedDate = pDate.toLocaleDateString('en-GB');
+
+//       worksheet.addRow({
+//         fullName: payment.student?.fullName || 'Nomaʼlum',
+//         phone: payment.student?.phone || '-',
+//         groupName: payment.group?.name || 'Guruhsiz',
+//         coursePrice: `${Number(payment.group?.price || 0).toLocaleString()} so'm`,
+//         paidAmount: `${Number(payment.amount).toLocaleString()} so'm`,
+//         debt: `${debtValue.toLocaleString()} so'm`,
+//         date: formattedDate, // To'g'rilangan sana
+//       });
+//     });
+
+//     const fileName = `Qarzdorlar_${new Date().toLocaleDateString('en-GB').replace(/\//g, '-')}.xlsx`;
+//     res.setHeader(
+//       'Content-Type',
+//       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+//     );
+//     res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+
+//     await workbook.xlsx.write(res);
+//     res.end();
+//   }
+
+//   /**
+//    * 4. O'QITUVCHILAR SAMARADORLIGI (QueryBuilder bilan optimallashgan)
+//    */
+//   async getTeacherPerformance(startDate: Date, endDate: Date) {
+//     const start = new Date(startDate);
+//     start.setHours(0, 0, 0, 0);
+//     const end = new Date(endDate);
+//     end.setHours(23, 59, 59, 999);
+
+//     const data = await this.groupRepo
+//       .createQueryBuilder('g')
+//       .leftJoin('g.teacher', 't')
+//       .leftJoin('g.attendances', 'a')
+//       .select([
+//         't.id as teacher_id',
+//         't.fullName as teacher_name',
+//         'g.id as group_id',
+//         'g.name as group_name',
+//         'COUNT(DISTINCT a.date) as total_lessons',
+//         'SUM(CASE WHEN a.isPresent = true THEN 1 ELSE 0 END) as attended_count',
+//       ])
+//       .where('a.date BETWEEN :start AND :end', { start, end })
+//       .groupBy('t.id, t.fullName, g.id, g.name')
+//       .getRawMany();
+
+//     const result = await Promise.all(
+//       data.map(async (item) => {
+//         // MUHIM: 'enrolledGroups' deb nomlangan relationni ishlatamiz
+//         // Agar entity-da boshqacha bo'lsa, o'sha nomni qo'ying (masalan: students)
+//         const studentCount = await this.studentRepo
+//           .createQueryBuilder('student')
+//           .leftJoin('student.enrolledGroups', 'group') // Bog'liqlik nomi: enrolledGroups
+//           .where('group.id = :groupId', { groupId: item.group_id })
+//           .getCount();
+
+//         const totalLessons = Number(item.total_lessons) || 0;
+//         const attendedCount = Number(item.attended_count) || 0;
+
+//         // To'g'ri formula: Jami darslar * Guruhdagi talabalar soni
+//         const shouldAttend = totalLessons * studentCount;
+
+//         const attendanceRate =
+//           shouldAttend > 0
+//             ? Math.round((attendedCount / shouldAttend) * 100)
+//             : 0;
+
+//         return {
+//           teacherId: item.teacher_id,
+//           teacherName: item.teacher_name,
+//           groupName: item.group_name,
+//           totalLessons,
+//           totalStudents: studentCount,
+//           shouldAttend,
+//           attendedCount,
+//           attendanceRate: attendanceRate > 100 ? 100 : attendanceRate,
+//         };
+//       }),
+//     );
+//     const dynamicCacheKey = `teacher_performance_${start.getTime()}_${end.getTime()}`;
+//     await this.cacheManager.set(dynamicCacheKey, result, 300000);
+//     return result;
+//   }
+// }
+
 import { Injectable, Inject, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { CACHE_MANAGER, CacheKey } from '@nestjs/cache-manager';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Payment } from '../entities/payment.entity';
 import { Group } from '../entities/group.entity';
 import { Attendance } from '../entities/attendance.entity';
@@ -11,6 +246,8 @@ import { User, UserRole } from 'src/entities/user.entity';
 import * as ExcelJS from 'exceljs';
 import * as express from 'express';
 import { SalaryService } from 'src/salarys/salary.service';
+
+const CACHE_TTL = 15 * 60 * 1000; // 15 daqiqa (ms)
 
 @Injectable()
 export class ReportsService {
@@ -25,244 +262,264 @@ export class ReportsService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  /**
-   * 1. MOLIYAVIY TAHLIL (Redis Kesh bilan)
-   */
+  // ─────────────────────────────────────────────
+  // 1. MOLIYAVIY TAHLIL
+  // ─────────────────────────────────────────────
   async getFinancialOverview(startDate: Date, endDate: Date) {
-  const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
-  const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
-  // 1. Redis Keshni tekshirish
-  const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
-  const cached = await this.cacheManager.get(cacheKey);
-  if (cached) return cached;
+    const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
 
-  // 2. To'lovlar va qarzni hisoblash
-  const paymentsData = await this.paymentRepo
-    .createQueryBuilder('p')
-    .leftJoinAndSelect('p.group', 'g')
-    .where('p.createdAt BETWEEN :start AND :end', { start, end })
-    .getMany();
+    // ✅ Cache ni tekshirish — avval
+    const cached = await this.cacheManager.get(cacheKey);
+    if (cached) return cached;
 
-  const totalIncome = paymentsData.reduce(
-    (sum, p) => sum + Number(p.amount),
-    0,
-  );
+    // ✅ To'lovlar
+    const paymentsData = await this.paymentRepo
+      .createQueryBuilder('p')
+      .leftJoinAndSelect('p.group', 'g')
+      .where('p.createdAt BETWEEN :start AND :end', { start, end })
+      .getMany();
 
-  const totalPending = paymentsData.reduce((sum, p) => {
-    const coursePrice = Number(p.group?.price || 0);
-    const paidAmount = Number(p.amount);
-    const debt = coursePrice > paidAmount ? coursePrice - paidAmount : 0;
-    return sum + debt;
-  }, 0);
+    const totalIncome = paymentsData.reduce(
+      (sum, p) => sum + Number(p.amount || 0),
+      0,
+    );
 
-  // 3. O'qituvchilar oyligini optimallashtirilgan (Parallel) hisoblash
-  const teachers = await this.userRepo.find({
-    where: { role: UserRole.TEACHER },
-  });
+    // ✅ To'g'ri qarz hisoblash:
+    // Har bir talabaning JAMI to'lovini guruhlash orqali hisoblaymiz
+    const studentPaymentMap = new Map<
+      string,
+      { totalPaid: number; groupPrice: number }
+    >();
 
-  const monthString = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}`;
+    for (const p of paymentsData) {
+      const studentId = p.student?.id;
+      if (!studentId) continue;
+      const groupPrice = Number(p.group?.price || 0);
+      const paidAmount = Number(p.amount || 0);
 
-  // Har bir o'qituvchi uchun so'rovlarni parallel yuboramiz
-  const salaryPromises = teachers.map(teacher => 
-    this.salaryService.calculateTeacherSalary(teacher.id, monthString)
-      .catch(() => ({ totalSalary: 0 })) // Maoshi belgilanmagan bo'lsa xatolikni ushlab 0 qaytaradi
-  );
-
-  const salaryResults = await Promise.all(salaryPromises);
-  
-  // Jami oylik xarajatini yig'amiz
-  const totalTeacherSalaries = salaryResults.reduce(
-    (sum, res) => sum + (res.totalSalary || 0), 
-    0
-  );
-
-  // 4. SOF FOYDA (Net Profit)
-  // Formula: Jami daromad - O'qituvchilar oyligi
-  const netProfit = totalIncome - totalTeacherSalaries;
-
-  const result = {
-    totalIncome,          // Jami tushgan naqd pul
-    totalPending,         // Hali tushmagan qarzlar
-    totalTeacherSalaries, // O'qituvchilarga berilishi kerak bo'lgan jami oylik
-    netProfit,            // Sof foyda (Haqiqiy foyda)
-    currency: "so'm",
-    generatedAt: new Date(),
-    period: {
-      from: start,
-      to: end
+      if (!studentPaymentMap.has(studentId)) {
+        studentPaymentMap.set(studentId, { totalPaid: 0, groupPrice });
+      }
+      studentPaymentMap.get(studentId)!.totalPaid += paidAmount;
     }
-  };
 
-  // 5. Natijani Redis-ga yozish (15 minutga)
-  await this.cacheManager.set(cacheKey, result, 900000);
+    let totalPending = 0;
+    for (const [, { totalPaid, groupPrice }] of studentPaymentMap) {
+      if (groupPrice > totalPaid) {
+        totalPending += groupPrice - totalPaid;
+      }
+    }
 
-  return result;
-}
+    // ✅ O'qituvchilar oyligini parallel hisoblash
+    const teachers = await this.userRepo.find({
+      where: { role: UserRole.TEACHER },
+    });
 
+    const monthString = `${start.getFullYear()}-${String(
+      start.getMonth() + 1,
+    ).padStart(2, '0')}`;
 
-  /**
-   * 2. QARZDORLAR RO'YXATI (Excel Export bilan)
-   */
+    const salaryResults = await Promise.all(
+      teachers.map((teacher) =>
+        this.salaryService
+          .calculateTeacherSalary(teacher.id, monthString)
+          .catch(() => ({ totalSalary: 0 })),
+      ),
+    );
+
+    const totalTeacherSalaries = salaryResults.reduce(
+      (sum, res) => sum + (res?.totalSalary || 0),
+      0,
+    );
+
+    const netProfit = totalIncome - totalTeacherSalaries;
+
+    const result = {
+      totalIncome,
+      totalPending,
+      totalTeacherSalaries,
+      netProfit,
+      currency: "so'm",
+      generatedAt: new Date(),
+      period: { from: start, to: end },
+    };
+
+    // ✅ 15 daqiqaga cache
+    await this.cacheManager.set(cacheKey, result, CACHE_TTL);
+
+    return result;
+  }
+
+  // ─────────────────────────────────────────────
+  // 2. QARZDORLAR EXCEL EXPORT
+  // ─────────────────────────────────────────────
   async exportDebtorsToExcel(res: express.Response) {
-    // 1. QueryBuilder yordamida guruh narxi va to'langan summa farqini hisoblaymiz
-    const paymentsWithDebt = await this.paymentRepo
+    // ✅ alias lar aniq belgilangan — prefix muammosi yo'q
+    const rawDebts = await this.paymentRepo
       .createQueryBuilder('payment')
-      .leftJoinAndSelect('payment.student', 'student')
-      .leftJoinAndSelect('payment.group', 'group')
+      .leftJoin('payment.student', 'student')
+      .leftJoin('payment.group', 'group')
       .select([
-        'payment', // To'lovning barcha ustunlari
-        'student', // Talaba ma'lumotlari
-        'group', // Guruh ma'lumotlari
+        'student.id                          AS "studentId"',
+        'student.fullName                    AS "fullName"',
+        'student.phone                       AS "phone"',
+        'group.id                            AS "groupId"',
+        'group.name                          AS "groupName"',
+        'CAST(group.price AS DECIMAL)        AS "groupPrice"',
+        'SUM(CAST(payment.amount AS DECIMAL)) AS "totalPaid"',
       ])
-      // Virtual ustun: qarz = guruh narxi - to'langan summa
-      .addSelect('(group.price - payment.amount)', 'calculated_debt')
-      .where('group.price > payment.amount') // Faqat kurs narxidan kam to'langanlar
-      .orderBy('payment.createdAt', 'DESC')
-      .getRawAndEntities();
-    // getRawAndEntities — ham entity'larni, ham hisoblangan 'calculated_debt'ni olish uchun
+      .groupBy(
+        'student.id, student.fullName, student.phone, group.id, group.name, group.price',
+      )
+      .having(
+        'CAST(group.price AS DECIMAL) > SUM(CAST(payment.amount AS DECIMAL))',
+      )
+      .orderBy('"fullName"', 'ASC')
+      .getRawMany();
+
+    // DEBUG — birinchi ishlatganda log qil, keyin o'chir
 
     const workbook = new ExcelJS.Workbook();
     const worksheet = workbook.addWorksheet('Qarzdorlar');
 
-    // 2. Excel sarlavhalari
     worksheet.columns = [
+      { header: '№', key: 'index', width: 5 },
       { header: 'Talaba F.I.SH', key: 'fullName', width: 30 },
       { header: 'Telefon', key: 'phone', width: 20 },
       { header: 'Guruh', key: 'groupName', width: 20 },
       { header: 'Kurs Narxi', key: 'coursePrice', width: 15 },
       { header: "To'langan Summa", key: 'paidAmount', width: 15 },
       { header: 'Qarz Miqdori', key: 'debt', width: 15 },
-      { header: 'Toʻlov Sanasi', key: 'date', width: 15 },
     ];
 
-    // Sarlavha dizayni
-    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFF' } };
-    worksheet.getRow(1).fill = {
+    // Header styling
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+    headerRow.fill = {
       type: 'pattern',
       pattern: 'solid',
-      fgColor: { argb: 'C0392B' }, // To'q qizil (Qarzdorlar uchun)
+      fgColor: { argb: 'C0392B' },
     };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-    // 3. Ma'lumotlarni Excelga yozish
-    // getRawAndEntities bizga entities (massiv) va raw (massiv) qaytaradi
-    paymentsWithDebt.entities.forEach((payment, index) => {
-      // Har bir entityga mos keladigan raw ma'lumotdan hisoblangan qarzni olamiz
-      const rawData = paymentsWithDebt.raw[index];
-      const debtValue = Number(rawData.calculated_debt);
+    let totalDebt = 0;
 
-      worksheet.addRow({
-        fullName: payment.student?.fullName || 'Nomaʼlum',
-        phone: payment.student?.phone || '-',
-        groupName: payment.group?.name || 'Guruhsiz',
-        coursePrice: `${Number(payment.group?.price || 0).toLocaleString()} so'm`,
-        paidAmount: `${Number(payment.amount).toLocaleString()} so'm`,
-        debt: `${debtValue.toLocaleString()} so'm`,
-        date: new Date(payment.paymentDate).toLocaleDateString(),
+    rawDebts.forEach((item, index) => {
+      const groupPrice = Number(item.groupPrice || 0);
+      const totalPaid = Number(item.totalPaid || 0);
+      const debt = groupPrice - totalPaid;
+      totalDebt += debt;
+
+      const row = worksheet.addRow({
+        index: index + 1,
+        fullName: item.fullName || "Noma'lum",
+        phone: item.phone || '-',
+        groupName: item.groupName || 'Guruhsiz',
+        coursePrice: `${groupPrice.toLocaleString()} so'm`,
+        paidAmount: `${totalPaid.toLocaleString()} so'm`,
+        debt: `${debt.toLocaleString()} so'm`,
       });
+
+      if (debt > 500000) {
+        row.getCell('debt').font = { color: { argb: 'C0392B' }, bold: true };
+      }
     });
 
-    // 4. Faylni yuborish
-    const fileName = `Qarzdorlar_Hisoboti_${new Date().toISOString().split('T')[0]}.xlsx`;
+    // JAMI qator
+    const totalRow = worksheet.addRow({
+      index: '',
+      fullName: 'JAMI QARZ:',
+      phone: '',
+      groupName: '',
+      coursePrice: '',
+      paidAmount: '',
+      debt: `${totalDebt.toLocaleString()} so'm`,
+    });
+    totalRow.font = { bold: true };
+    totalRow.fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'F9EBEA' },
+    };
+
+    const today = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
+    const fileName = `Qarzdorlar_${today}.xlsx`;
+
     res.setHeader(
       'Content-Type',
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     );
-    res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
 
     await workbook.xlsx.write(res);
     res.end();
   }
 
-  /**
-   * 3. TALABALAR DINAMIKASI (Kesh bilan)
-   */
-  // async getGrowthReport(startDate: Date, endDate: Date) {
-  //   const cacheKey = `growth_${startDate.getTime()}_${endDate.getTime()}`;
-  //   const cached = await this.cacheManager.get(cacheKey);
-  //   if (cached) return cached;
-
-  //   const [newStudents, leftStudents] = await Promise.all([
-  //     this.studentRepo.count({
-  //       where: { createdAt: Between(startDate, endDate) },
-  //     }),
-  //     this.studentRepo.count({
-  //       where: { deletedAt: Between(startDate, endDate) },
-  //       withDeleted: true,
-  //     }),
-  //   ]);
-
-  //   const result = {
-  //     newStudents,
-  //     leftStudents,
-  //     netGrowth: newStudents - leftStudents,
-  //   };
-  //   await this.cacheManager.set(cacheKey, result, 60);
-  //   return result;
-  // }
-
-  /**
-   * 4. O'QITUVCHILAR SAMARADORLIGI (QueryBuilder bilan optimallashgan)
-   */
+  // ─────────────────────────────────────────────
+  // 3. O'QITUVCHILAR SAMARADORLIGI
+  // ─────────────────────────────────────────────
   async getTeacherPerformance(startDate: Date, endDate: Date) {
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
 
+    const cacheKey = `teacher_performance_${start.getTime()}_${end.getTime()}`;
+
+    // ✅ Cache tekshiruvi — AVVAL (oldingi kodda bu yo'q edi!)
+    const cached = await this.cacheManager.get(cacheKey);
+    if (cached) return cached;
+
+    // ✅ N+1 muammosi hal qilindi — bitta query da student count ham olinmoqda
     const data = await this.groupRepo
       .createQueryBuilder('g')
       .leftJoin('g.teacher', 't')
       .leftJoin('g.attendances', 'a')
+      .leftJoin('g.enrolledStudents', 's') // ✅ Student count shu yerda
       .select([
         't.id as teacher_id',
         't.fullName as teacher_name',
         'g.id as group_id',
         'g.name as group_name',
         'COUNT(DISTINCT a.date) as total_lessons',
+        'COUNT(DISTINCT s.id) as student_count', // ✅ Alohida query emas!
         'SUM(CASE WHEN a.isPresent = true THEN 1 ELSE 0 END) as attended_count',
       ])
       .where('a.date BETWEEN :start AND :end', { start, end })
       .groupBy('t.id, t.fullName, g.id, g.name')
       .getRawMany();
 
-    const result = await Promise.all(
-      data.map(async (item) => {
-        // MUHIM: 'enrolledGroups' deb nomlangan relationni ishlatamiz
-        // Agar entity-da boshqacha bo'lsa, o'sha nomni qo'ying (masalan: students)
-        const studentCount = await this.studentRepo
-          .createQueryBuilder('student')
-          .leftJoin('student.enrolledGroups', 'group') // Bog'liqlik nomi: enrolledGroups
-          .where('group.id = :groupId', { groupId: item.group_id })
-          .getCount();
+    const result = data.map((item) => {
+      const totalLessons = Number(item.total_lessons) || 0;
+      const studentCount = Number(item.student_count) || 0;
+      const attendedCount = Number(item.attended_count) || 0;
 
-        const totalLessons = Number(item.total_lessons) || 0;
-        const attendedCount = Number(item.attended_count) || 0;
+      const shouldAttend = totalLessons * studentCount;
+      const attendanceRate =
+        shouldAttend > 0
+          ? Math.min(Math.round((attendedCount / shouldAttend) * 100), 100)
+          : 0;
 
-        // To'g'ri formula: Jami darslar * Guruhdagi talabalar soni
-        const shouldAttend = totalLessons * studentCount;
+      return {
+        teacherId: item.teacher_id,
+        teacherName: item.teacher_name,
+        groupName: item.group_name,
+        totalLessons,
+        totalStudents: studentCount,
+        shouldAttend,
+        attendedCount,
+        attendanceRate,
+      };
+    });
 
-        const attendanceRate =
-          shouldAttend > 0
-            ? Math.round((attendedCount / shouldAttend) * 100)
-            : 0;
+    // ✅ Cache ga yozish — 15 daqiqa
+    await this.cacheManager.set(cacheKey, result, CACHE_TTL);
 
-        return {
-          teacherId: item.teacher_id,
-          teacherName: item.teacher_name,
-          groupName: item.group_name,
-          totalLessons,
-          totalStudents: studentCount,
-          shouldAttend,
-          attendedCount,
-          attendanceRate: attendanceRate > 100 ? 100 : attendanceRate,
-        };
-      }),
-    );
-    const dynamicCacheKey = `teacher_performance_${start.getTime()}_${end.getTime()}`;
-    await this.cacheManager.set(dynamicCacheKey, result, 900000);
     return result;
   }
 }
