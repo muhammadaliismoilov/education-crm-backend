@@ -85,7 +85,7 @@
 
 services:
   api:
-    image: education-crm:latest  # ✅ build emas, image ishlatadi
+    image: education-crm:latest  
     container_name: crm_api
     restart: always
     ports:
