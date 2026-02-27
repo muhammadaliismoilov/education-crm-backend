@@ -35,8 +35,6 @@
 
 
 
-
-
 name: Deploy Education CRM (Docker)
 
 on:
@@ -52,25 +50,44 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy project to VPS
+      # ✅ Docker image ni GitHub Actions da build qilamiz (tez internet!)
+      - name: Build Docker image
+        run: docker build -t education-crm:latest .
+
+      # ✅ Image ni tar ga siqamiz
+      - name: Save image to tar
+        run: docker save education-crm:latest | gzip > crm-image.tar.gz
+
+      # ✅ Faqat image ni serverga yuboramiz — butun papka emas
+      - name: Copy image to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "."
+          source: "crm-image.tar.gz,docker-compose.yml,.env"
           target: "/var/www/education-crm"
 
-      - name: Deploy with Docker Compose
+      # ✅ Serverda faqat image load + run — build yo'q!
+      - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          # ✅ Timeout 30 daqiqa — npm install uchun yetarli
-          command_timeout: 30m
+          command_timeout: 10m
           script: |
             cd /var/www/education-crm
+
+            # Eski containerni to'xtatish
             docker compose down
-            docker compose up -d --build
+
+            # Yangi image ni load qilish
+            docker load < crm-image.tar.gz
+
+            # Ishga tushirish — --build YO'Q! (allaqachon build qilingan)
+            docker compose up -d
+
+            # Tozalash
             docker image prune -f
+            rm -f crm-image.tar.gz
