@@ -83,11 +83,9 @@
 #   crm_postgres_data:
 
 
-
-
 services:
   api:
-    build: .
+    image: education-crm:latest  # ✅ build emas, image ishlatadi
     container_name: crm_api
     restart: always
     ports:
