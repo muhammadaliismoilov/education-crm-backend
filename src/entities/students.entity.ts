@@ -11,6 +11,7 @@ import {
 import { Group } from './group.entity';
 import { Payment } from './payment.entity';
 import { Attendance } from './attendance.entity';
+import {  StudentDiscount } from './studentDiscount';
 
 export enum DocumentType {
   PASSPORT = 'passport',
@@ -34,7 +35,12 @@ export class Student {
   @Column({ nullable: true })
   parentPhone: string; // Ota-onasi nomeri
 
-  @Column({ type: 'enum', enum: DocumentType, default:DocumentType.BIRTH_CERTIFICATE, nullable: true })
+  @Column({
+    type: 'enum',
+    enum: DocumentType,
+    default: DocumentType.BIRTH_CERTIFICATE,
+    nullable: true,
+  })
   documentType: DocumentType; // Masalan: 'PASSPORT' yoki 'BIRTH_CERTIFICATE'
 
   @Column({ unique: true, nullable: true })
@@ -57,6 +63,9 @@ export class Student {
 
   @ManyToMany(() => Group, (group) => group.students)
   enrolledGroups: Group[];
+
+ @OneToMany(() => StudentDiscount, (discount) => discount.student)
+discounts: StudentDiscount[];
 
   @OneToMany(() => Payment, (payment) => payment.student)
   payments: Payment[];
