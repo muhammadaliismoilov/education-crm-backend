@@ -359,7 +359,6 @@ export class ReportsService {
   // 2. QARZDORLAR EXCEL EXPORT
   // ─────────────────────────────────────────────
   async exportDebtorsToExcel(res: express.Response) {
-    // ✅ alias lar aniq belgilangan — prefix muammosi yo'q
     const rawDebts = await this.paymentRepo
       .createQueryBuilder('payment')
       .leftJoin('payment.student', 'student')
@@ -471,35 +470,61 @@ export class ReportsService {
 
     const cacheKey = `teacher_performance_${start.getTime()}_${end.getTime()}`;
 
-    // ✅ Cache tekshiruvi — AVVAL (oldingi kodda bu yo'q edi!)
     const cached = await this.cacheManager.get(cacheKey);
     if (cached) return cached;
 
-    // ✅ N+1 muammosi hal qilindi — bitta query da student count ham olinmoqda
-    const data = await this.groupRepo
+    // 1. ATTENDANCE ma'lumotlari — student JOIN YO'Q!
+    const attendanceData = await this.groupRepo
       .createQueryBuilder('g')
       .leftJoin('g.teacher', 't')
-      .leftJoin('g.attendances', 'a')
-      .leftJoin('g.students', 's') // ✅ Student count shu yerda
+      .leftJoin('g.attendances', 'a', 'a.date BETWEEN :start AND :end', {
+        start,
+        end,
+      })
       .select([
-        't.id as teacher_id',
-        't.fullName as teacher_name',
-        'g.id as group_id',
-        'g.name as group_name',
-        'COUNT(DISTINCT a.date) as total_lessons',
-        'COUNT(DISTINCT s.id) as student_count', // ✅ Alohida query emas!
-        'SUM(CASE WHEN a.isPresent = true THEN 1 ELSE 0 END) as attended_count',
+        't.id                                                 AS teacher_id',
+        't.fullName                                           AS teacher_name',
+        'g.id                                                 AS group_id',
+        'g.name                                               AS group_name',
+        'COUNT(DISTINCT a.date)                               AS total_lessons',
+        'SUM(CASE WHEN a.isPresent = true THEN 1 ELSE 0 END) AS attended_count',
       ])
-      .where('a.date BETWEEN :start AND :end', { start, end })
+      .where('t.id IS NOT NULL')
       .groupBy('t.id, t.fullName, g.id, g.name')
       .getRawMany();
 
-    const result = data.map((item) => {
-      const totalLessons = Number(item.total_lessons) || 0;
-      const studentCount = Number(item.student_count) || 0;
-      const attendedCount = Number(item.attended_count) || 0;
+    // 2. STUDENT COUNT — attendance JOIN YO'Q!
+    const groupIds = attendanceData.map((d) => d.group_id).filter(Boolean);
 
+    const studentCounts =
+      groupIds.length > 0
+        ? await this.studentRepo
+            .createQueryBuilder('s')
+            .leftJoin('s.enrolledGroups', 'g')
+            .select([
+              'g.id          AS group_id',
+              'COUNT(s.id)   AS student_count',
+            ])
+            .where('g.id IN (:...groupIds)', { groupIds })
+            .groupBy('g.id')
+            .getRawMany()
+        : [];
+
+    // group_id → student_count map
+    const studentCountMap = new Map<string, number>(
+      studentCounts.map((row) => [
+        row.group_id,
+        Number(row.student_count || 0),
+      ]),
+    );
+
+    // 3. Birlashtirish
+    const result = attendanceData.map((item) => {
+      const totalLessons = Number(item.total_lessons) || 0;
+      const attendedCount = Number(item.attended_count) || 0;
+      const studentCount = studentCountMap.get(item.group_id) || 0;
       const shouldAttend = totalLessons * studentCount;
+
       const attendanceRate =
         shouldAttend > 0
           ? Math.min(Math.round((attendedCount / shouldAttend) * 100), 100)
@@ -517,9 +542,7 @@ export class ReportsService {
       };
     });
 
-    // ✅ Cache ga yozish — 3 daqiqa
     await this.cacheManager.set(cacheKey, result, CACHE_TTL);
-
     return result;
   }
 }
