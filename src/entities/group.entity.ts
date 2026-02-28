@@ -14,6 +14,7 @@ import { User } from './user.entity';
 import { Attendance } from './attendance.entity';
 import { Payment } from './payment.entity';
 import { Student } from './students.entity';
+import { StudentDiscount } from './studentDiscount';
 
 @Entity('groups')
 export class Group {
@@ -52,6 +53,9 @@ export class Group {
   @ManyToMany(() => Student, (student) => student.enrolledGroups)
   @JoinTable({ name: 'group_students' }) // Bog'lovchi jadval nomi aniq bo'lishi kerak
   students: Student[];
+
+  @OneToMany(() => StudentDiscount, (discount) => discount.group)
+  discounts: StudentDiscount[];
 
   @OneToMany(() => Payment, (payment) => payment.group)
   payments: Payment[];
