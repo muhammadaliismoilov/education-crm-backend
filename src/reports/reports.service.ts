@@ -247,7 +247,7 @@ import * as ExcelJS from 'exceljs';
 import * as express from 'express';
 import { SalaryService } from 'src/salarys/salary.service';
 
-const CACHE_TTL = 15 * 60 * 1000; // 15 daqiqa (ms)
+const CACHE_TTL = 3 * 60 * 1000; // 3 daqiqa (ms)
 
 @Injectable()
 export class ReportsService {
@@ -349,7 +349,6 @@ export class ReportsService {
       period: { from: start, to: end },
     };
 
-    // ✅ 15 daqiqaga cache
     await this.cacheManager.set(cacheKey, result, CACHE_TTL);
 
     return result;
@@ -480,7 +479,7 @@ export class ReportsService {
       .createQueryBuilder('g')
       .leftJoin('g.teacher', 't')
       .leftJoin('g.attendances', 'a')
-      .leftJoin('g.enrolledStudents', 's') // ✅ Student count shu yerda
+      .leftJoin('g.students', 's') // ✅ Student count shu yerda
       .select([
         't.id as teacher_id',
         't.fullName as teacher_name',
@@ -517,7 +516,7 @@ export class ReportsService {
       };
     });
 
-    // ✅ Cache ga yozish — 15 daqiqa
+    // ✅ Cache ga yozish — 3 daqiqa
     await this.cacheManager.set(cacheKey, result, CACHE_TTL);
 
     return result;
