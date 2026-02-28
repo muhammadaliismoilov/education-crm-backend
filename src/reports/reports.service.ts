@@ -281,6 +281,7 @@ export class ReportsService {
     const paymentsData = await this.paymentRepo
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.group', 'g')
+      .leftJoinAndSelect('p.student', 's') // ✅ QO'SHILDI
       .where('p.createdAt BETWEEN :start AND :end', { start, end })
       .getMany();
 
