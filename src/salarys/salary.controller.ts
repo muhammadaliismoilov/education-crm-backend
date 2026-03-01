@@ -13,9 +13,7 @@ import {
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
   ApiBearerAuth,
-  ApiParam,
   ApiQuery,
 } from '@nestjs/swagger';
 import { SalaryService } from './salary.service';
@@ -32,31 +30,49 @@ import { PaySalaryDto } from './salary.dto';
 export class SalaryController {
   constructor(private readonly salaryService: SalaryService) {}
 
+  // ─────────────────────────────────────────────
+  // Barcha o'qituvchilar oyligi
+  // ─────────────────────────────────────────────
   @Get('estimated-all')
   @ApiOperation({
-    summary: 'Barcha o‘qituvchilarning real-vaqtdagi hisoblanayotgan oyliklari',
-    description:
-      'Bu API bazaga ma’lumot yozmaydi, faqat joriy davomat asosida hisoblab beradi.',
+    summary: 'Barcha o\'qituvchilarning hisoblanayotgan oyliklari',
+    description: 'Bazaga yozmaydi, davomat asosida hisoblab beradi.',
   })
-  @ApiQuery({ name: 'month', required: false, example: '2026-02' })
-  async getAllEstimated(@Query('month') month?: string) {
-    return this.salaryService.getEstimatedSalaries(month);
+  @ApiQuery({ name: 'startDate', required: false, example: '2026-02-01' })
+  @ApiQuery({ name: 'endDate',   required: false, example: '2026-02-28' })
+  async getAllEstimated(
+    @Query('startDate') startDate?: string,
+    @Query('endDate') endDate?: string,
+  ) {
+    return this.salaryService.getEstimatedSalaries(startDate, endDate);
   }
 
+  // ─────────────────────────────────────────────
+  // Bitta o'qituvchi oyligi
+  // ─────────────────────────────────────────────
   @Get('calculate')
   @Roles(UserRole.ADMIN)
   @ApiOperation({
-    summary: "O'qituvchi oyligini hisoblash (Guruhlar kesimida)",
+    summary: 'O\'qituvchi oyligini hisoblash (Guruhlar kesimida)',
   })
-  @ApiQuery({ name: 'teacherId', required: true, example: 'teacherId' })
-  @ApiQuery({ name: 'month', required: true, example: '2026-01' })
+  @ApiQuery({ name: 'teacherId',  required: true,  example: 'uuid' })
+  @ApiQuery({ name: 'startDate',  required: true,  example: '2026-02-01' })
+  @ApiQuery({ name: 'endDate',    required: true,  example: '2026-02-28' })
   async calculate(
     @Query('teacherId') teacherId: string,
-    @Query('month') month: string, 
+    @Query('startDate') startDate: string,
+    @Query('endDate') endDate: string,
   ) {
-    return this.salaryService.calculateTeacherSalary(teacherId, month);
+    return this.salaryService.calculateTeacherSalary(
+      teacherId,
+      startDate,
+      endDate,
+    );
   }
 
+  // ─────────────────────────────────────────────
+  // Oylik to'lash
+  // ─────────────────────────────────────────────
   @Post('pay')
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Hisoblangan oylikni bazaga saqlash' })
@@ -64,24 +80,33 @@ export class SalaryController {
     return this.salaryService.paySalary(dto);
   }
 
+  // ─────────────────────────────────────────────
+  // Barcha to'langan oyliklar
+  // ─────────────────────────────────────────────
   @Get('all')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: "Barcha to'langan oyliklar ro'yxati" })
+  @ApiOperation({ summary: 'Barcha to\'langan oyliklar ro\'yxati' })
   @ApiQuery({ name: 'month', required: false, example: '2026-01' })
   async findAll(@Query('month') month?: string) {
     return this.salaryService.findAll(month);
   }
 
+  // ─────────────────────────────────────────────
+  // Bitta to'lov
+  // ─────────────────────────────────────────────
   @Get(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: "Bitta oylik to'lovi tafsilotlari" })
+  @ApiOperation({ summary: 'Bitta oylik to\'lovi tafsilotlari' })
   async findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.salaryService.findOne(id);
   }
 
+  // ─────────────────────────────────────────────
+  // To'lovni yangilash
+  // ─────────────────────────────────────────────
   @Patch(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: "To'lov miqdorini tahrirlash" })
+  @ApiOperation({ summary: 'To\'lov miqdorini tahrirlash' })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body('amount') amount: number,
@@ -89,9 +114,12 @@ export class SalaryController {
     return this.salaryService.update(id, amount);
   }
 
+  // ─────────────────────────────────────────────
+  // To'lovni o'chirish
+  // ─────────────────────────────────────────────
   @Delete(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: "To'lovni o'chirish (Bekor qilish)" })
+  @ApiOperation({ summary: 'To\'lovni o\'chirish (Bekor qilish)' })
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.salaryService.remove(id);
   }

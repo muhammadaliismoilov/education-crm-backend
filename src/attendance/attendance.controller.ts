@@ -7,6 +7,7 @@ import {
   UseGuards,
   ParseUUIDPipe,
   Patch,
+  Request,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -41,23 +42,27 @@ export class AttendanceController {
   }
 
   @Post('bulk')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER) // ✅ Admin va Teacher qila oladi
   @ApiOperation({ summary: 'Davomatni ommaviy saqlash yoki yangilash' })
-  async markBulk(@Body() dto: MarkAttendanceDto) {
-    return this.attendanceService.markBulk(dto);
+  async markBulk(@Body() dto: MarkAttendanceDto, @Request() req) {
+    // ✅ Service'ga req.user.role uzatiladi
+    return this.attendanceService.markBulk(dto, req.user.role);
   }
 
   @Patch('single-update')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER) // ✅ Admin va Teacher qila oladi
   @ApiOperation({ summary: 'Bitta talabaning davomatini tahrirlash' })
-  async updateSingle(@Body() dto: UpdateSingleAttendanceDto) {
-    return this.attendanceService.updateSingleAttendance(dto);
+  async updateSingle(@Body() dto: UpdateSingleAttendanceDto, @Request() req) {
+    // ✅ Service'ga req.user.role uzatiladi
+    return this.attendanceService.updateSingleAttendance(dto, req.user.role);
   }
 
   @Get('monthly-report')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN,UserRole.TEACHER) // ✅ Faqat Admin ko'ra oladi
   @ApiOperation({
     summary: 'Guruhning oylik pivot davomat hisoboti',
     description:
-      'Berilgan guruh va oy uchun har bir talabaning har bir dars kunida "keldi" yoki "kelmadi" holatini ko‘rsatadigan pivot jadval shaklidagi hisobotni qaytaradi. Bu hisobot o‘qituvchilarning oylik maoshini hisoblashda foydalaniladi. ',
+      'Berilgan guruh va oy uchun har bir talabaning har bir dars kunida "keldi" yoki "kelmadi" holatini ko‘rsatadigan pivot jadval shaklidagi hisobot.',
   })
   @ApiQuery({ name: 'groupId', type: 'string', required: true })
   @ApiQuery({
