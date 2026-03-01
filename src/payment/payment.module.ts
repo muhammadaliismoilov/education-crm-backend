@@ -6,11 +6,12 @@ import { Group } from 'src/entities/group.entity';
 import { PaymentController } from './payment.controller';
 import { PaymentService } from './payment.service';
 import { Student } from 'src/entities/students.entity';
+import { StudentDiscount } from 'src/entities/studentDiscount';
 
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Payment, User, Group, Student]),
+    TypeOrmModule.forFeature([Payment, User, Group, Student,StudentDiscount]),
   ],
   controllers: [PaymentController],
   providers: [PaymentService],
