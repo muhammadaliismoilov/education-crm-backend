@@ -273,15 +273,13 @@ export class ReportsService {
 
     const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
 
-    // ✅ Cache ni tekshirish — avval
     const cached = await this.cacheManager.get(cacheKey);
     if (cached) return cached;
 
-    // ✅ To'lovlar
     const paymentsData = await this.paymentRepo
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.group', 'g')
-      .leftJoinAndSelect('p.student', 's') // ✅ QO'SHILDI
+      .leftJoinAndSelect('p.student', 's')
       .where('p.createdAt BETWEEN :start AND :end', { start, end })
       .getMany();
 
@@ -290,45 +288,47 @@ export class ReportsService {
       0,
     );
 
-    // ✅ To'g'ri qarz hisoblash:
-    // Har bir talabaning JAMI to'lovini guruhlash orqali hisoblaymiz
-    const studentPaymentMap = new Map<
-      string,
-      { totalPaid: number; groupPrice: number }
-    >();
+    // ✅ student+group kombinatsiyasi bo'yicha qarz hisoblash
+    const studentGroupMap = new Map<string,{ totalPaid: number; groupPrice: number }>();
 
     for (const p of paymentsData) {
       const studentId = p.student?.id;
-      if (!studentId) continue;
+      const groupId = p.group?.id;
+      if (!studentId || !groupId) continue;
+
+      const key = `${studentId}_${groupId}`;
       const groupPrice = Number(p.group?.price || 0);
       const paidAmount = Number(p.amount || 0);
 
-      if (!studentPaymentMap.has(studentId)) {
-        studentPaymentMap.set(studentId, { totalPaid: 0, groupPrice });
+      if (!studentGroupMap.has(key)) {
+        studentGroupMap.set(key, { totalPaid: 0, groupPrice });
       }
-      studentPaymentMap.get(studentId)!.totalPaid += paidAmount;
+      studentGroupMap.get(key)!.totalPaid += paidAmount;
     }
 
     let totalPending = 0;
-    for (const [, { totalPaid, groupPrice }] of studentPaymentMap) {
+    for (const [, { totalPaid, groupPrice }] of studentGroupMap) {
       if (groupPrice > totalPaid) {
         totalPending += groupPrice - totalPaid;
       }
     }
 
-    // ✅ O'qituvchilar oyligini parallel hisoblash
+    // ✅ O'qituvchilar oyligi — startDate va endDate bilan
     const teachers = await this.userRepo.find({
       where: { role: UserRole.TEACHER },
     });
 
-    const monthString = `${start.getFullYear()}-${String(
-      start.getMonth() + 1,
-    ).padStart(2, '0')}`;
+    const startStr = start.toISOString().split('T')[0]; // "2026-02-01"
+    const endStr = end.toISOString().split('T')[0]; // "2026-02-28"
 
     const salaryResults = await Promise.all(
       teachers.map((teacher) =>
         this.salaryService
-          .calculateTeacherSalary(teacher.id, monthString)
+          .calculateTeacherSalary(
+            teacher.id,
+            startStr, // ✅ startDate
+            endStr, // ✅ endDate
+          )
           .catch(() => ({ totalSalary: 0 })),
       ),
     );
@@ -351,7 +351,6 @@ export class ReportsService {
     };
 
     await this.cacheManager.set(cacheKey, result, CACHE_TTL);
-
     return result;
   }
 
