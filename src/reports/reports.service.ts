@@ -32,9 +32,9 @@ export class ReportsService {
   // ─────────────────────────────────────────────
 async getFinancialOverview(startDate: Date, endDate: Date) {
   const start = new Date(startDate);
-  start.setHours(0, 0, 0, 0);
+  start.setUTCHours(0, 0, 0, 0);  
   const end = new Date(endDate);
-  end.setHours(23, 59, 59, 999);
+  end.setUTCHours(23, 59, 59, 999); 
 
   const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
 
@@ -43,7 +43,7 @@ async getFinancialOverview(startDate: Date, endDate: Date) {
     if (cached) return cached;
   } catch (_) {}
 
-  // ✅ 1. Sana oralig'idagi daromad
+  // 1. Sana oralig'idagi daromad
   const paymentsData = await this.paymentRepo
     .createQueryBuilder('p')
     .leftJoinAndSelect('p.group', 'g')
@@ -55,7 +55,7 @@ async getFinancialOverview(startDate: Date, endDate: Date) {
     (sum, p) => sum + Number(p.amount || 0), 0,
   );
 
-  // ✅ 2. BARCHA talabalarning umumiy qarzi
+  // 2. BARCHA talabalarning umumiy qarzi
   // Sana oralig'iga bog'liq EMAS — har doim umumiy qarz
   const allDebts = await this.paymentRepo
     .createQueryBuilder('p')
@@ -69,7 +69,7 @@ async getFinancialOverview(startDate: Date, endDate: Date) {
     .select([
       's.id                                      AS "studentId"',
       'g.id                                      AS "groupId"',
-      // ✅ Discount bor bo'lsa customPrice, yo'q bo'lsa group.price
+      // Discount bor bo'lsa customPrice, yo'q bo'lsa group.price
       `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL)) AS "effectivePrice"`,
       'SUM(CAST(p.amount AS DECIMAL))             AS "totalPaid"',
     ])
@@ -87,7 +87,7 @@ async getFinancialOverview(startDate: Date, endDate: Date) {
     }
   }
 
-  // ✅ 3. O'qituvchilar oyligi
+  // 3. O'qituvchilar oyligi
   const teachers = await this.userRepo.find({
     where: { role: UserRole.TEACHER },
   });
@@ -110,8 +110,8 @@ async getFinancialOverview(startDate: Date, endDate: Date) {
   const netProfit = totalIncome - totalTeacherSalaries;
 
   const result = {
-    totalIncome,         // ✅ Sana oralig'idagi daromad
-    totalPending,        // ✅ BARCHA talabalarning umumiy qarzi
+    totalIncome,         // Sana oralig'idagi daromad
+    totalPending,        // BARCHA talabalarning umumiy qarzi
     totalTeacherSalaries,
     netProfit,
     currency: "so'm",
@@ -132,106 +132,102 @@ async getFinancialOverview(startDate: Date, endDate: Date) {
   // ─────────────────────────────────────────────
   // 2. QARZDORLAR EXCEL EXPORT
   // ─────────────────────────────────────────────
-  async exportDebtorsToExcel(res: express.Response) {
-    const rawDebts = await this.paymentRepo
-      .createQueryBuilder('payment')
-      .leftJoin('payment.student', 'student')
-      .leftJoin('payment.group', 'group')
-      .select([
-        'student.id                          AS "studentId"',
-        'student.fullName                    AS "fullName"',
-        'student.phone                       AS "phone"',
-        'group.id                            AS "groupId"',
-        'group.name                          AS "groupName"',
-        'CAST(group.price AS DECIMAL)        AS "groupPrice"',
-        'SUM(CAST(payment.amount AS DECIMAL)) AS "totalPaid"',
-      ])
-      .groupBy(
-        'student.id, student.fullName, student.phone, group.id, group.name, group.price',
-      )
-      .having(
-        'CAST(group.price AS DECIMAL) > SUM(CAST(payment.amount AS DECIMAL))',
-      )
-      .orderBy('"fullName"', 'ASC')
-      .getRawMany();
+ async exportDebtorsToExcel(res: express.Response) {
+  // Student dan boshlaymiz — to'lov yo'q bo'lsa ham chiqsin
+  const rawDebts = await this.studentRepo.manager
+    .createQueryBuilder()
+    .select([
+      's.id                                                        AS "studentId"',
+      's.fullName                                                  AS "fullName"',
+      's.phone                                                     AS "phone"',
+      'g.id                                                        AS "groupId"',
+      'g.name                                                      AS "groupName"',
+      `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL))        AS "groupPrice"`,
+      `COALESCE(SUM(CAST(p.amount AS DECIMAL)), 0)                 AS "totalPaid"`,
+    ])
+    .from('students', 's')
+    .innerJoin('group_students', 'gs', 'gs."studentsId" = s.id')
+    .innerJoin('groups', 'g', 'g.id = gs."groupsId"')
+    .leftJoin('student_discounts', 'sd', 'sd."studentId" = s.id AND sd."groupId" = g.id')
+    .leftJoin('payments', 'p', 'p."studentId" = s.id AND p."groupId" = g.id')
+    .where('s."deletedAt" IS NULL')
+    .groupBy('s.id, s.fullName, s.phone, g.id, g.name, sd."customPrice", g.price')
+    .having(
+      `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL)) > COALESCE(SUM(CAST(p.amount AS DECIMAL)), 0)`
+    )
+    .orderBy('s.fullName', 'ASC')
+    .getRawMany();
 
-    // DEBUG — birinchi ishlatganda log qil, keyin o'chir
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Qarzdorlar');
 
-    const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Qarzdorlar');
+  worksheet.columns = [
+    { header: '№',                key: 'index',       width: 5  },
+    { header: 'Talaba F.I.SH',   key: 'fullName',    width: 30 },
+    { header: 'Telefon',          key: 'phone',       width: 20 },
+    { header: 'Guruh',            key: 'groupName',   width: 20 },
+    { header: 'Kurs Narxi',       key: 'coursePrice', width: 15 },
+    { header: "To'langan Summa", key: 'paidAmount',  width: 15 },
+    { header: 'Qarz Miqdori',     key: 'debt',        width: 15 },
+  ];
 
-    worksheet.columns = [
-      { header: '№', key: 'index', width: 5 },
-      { header: 'Talaba F.I.SH', key: 'fullName', width: 30 },
-      { header: 'Telefon', key: 'phone', width: 20 },
-      { header: 'Guruh', key: 'groupName', width: 20 },
-      { header: 'Kurs Narxi', key: 'coursePrice', width: 15 },
-      { header: "To'langan Summa", key: 'paidAmount', width: 15 },
-      { header: 'Qarz Miqdori', key: 'debt', width: 15 },
-    ];
+  const headerRow = worksheet.getRow(1);
+  headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'C0392B' },
+  };
+  headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
-    // Header styling
-    const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true, color: { argb: 'FFFFFF' } };
-    headerRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'C0392B' },
-    };
-    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+  let totalDebt = 0;
 
-    let totalDebt = 0;
+  rawDebts.forEach((item, index) => {
+    const groupPrice = Number(item.groupPrice || 0);
+    const totalPaid  = Number(item.totalPaid  || 0);
+    const debt       = groupPrice - totalPaid;
+    totalDebt += debt;
 
-    rawDebts.forEach((item, index) => {
-      const groupPrice = Number(item.groupPrice || 0);
-      const totalPaid = Number(item.totalPaid || 0);
-      const debt = groupPrice - totalPaid;
-      totalDebt += debt;
-
-      const row = worksheet.addRow({
-        index: index + 1,
-        fullName: item.fullName || "Noma'lum",
-        phone: item.phone || '-',
-        groupName: item.groupName || 'Guruhsiz',
-        coursePrice: `${groupPrice.toLocaleString()} so'm`,
-        paidAmount: `${totalPaid.toLocaleString()} so'm`,
-        debt: `${debt.toLocaleString()} so'm`,
-      });
-
-      if (debt > 500000) {
-        row.getCell('debt').font = { color: { argb: 'C0392B' }, bold: true };
-      }
+    const row = worksheet.addRow({
+      index:       index + 1,
+      fullName:    item.fullName  || "Noma'lum",
+      phone:       item.phone     || '-',
+      groupName:   item.groupName || 'Guruhsiz',
+      coursePrice: `${groupPrice.toLocaleString()} so'm`,
+      paidAmount:  `${totalPaid.toLocaleString()} so'm`,
+      debt:        `${debt.toLocaleString()} so'm`,
     });
 
-    // JAMI qator
-    const totalRow = worksheet.addRow({
-      index: '',
-      fullName: 'JAMI QARZ:',
-      phone: '',
-      groupName: '',
-      coursePrice: '',
-      paidAmount: '',
-      debt: `${totalDebt.toLocaleString()} so'm`,
-    });
-    totalRow.font = { bold: true };
-    totalRow.fill = {
-      type: 'pattern',
-      pattern: 'solid',
-      fgColor: { argb: 'F9EBEA' },
-    };
+    if (debt > 500000) {
+      row.getCell('debt').font = { color: { argb: 'C0392B' }, bold: true };
+    }
+  });
 
-    const today = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
-    const fileName = `Qarzdorlar_${today}.xlsx`;
+  const totalRow = worksheet.addRow({
+    index:       '',
+    fullName:    'JAMI QARZ:',
+    phone:       '',
+    groupName:   '',
+    coursePrice: '',
+    paidAmount:  '',
+    debt:        `${totalDebt.toLocaleString()} so'm`,
+  });
+  totalRow.font = { bold: true };
+  totalRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'F9EBEA' },
+  };
 
-    res.setHeader(
-      'Content-Type',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    );
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+  const today    = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
+  const fileName = `Qarzdorlar_${today}.xlsx`;
 
-    await workbook.xlsx.write(res);
-    res.end();
-  }
+  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+
+  await workbook.xlsx.write(res);
+  res.end();
+}
 
   // ─────────────────────────────────────────────
   // 3. O'QITUVCHILAR SAMARADORLIGI
