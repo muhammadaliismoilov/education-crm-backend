@@ -265,94 +265,193 @@ export class ReportsService {
   // ─────────────────────────────────────────────
   // 1. MOLIYAVIY TAHLIL
   // ─────────────────────────────────────────────
-  async getFinancialOverview(startDate: Date, endDate: Date) {
-    const start = new Date(startDate);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(endDate);
-    end.setHours(23, 59, 59, 999);
+  // async getFinancialOverview(startDate: Date, endDate: Date) {
+  //   const start = new Date(startDate);
+  //   start.setHours(0, 0, 0, 0);
+  //   const end = new Date(endDate);
+  //   end.setHours(23, 59, 59, 999);
 
-    const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
+  //   const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
 
+  //   const cached = await this.cacheManager.get(cacheKey);
+  //   if (cached) return cached;
+
+  //   const paymentsData = await this.paymentRepo
+  //     .createQueryBuilder('p')
+  //     .leftJoinAndSelect('p.group', 'g')
+  //     .leftJoinAndSelect('p.student', 's')
+  //     .where('p.createdAt BETWEEN :start AND :end', { start, end })
+  //     .getMany();
+
+  //   const totalIncome = paymentsData.reduce(
+  //     (sum, p) => sum + Number(p.amount || 0),
+  //     0,
+  //   );
+
+  //   // ✅ student+group kombinatsiyasi bo'yicha qarz hisoblash
+  //   const studentGroupMap = new Map<string,{ totalPaid: number; groupPrice: number }>();
+
+  //   for (const p of paymentsData) {
+  //     const studentId = p.student?.id;
+  //     const groupId = p.group?.id;
+  //     if (!studentId || !groupId) continue;
+
+  //     const key = `${studentId}_${groupId}`;
+  //     const groupPrice = Number(p.group?.price || 0);
+  //     const paidAmount = Number(p.amount || 0);
+
+  //     if (!studentGroupMap.has(key)) {
+  //       studentGroupMap.set(key, { totalPaid: 0, groupPrice });
+  //     }
+  //     studentGroupMap.get(key)!.totalPaid += paidAmount;
+  //   }
+
+  //   let totalPending = 0;
+  //   for (const [, { totalPaid, groupPrice }] of studentGroupMap) {
+  //     if (groupPrice > totalPaid) {
+  //       totalPending += groupPrice - totalPaid;
+  //     }
+  //   }
+
+  //   // ✅ O'qituvchilar oyligi — startDate va endDate bilan
+  //   const teachers = await this.userRepo.find({
+  //     where: { role: UserRole.TEACHER },
+  //   });
+
+  //   const startStr = start.toISOString().split('T')[0]; // "2026-02-01"
+  //   const endStr = end.toISOString().split('T')[0]; // "2026-02-28"
+
+  //   const salaryResults = await Promise.all(
+  //     teachers.map((teacher) =>
+  //       this.salaryService
+  //         .calculateTeacherSalary(
+  //           teacher.id,
+  //           startStr, // ✅ startDate
+  //           endStr, // ✅ endDate
+  //         )
+  //         .catch(() => ({ totalSalary: 0 })),
+  //     ),
+  //   );
+
+  //   const totalTeacherSalaries = salaryResults.reduce(
+  //     (sum, res) => sum + (res?.totalSalary || 0),
+  //     0,
+  //   );
+
+  //   const netProfit = totalIncome - totalTeacherSalaries;
+
+  //   const result = {
+  //     totalIncome,
+  //     totalPending,
+  //     totalTeacherSalaries,
+  //     netProfit,
+  //     currency: "so'm",
+  //     generatedAt: new Date(),
+  //     period: { from: start, to: end },
+  //   };
+
+  //   await this.cacheManager.set(cacheKey, result, CACHE_TTL);
+  //   return result;
+  // }
+
+async getFinancialOverview(startDate: Date, endDate: Date) {
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+
+  const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
+
+  try {
     const cached = await this.cacheManager.get(cacheKey);
     if (cached) return cached;
+  } catch (_) {}
 
-    const paymentsData = await this.paymentRepo
-      .createQueryBuilder('p')
-      .leftJoinAndSelect('p.group', 'g')
-      .leftJoinAndSelect('p.student', 's')
-      .where('p.createdAt BETWEEN :start AND :end', { start, end })
-      .getMany();
+  // ✅ 1. Sana oralig'idagi daromad
+  const paymentsData = await this.paymentRepo
+    .createQueryBuilder('p')
+    .leftJoinAndSelect('p.group', 'g')
+    .leftJoinAndSelect('p.student', 's')
+    .where('p.createdAt BETWEEN :start AND :end', { start, end })
+    .getMany();
 
-    const totalIncome = paymentsData.reduce(
-      (sum, p) => sum + Number(p.amount || 0),
-      0,
-    );
+  const totalIncome = paymentsData.reduce(
+    (sum, p) => sum + Number(p.amount || 0), 0,
+  );
 
-    // ✅ student+group kombinatsiyasi bo'yicha qarz hisoblash
-    const studentGroupMap = new Map<string,{ totalPaid: number; groupPrice: number }>();
+  // ✅ 2. BARCHA talabalarning umumiy qarzi
+  // Sana oralig'iga bog'liq EMAS — har doim umumiy qarz
+  const allDebts = await this.paymentRepo
+    .createQueryBuilder('p')
+    .leftJoin('p.student', 's')
+    .leftJoin('p.group', 'g')
+    .leftJoin(
+      'student_discounts',
+      'sd',
+      'sd."studentId" = s.id AND sd."groupId" = g.id',
+    )
+    .select([
+      's.id                                      AS "studentId"',
+      'g.id                                      AS "groupId"',
+      // ✅ Discount bor bo'lsa customPrice, yo'q bo'lsa group.price
+      `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL)) AS "effectivePrice"`,
+      'SUM(CAST(p.amount AS DECIMAL))             AS "totalPaid"',
+    ])
+    .where('s.id IS NOT NULL')
+    .groupBy('s.id, g.id, sd."customPrice", g.price')
+    .getRawMany();
 
-    for (const p of paymentsData) {
-      const studentId = p.student?.id;
-      const groupId = p.group?.id;
-      if (!studentId || !groupId) continue;
-
-      const key = `${studentId}_${groupId}`;
-      const groupPrice = Number(p.group?.price || 0);
-      const paidAmount = Number(p.amount || 0);
-
-      if (!studentGroupMap.has(key)) {
-        studentGroupMap.set(key, { totalPaid: 0, groupPrice });
-      }
-      studentGroupMap.get(key)!.totalPaid += paidAmount;
+  // Faqat qarzlilarni yig'amiz
+  let totalPending = 0;
+  for (const row of allDebts) {
+    const effectivePrice = Number(row.effectivePrice || 0);
+    const totalPaid = Number(row.totalPaid || 0);
+    if (effectivePrice > totalPaid) {
+      totalPending += effectivePrice - totalPaid;
     }
-
-    let totalPending = 0;
-    for (const [, { totalPaid, groupPrice }] of studentGroupMap) {
-      if (groupPrice > totalPaid) {
-        totalPending += groupPrice - totalPaid;
-      }
-    }
-
-    // ✅ O'qituvchilar oyligi — startDate va endDate bilan
-    const teachers = await this.userRepo.find({
-      where: { role: UserRole.TEACHER },
-    });
-
-    const startStr = start.toISOString().split('T')[0]; // "2026-02-01"
-    const endStr = end.toISOString().split('T')[0]; // "2026-02-28"
-
-    const salaryResults = await Promise.all(
-      teachers.map((teacher) =>
-        this.salaryService
-          .calculateTeacherSalary(
-            teacher.id,
-            startStr, // ✅ startDate
-            endStr, // ✅ endDate
-          )
-          .catch(() => ({ totalSalary: 0 })),
-      ),
-    );
-
-    const totalTeacherSalaries = salaryResults.reduce(
-      (sum, res) => sum + (res?.totalSalary || 0),
-      0,
-    );
-
-    const netProfit = totalIncome - totalTeacherSalaries;
-
-    const result = {
-      totalIncome,
-      totalPending,
-      totalTeacherSalaries,
-      netProfit,
-      currency: "so'm",
-      generatedAt: new Date(),
-      period: { from: start, to: end },
-    };
-
-    await this.cacheManager.set(cacheKey, result, CACHE_TTL);
-    return result;
   }
+
+  // ✅ 3. O'qituvchilar oyligi
+  const teachers = await this.userRepo.find({
+    where: { role: UserRole.TEACHER },
+  });
+
+  const startStr = start.toISOString().split('T')[0];
+  const endStr = end.toISOString().split('T')[0];
+
+  const salaryResults = await Promise.all(
+    teachers.map((teacher) =>
+      this.salaryService
+        .calculateTeacherSalary(teacher.id, startStr, endStr)
+        .catch(() => ({ totalSalary: 0 })),
+    ),
+  );
+
+  const totalTeacherSalaries = salaryResults.reduce(
+    (sum, res) => sum + (res?.totalSalary || 0), 0,
+  );
+
+  const netProfit = totalIncome - totalTeacherSalaries;
+
+  const result = {
+    totalIncome,         // ✅ Sana oralig'idagi daromad
+    totalPending,        // ✅ BARCHA talabalarning umumiy qarzi
+    totalTeacherSalaries,
+    netProfit,
+    currency: "so'm",
+    generatedAt: new Date(),
+    period: { from: start, to: end },
+  };
+
+  try {
+    await this.cacheManager.set(cacheKey, result, CACHE_TTL);
+  } catch (_) {}
+
+  return result;
+}
+
+
+
 
   // ─────────────────────────────────────────────
   // 2. QARZDORLAR EXCEL EXPORT
