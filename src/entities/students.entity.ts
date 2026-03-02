@@ -11,7 +11,7 @@ import {
 import { Group } from './group.entity';
 import { Payment } from './payment.entity';
 import { Attendance } from './attendance.entity';
-import {  StudentDiscount } from './studentDiscount';
+import { StudentDiscount } from './studentDiscount';
 
 export enum DocumentType {
   PASSPORT = 'passport',
@@ -64,8 +64,8 @@ export class Student {
   @ManyToMany(() => Group, (group) => group.students)
   enrolledGroups: Group[];
 
- @OneToMany(() => StudentDiscount, (discount) => discount.student)
-discounts: StudentDiscount[];
+  @OneToMany(() => StudentDiscount, (discount) => discount.student)
+  discounts: StudentDiscount[];
 
   @OneToMany(() => Payment, (payment) => payment.student)
   payments: Payment[];
