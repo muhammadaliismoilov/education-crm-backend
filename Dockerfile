@@ -15,5 +15,5 @@ COPY --from=builder /app/dist ./dist
 RUN echo "=== CHECKING DIST ===" && ls -la /app/dist/
 EXPOSE 3000
 
-# ✅ dist/src/main — chunki rootDir yo'q tsconfig da
+#  dist/src/main — chunki rootDir yo'q tsconfig da
 CMD ["node", "dist/src/main"]

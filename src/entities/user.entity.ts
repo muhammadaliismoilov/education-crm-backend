@@ -17,7 +17,6 @@ import { SalaryPayout } from './salaryPayout.entity';
 export enum UserRole {
   ADMIN = 'admin',
   TEACHER = 'teacher',
-  
 }
 
 @Entity('users')
@@ -34,17 +33,14 @@ export class User {
   @Column({ unique: true })
   login: string;
 
-  @Column({ select: false }) 
+  @Column({ select: false })
   password: string;
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.TEACHER })
   role: UserRole;
 
-  @Column({ type: 'int', nullable: true }) 
+  @Column({ type: 'int', nullable: true })
   salaryPercentage: number; // Faqat o'qituvchilar uchun foiz stavkasi
-
-
-  // --- Bog'liqliklar ---
 
   @OneToMany(() => Group, (group) => group.teacher)
   teachingGroups: Group[]; // O'qituvchining dars beradigan guruhlari
@@ -61,8 +57,8 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @DeleteDateColumn({ select: false }) 
-  deletedAt: Date; 
+  @DeleteDateColumn({ select: false })
+  deletedAt: Date;
 
   // --- Hooks ---
 

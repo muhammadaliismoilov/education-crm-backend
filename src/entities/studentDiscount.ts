@@ -1,4 +1,3 @@
-// src/entities/student-discount.entity.ts
 import {
   Entity,
   PrimaryGeneratedColumn,

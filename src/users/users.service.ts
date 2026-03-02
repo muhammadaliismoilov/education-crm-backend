@@ -6,7 +6,6 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
-
 import { CreateUserDto, UpdateUserDto } from './users.dto';
 import { User, UserRole } from 'src/entities/user.entity';
 
@@ -94,35 +93,35 @@ export class UsersService {
     // Soft Remove - ma'lumot bazada qoladi, lekin deletedAt belgilanadi
     await this.userRepo.softRemove(user);
   }
-async findAllDeleted(search?: string, page = 1, limit = 10) {
-  // withDeleted() hammasini olib keladi
-  const query = this.userRepo.createQueryBuilder('user').withDeleted();
+  async findAllDeleted(search?: string, page = 1, limit = 10) {
+    // withDeleted() hammasini olib keladi
+    const query = this.userRepo.createQueryBuilder('user').withDeleted();
 
-  // FAQAT o'chirilganlarni saralab olamiz
-  query.andWhere('user.deletedAt IS NOT NULL');
+    // FAQAT o'chirilganlarni saralab olamiz
+    query.andWhere('user.deletedAt IS NOT NULL');
 
-  if (search) {
-    query.andWhere(
-      '(user.fullName ILike :search OR user.phone ILike :search OR user.login ILike :search)',
-      { search: `%${search}%` },
-    );
+    if (search) {
+      query.andWhere(
+        '(user.fullName ILike :search OR user.phone ILike :search OR user.login ILike :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const [items, total] = await query
+      .orderBy('user.deletedAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data: items,
+      meta: {
+        totalItems: total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
   }
-
-  const [items, total] = await query
-    .orderBy('user.deletedAt', 'DESC')
-    .skip((page - 1) * limit)
-    .take(limit)
-    .getManyAndCount();
-
-  return {
-    data: items,
-    meta: {
-      totalItems: total,
-      currentPage: page,
-      totalPages: Math.ceil(total / limit),
-    },
-  };
-}
 
   async restore(id: string): Promise<User> {
     await this.userRepo.restore(id);
