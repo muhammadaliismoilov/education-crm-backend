@@ -31,38 +31,46 @@ export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
   @Get('sheet')
-  @ApiOperation({ summary: 'Guruh talabalari ro‘yxatini davomat uchun olish' })
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: "Guruh talabalari ro'yxatini davomat uchun olish" })
   @ApiQuery({ name: 'groupId', type: 'string' })
   @ApiQuery({ name: 'date', example: '2026-02-14' })
   async getSheet(
     @Query('groupId', ParseUUIDPipe) groupId: string,
     @Query('date') date: string,
+    @Request() req,
   ) {
-    return this.attendanceService.getAttendanceSheet(groupId, date);
+    // ✅ role uzatildi
+    return this.attendanceService.getAttendanceSheet(
+      groupId,
+      date,
+      req.user.role,
+    );
   }
 
   @Post('bulk')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER) // ✅ Admin va Teacher qila oladi
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
   @ApiOperation({ summary: 'Davomatni ommaviy saqlash yoki yangilash' })
   async markBulk(@Body() dto: MarkAttendanceDto, @Request() req) {
-    // ✅ Service'ga req.user.role uzatiladi
     return this.attendanceService.markBulk(dto, req.user.role);
   }
 
   @Patch('single-update')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER) // ✅ Admin va Teacher qila oladi
-  @ApiOperation({ summary: 'Bitta talabaning davomatini tahrirlash' })
-  async updateSingle(@Body() dto: UpdateSingleAttendanceDto, @Request() req) {
-    // ✅ Service'ga req.user.role uzatiladi
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @ApiOperation({ summary: "Bitta talabaning davomatini tahrirlash" })
+  async updateSingle(
+    @Body() dto: UpdateSingleAttendanceDto,
+    @Request() req,
+  ) {
     return this.attendanceService.updateSingleAttendance(dto, req.user.role);
   }
 
   @Get('monthly-report')
-  @Roles(UserRole.ADMIN,UserRole.TEACHER) // ✅ Faqat Admin ko'ra oladi
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
   @ApiOperation({
     summary: 'Guruhning oylik pivot davomat hisoboti',
     description:
-      'Berilgan guruh va oy uchun har bir talabaning har bir dars kunida "keldi" yoki "kelmadi" holatini ko‘rsatadigan pivot jadval shaklidagi hisobot.',
+      "Berilgan guruh va oy uchun har bir talabaning har bir dars kunida keldi yoki kelmadi holatini ko'rsatadigan pivot jadval.",
   })
   @ApiQuery({ name: 'groupId', type: 'string', required: true })
   @ApiQuery({

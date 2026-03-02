@@ -25,23 +25,19 @@ export class AttendanceService {
   // HELPER — dars vaqtini tekshirish
   // ─────────────────────────────────────────────
   private checkLessonTime(group: Group, role: UserRole): void {
-    // Admin uchun cheklov yo'q
     if (role === UserRole.ADMIN) return;
 
-    // Hozirgi vaqt
-    const now = new Date();
-    const currentHour = now.getHours();
-    const currentMinute = now.getMinutes();
-    const currentTotalMinutes = currentHour * 60 + currentMinute;
+    if (!group.startTime || !group.endTime) return;
 
-    // Guruh startTime va endTime — "14:00" formatida
+    const now = new Date();
+    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+
     const [startHour, startMinute] = group.startTime.split(':').map(Number);
     const [endHour, endMinute] = group.endTime.split(':').map(Number);
 
     const startTotalMinutes = startHour * 60 + startMinute;
     const endTotalMinutes = endHour * 60 + endMinute;
 
-    // Vaqt oralig'ida emasmi?
     if (
       currentTotalMinutes < startTotalMinutes ||
       currentTotalMinutes > endTotalMinutes
@@ -53,15 +49,18 @@ export class AttendanceService {
   }
 
   // ─────────────────────────────────────────────
-  // DAVOMAT SAHIFASI
+  // DAVOMAT SAHIFASI — role tekshiruvi bilan
   // ─────────────────────────────────────────────
-  async getAttendanceSheet(groupId: string, date: string) {
+  async getAttendanceSheet(groupId: string, date: string, role: UserRole) {
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
       relations: ['students'],
     });
 
     if (!group) throw new NotFoundException('Guruh topilmadi');
+
+    // ✅ Teacher uchun vaqt tekshiruvi — sahifa ochilishidan oldin
+    this.checkLessonTime(group, role);
 
     const existingAttendance = await this.attendanceRepo.find({
       where: { group: { id: groupId }, date },
@@ -87,8 +86,8 @@ export class AttendanceService {
       groupInfo: {
         id: group.id,
         name: group.name,
-        startTime: group.startTime,  // ✅ Frontend uchun
-        endTime: group.endTime,      // ✅ Frontend uchun
+        startTime: group.startTime,
+        endTime: group.endTime,
         paidStudentsCount,
         totalStudents: group.students.length,
       },
@@ -105,7 +104,6 @@ export class AttendanceService {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
-    // ✅ Teacher uchun vaqt tekshiruvi
     this.checkLessonTime(group, role);
 
     const queryRunner = this.dataSource.createQueryRunner();
@@ -152,7 +150,6 @@ export class AttendanceService {
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
-    // ✅ Teacher uchun vaqt tekshiruvi
     this.checkLessonTime(group, role);
 
     let attendance = await this.attendanceRepo.findOne({
@@ -174,7 +171,7 @@ export class AttendanceService {
   }
 
   // ─────────────────────────────────────────────
-  // OYLIK DAVOMAT — o'zgarmaydi
+  // OYLIK DAVOMAT
   // ─────────────────────────────────────────────
   async getGroupMonthlyAttendance(groupId: string, month?: string) {
     if (month && !/^\d{4}-\d{2}$/.test(month)) {
