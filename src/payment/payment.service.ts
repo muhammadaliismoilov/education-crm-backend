@@ -65,6 +65,10 @@ export class PaymentService {
       if (!student.enrolledGroups || student.enrolledGroups.length === 0)
         throw new BadRequestException('Talaba hech qanday guruhga yozilmagan');
 
+      if(!student.enrolledGroups.some((g) => g.id === groupId)) {
+        throw new BadRequestException('Talaba bu guruhga yozilmagan');
+      }
+
       const group = await queryRunner.manager.findOne(Group, {
         where: { id: groupId },
       });
