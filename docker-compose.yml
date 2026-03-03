@@ -1,7 +1,7 @@
 
 services:
   api:
-    image: education-crm:latest   #  GitHub Actions build qilgan nom
+    build: .  
     container_name: crm_api
     restart: always
     ports:

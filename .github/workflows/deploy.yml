@@ -1,39 +1,3 @@
-# name: Deploy Education CRM (Docker)
-
-# on:
-#   push:
-#     branches:
-#       - main
-
-# jobs:
-#   deploy:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       - name: Checkout code
-#         uses: actions/checkout@v4
-
-#       - name: Copy project to VPS
-#         uses: appleboy/scp-action@v0.1.7
-#         with:
-#           host: ${{ secrets.SERVER_IP }}
-#           username: root
-#           key: ${{ secrets.SSH_PRIVATE_KEY }}
-#           source: "."
-#           target: "/var/www/education-crm" # Loyiha papkasi nomi
-
-#       - name: Deploy with Docker Compose
-#         uses: appleboy/ssh-action@v1.0.3
-#         with:
-#           host: ${{ secrets.SERVER_IP }}
-#           username: root
-#           key: ${{ secrets.SSH_PRIVATE_KEY }}
-#           script: |
-#             cd /var/www/education-crm
-#             docker compose down
-#             docker compose up -d --build
-
-
 
 name: Deploy Education CRM (Docker)
 
@@ -50,15 +14,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # ✅ Docker image ni GitHub Actions da build qilamiz (tez internet!)
+      # Docker image ni GitHub Actions da build qilamiz (tez internet!)
       - name: Build Docker image
         run: docker build -t education-crm:latest .
 
-      # ✅ Image ni tar ga siqamiz
+      # Image ni tar ga siqamiz
       - name: Save image to tar
         run: docker save education-crm:latest | gzip > crm-image.tar.gz
 
-      # ✅ Faqat image ni serverga yuboramiz — butun papka emas
+      # Faqat image ni serverga yuboramiz — butun papka emas
       - name: Copy image to VPS
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -68,7 +32,7 @@ jobs:
           source: "crm-image.tar.gz,docker-compose.yml,.env"
           target: "/var/www/education-crm"
 
-      # ✅ Serverda faqat image load + run — build yo'q!
+      # Serverda faqat image load + run — build yo'q!
       - name: Deploy on VPS
         uses: appleboy/ssh-action@v1.0.3
         with:
