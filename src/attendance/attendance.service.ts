@@ -24,32 +24,6 @@ export class AttendanceService {
   // ─────────────────────────────────────────────
   // HELPER — dars vaqtini tekshirish
   // ─────────────────────────────────────────────
-// private checkLessonTime(group: Group, role: UserRole): void {
-//   if (role === UserRole.ADMIN) return;
-//   if (!group.startTime || !group.endTime) return;
-
-//   const now = new Date();
-
-//   // ✅ UTC + 5 = Toshkent vaqti
-//   const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-//   const currentTotalMinutes = (utcMinutes + 5 * 60) % (24 * 60);
-
-//   const [startHour, startMinute] = group.startTime.split(':').map(Number);
-//   const [endHour, endMinute] = group.endTime.split(':').map(Number);
-
-//   const startTotalMinutes = startHour * 60 + startMinute;
-//   const endTotalMinutes = endHour * 60 + endMinute;
-
-//   if (
-//     currentTotalMinutes < startTotalMinutes ||
-//     currentTotalMinutes > endTotalMinutes
-//   ) {
-//     throw new ForbiddenException(
-//       `Davomat faqat dars vaqtida qilinishi mumkin: ${group.startTime} - ${group.endTime}`,
-//     );
-//   }
-// }
-
 private checkLessonTime(group: Group, role: UserRole): void {
   if (role === UserRole.ADMIN) return;
   if (!group.startTime || !group.endTime) return;
@@ -58,12 +32,12 @@ private checkLessonTime(group: Group, role: UserRole): void {
   const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
   const currentTotalMinutes = (utcMinutes + 5 * 60) % (24 * 60);
 
-  // ✅ LOG — serverda qanday vaqt ko'rinishini tekshirish
-  console.log('=== VAQT TEKSHIRUVI ===');
-  console.log('UTC vaqt:', now.getUTCHours() + ':' + now.getUTCMinutes());
-  console.log('Toshkent vaqt (daqiqa):', currentTotalMinutes);
-  console.log('Guruh startTime:', group.startTime);
-  console.log('Guruh endTime:', group.endTime);
+  // LOG — serverda qanday vaqt ko'rinishini tekshirish
+  // console.log('=== VAQT TEKSHIRUVI ===');
+  // console.log('UTC vaqt:', now.getUTCHours() + ':' + now.getUTCMinutes());
+  // console.log('Toshkent vaqt (daqiqa):', currentTotalMinutes);
+  // console.log('Guruh startTime:', group.startTime);
+  // console.log('Guruh endTime:', group.endTime);
 
   const [startHour, startMinute] = group.startTime.split(':').map(Number);
   const [endHour, endMinute] = group.endTime.split(':').map(Number);
@@ -71,9 +45,9 @@ private checkLessonTime(group: Group, role: UserRole): void {
   const startTotalMinutes = startHour * 60 + startMinute;
   const endTotalMinutes = endHour * 60 + endMinute;
 
-  console.log('startTotalMinutes:', startTotalMinutes);
-  console.log('endTotalMinutes:', endTotalMinutes);
-  console.log('======================');
+  // console.log('startTotalMinutes:', startTotalMinutes);
+  // console.log('endTotalMinutes:', endTotalMinutes);
+  // console.log('======================');
 
   if (
     currentTotalMinutes < startTotalMinutes ||
