@@ -24,40 +24,33 @@ export class AttendanceService {
   // ─────────────────────────────────────────────
   // HELPER — dars vaqtini tekshirish
   // ─────────────────────────────────────────────
-private checkLessonTime(group: Group, role: UserRole): void {
-  if (role === UserRole.ADMIN) return;
-  if (!group.startTime || !group.endTime) return;
+  private checkLessonTime(group: Group, role: UserRole): void {
+    if (role === UserRole.ADMIN) return;
+    if (!group.startTime || !group.endTime) return;
 
-  const now = new Date();
-  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
-  const currentTotalMinutes = (utcMinutes + 5 * 60) % (24 * 60);
+    // Toshkent vaqtini olish (Server qayerda bo'lishidan qat'i nazar)
+    const uzTime = new Date().toLocaleString('en-US', {
+      timeZone: 'Asia/Tashkent',
+    });
+    const now = new Date(uzTime);
 
-  // LOG — serverda qanday vaqt ko'rinishini tekshirish
-  // console.log('=== VAQT TEKSHIRUVI ===');
-  // console.log('UTC vaqt:', now.getUTCHours() + ':' + now.getUTCMinutes());
-  // console.log('Toshkent vaqt (daqiqa):', currentTotalMinutes);
-  // console.log('Guruh startTime:', group.startTime);
-  // console.log('Guruh endTime:', group.endTime);
+    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
 
-  const [startHour, startMinute] = group.startTime.split(':').map(Number);
-  const [endHour, endMinute] = group.endTime.split(':').map(Number);
+    const [startHour, startMinute] = group.startTime.split(':').map(Number);
+    const [endHour, endMinute] = group.endTime.split(':').map(Number);
 
-  const startTotalMinutes = startHour * 60 + startMinute;
-  const endTotalMinutes = endHour * 60 + endMinute;
+    const startTotalMinutes = startHour * 60 + startMinute;
+    const endTotalMinutes = endHour * 60 + endMinute;
 
-  // console.log('startTotalMinutes:', startTotalMinutes);
-  // console.log('endTotalMinutes:', endTotalMinutes);
-  // console.log('======================');
-
-  if (
-    currentTotalMinutes < startTotalMinutes ||
-    currentTotalMinutes > endTotalMinutes
-  ) {
-    throw new ForbiddenException(
-      `Davomat faqat dars vaqtida qilinishi mumkin: ${group.startTime} - ${group.endTime}`,
-    );
+    if (
+      currentTotalMinutes < startTotalMinutes ||
+      currentTotalMinutes > endTotalMinutes
+    ) {
+      throw new ForbiddenException(
+        `Davomat faqat dars vaqtida qilinishi mumkin: ${group.startTime} - ${group.endTime}`,
+      );
+    }
   }
-}
   // ─────────────────────────────────────────────
   // DAVOMAT SAHIFASI — role tekshiruvi bilan
   // ─────────────────────────────────────────────
@@ -151,10 +144,7 @@ private checkLessonTime(group: Group, role: UserRole): void {
   // ─────────────────────────────────────────────
   // BITTA DAVOMAT YANGILASH — role tekshiruvi bilan
   // ─────────────────────────────────────────────
-  async updateSingleAttendance(
-    dto: UpdateSingleAttendanceDto,
-    role: UserRole,
-  ) {
+  async updateSingleAttendance(dto: UpdateSingleAttendanceDto, role: UserRole) {
     const { groupId, date, studentId, isPresent } = dto;
 
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
