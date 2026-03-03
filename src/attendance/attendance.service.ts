@@ -24,30 +24,31 @@ export class AttendanceService {
   // ─────────────────────────────────────────────
   // HELPER — dars vaqtini tekshirish
   // ─────────────────────────────────────────────
-  private checkLessonTime(group: Group, role: UserRole): void {
-    if (role === UserRole.ADMIN) return;
+private checkLessonTime(group: Group, role: UserRole): void {
+  if (role === UserRole.ADMIN) return;
+  if (!group.startTime || !group.endTime) return;
 
-    if (!group.startTime || !group.endTime) return;
+  const now = new Date();
 
-    const now = new Date();
-    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+  // ✅ UTC + 5 = Toshkent vaqti
+  const utcMinutes = now.getUTCHours() * 60 + now.getUTCMinutes();
+  const currentTotalMinutes = (utcMinutes + 5 * 60) % (24 * 60);
 
-    const [startHour, startMinute] = group.startTime.split(':').map(Number);
-    const [endHour, endMinute] = group.endTime.split(':').map(Number);
+  const [startHour, startMinute] = group.startTime.split(':').map(Number);
+  const [endHour, endMinute] = group.endTime.split(':').map(Number);
 
-    const startTotalMinutes = startHour * 60 + startMinute;
-    const endTotalMinutes = endHour * 60 + endMinute;
+  const startTotalMinutes = startHour * 60 + startMinute;
+  const endTotalMinutes = endHour * 60 + endMinute;
 
-    if (
-      currentTotalMinutes < startTotalMinutes ||
-      currentTotalMinutes > endTotalMinutes
-    ) {
-      throw new ForbiddenException(
-        `Davomat faqat dars vaqtida qilinishi mumkin: ${group.startTime} - ${group.endTime}`,
-      );
-    }
+  if (
+    currentTotalMinutes < startTotalMinutes ||
+    currentTotalMinutes > endTotalMinutes
+  ) {
+    throw new ForbiddenException(
+      `Davomat faqat dars vaqtida qilinishi mumkin: ${group.startTime} - ${group.endTime}`,
+    );
   }
-
+}
   // ─────────────────────────────────────────────
   // DAVOMAT SAHIFASI — role tekshiruvi bilan
   // ─────────────────────────────────────────────
