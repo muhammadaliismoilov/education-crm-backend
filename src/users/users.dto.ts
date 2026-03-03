@@ -10,7 +10,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import { UserRole } from 'src/entities/user.entity';
+import { UserRole } from '../entities/user.entity';
 
 export class CreateUserDto {
   @ApiProperty({ example: 'Ali Valiyev' })
