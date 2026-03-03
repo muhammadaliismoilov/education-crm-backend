@@ -24,33 +24,45 @@ export class AttendanceService {
   // ─────────────────────────────────────────────
   // HELPER — dars vaqtini tekshirish
   // ─────────────────────────────────────────────
-  private checkLessonTime(group: Group, role: UserRole): void {
-    if (role === UserRole.ADMIN) return;
-    if (!group.startTime || !group.endTime) return;
+private checkLessonTime(group: Group, role: UserRole): void {
+  if (role === UserRole.ADMIN) return;
+  
+  const rawStart = group.startTime.includes('-') 
+    ? group.startTime.split('-')[0].trim() 
+    : group.startTime;
+    
+  const rawEnd = group.startTime.includes('-') 
+    ? group.startTime.split('-')[1].trim() 
+    : group.endTime;
 
-    // Toshkent vaqtini olish (Server qayerda bo'lishidan qat'i nazar)
-    const uzTime = new Date().toLocaleString('en-US', {
-      timeZone: 'Asia/Tashkent',
-    });
-    const now = new Date(uzTime);
+  if (!rawStart || !rawEnd) return;
 
-    const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
+  const uzTime = new Date().toLocaleString('en-US', { timeZone: 'Asia/Tashkent' });
+  const now = new Date(uzTime);
+  const currentTotalMinutes = now.getHours() * 60 + now.getMinutes();
 
-    const [startHour, startMinute] = group.startTime.split(':').map(Number);
-    const [endHour, endMinute] = group.endTime.split(':').map(Number);
+  const [startHour, startMinute] = rawStart.split(':').map(Number);
+  const [endHour, endMinute] = rawEnd.split(':').map(Number);
 
-    const startTotalMinutes = startHour * 60 + startMinute;
-    const endTotalMinutes = endHour * 60 + endMinute;
+  const startTotalMinutes = startHour * 60 + startMinute;
+  const endTotalMinutes = endHour * 60 + endMinute;
 
-    if (
-      currentTotalMinutes < startTotalMinutes ||
-      currentTotalMinutes > endTotalMinutes
-    ) {
-      throw new ForbiddenException(
-        `Davomat faqat dars vaqtida qilinishi mumkin: ${group.startTime} - ${group.endTime}`,
-      );
-    }
+  // QIDIRUV (DEBUG) UCHUN LOGLAR
+  console.log('--- DAVOMAT VAQTI TEKSHIRUVI ---');
+  console.log('Hozirgi soat (UZB):', now.getHours() + ':' + now.getMinutes());
+  console.log('Hozirgi jami daqiqa:', currentTotalMinutes);
+  console.log('Dars boshlanishi (daqiqa):', startTotalMinutes);
+  console.log('Dars tugashi (daqiqa):', endTotalMinutes);
+  console.log('Farq Start:', currentTotalMinutes - startTotalMinutes);
+  console.log('Farq End:', endTotalMinutes - currentTotalMinutes);
+  console.log('-------------------------------');
+
+  if (currentTotalMinutes < startTotalMinutes || currentTotalMinutes > endTotalMinutes) {
+    throw new ForbiddenException(
+      `Davomat faqat dars vaqtida qilinishi mumkin: ${rawStart} - ${rawEnd}`,
+    );
   }
+}
   // ─────────────────────────────────────────────
   // DAVOMAT SAHIFASI — role tekshiruvi bilan
   // ─────────────────────────────────────────────
