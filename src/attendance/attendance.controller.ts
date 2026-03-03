@@ -19,7 +19,7 @@ import { AttendanceService } from './attendance.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../entities/user.entity';
-import { Roles } from 'src/common/guards/roles.decarator';
+import { Roles } from '../common/guards/roles.decarator';
 import { MarkAttendanceDto } from './mark-attendance.dto';
 import { UpdateSingleAttendanceDto } from './update-single-attendance.dto';
 

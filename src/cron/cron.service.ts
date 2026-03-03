@@ -2,7 +2,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
-import { Student } from 'src/entities/students.entity';
+import { Student } from '../entities/students.entity';
 import { DataSource, Repository } from 'typeorm';
 
 // Bir vaqtda nechta student qayta ishlanadi

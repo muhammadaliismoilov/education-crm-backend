@@ -4,10 +4,10 @@ import { Between, LessThan, Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject } from '@nestjs/common';
 import type { Cache } from 'cache-manager';
-import { Student } from 'src/entities/students.entity';
-import { Payment } from 'src/entities/payment.entity';
-import { Group } from 'src/entities/group.entity';
-import { Attendance } from 'src/entities/attendance.entity';
+import { Student } from '../entities/students.entity';
+import { Payment } from '../entities/payment.entity';
+import { Group } from '../entities/group.entity';
+import { Attendance } from '../entities/attendance.entity';
 
 @Injectable()
 export class DashboardService {

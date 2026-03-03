@@ -17,11 +17,11 @@ import {
   ApiResponse,
 } from '@nestjs/swagger';
 import { StudentsService } from './students.service';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { Roles } from 'src/common/guards/roles.decarator';
-import { UserRole } from 'src/entities/user.entity';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/guards/roles.decarator';
+import { UserRole } from '../entities/user.entity';
 
 @ApiTags('Students')
 @ApiBearerAuth()

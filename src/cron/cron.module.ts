@@ -2,7 +2,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CronService } from './cron.service';
-import { Student } from 'src/entities/students.entity';
+import { Student } from '../entities/students.entity';
 
 
 @Module({

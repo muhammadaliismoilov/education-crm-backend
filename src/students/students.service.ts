@@ -6,10 +6,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import { DocumentType, Student } from 'src/entities/students.entity';
-import { Group } from 'src/entities/group.entity';
+import { DocumentType, Student } from '../entities/students.entity';
+import { Group } from '../entities/group.entity';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
-import { StudentDiscount } from 'src/entities/studentDiscount';
+import { StudentDiscount } from '../entities/studentDiscount';
 
 @Injectable()
 export class StudentsService {

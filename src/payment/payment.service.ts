@@ -9,11 +9,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, In } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 import { CreatePaymentDto, UpdatePaymentDto } from './payment.dto';
-import { Student } from 'src/entities/students.entity';
+import { Student } from '../entities/students.entity';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
-import { Group } from 'src/entities/group.entity';
-import { StudentDiscount } from 'src/entities/studentDiscount';
+import { Group } from '../entities/group.entity';
+import { StudentDiscount } from '../entities/studentDiscount';
 
 @Injectable()
 export class PaymentService {

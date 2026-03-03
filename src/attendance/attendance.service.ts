@@ -10,7 +10,7 @@ import { Group } from '../entities/group.entity';
 import { DataSource, Repository } from 'typeorm';
 import { MarkAttendanceDto } from './mark-attendance.dto';
 import { UpdateSingleAttendanceDto } from './update-single-attendance.dto';
-import { UserRole } from 'src/entities/user.entity';
+import { UserRole } from '../entities/user.entity';
 
 @Injectable()
 export class AttendanceService {
