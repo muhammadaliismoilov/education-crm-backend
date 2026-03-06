@@ -48,14 +48,14 @@ private checkLessonTime(group: Group, role: UserRole): void {
   const endTotalMinutes = endHour * 60 + endMinute;
 
   // QIDIRUV (DEBUG) UCHUN LOGLAR
-  console.log('--- DAVOMAT VAQTI TEKSHIRUVI ---');
-  console.log('Hozirgi soat (UZB):', now.getHours() + ':' + now.getMinutes());
-  console.log('Hozirgi jami daqiqa:', currentTotalMinutes);
-  console.log('Dars boshlanishi (daqiqa):', startTotalMinutes);
-  console.log('Dars tugashi (daqiqa):', endTotalMinutes);
-  console.log('Farq Start:', currentTotalMinutes - startTotalMinutes);
-  console.log('Farq End:', endTotalMinutes - currentTotalMinutes);
-  console.log('-------------------------------');
+  // console.log('--- DAVOMAT VAQTI TEKSHIRUVI ---');
+  // console.log('Hozirgi soat (UZB):', now.getHours() + ':' + now.getMinutes());
+  // console.log('Hozirgi jami daqiqa:', currentTotalMinutes);
+  // console.log('Dars boshlanishi (daqiqa):', startTotalMinutes);
+  // console.log('Dars tugashi (daqiqa):', endTotalMinutes);
+  // console.log('Farq Start:', currentTotalMinutes - startTotalMinutes);
+  // console.log('Farq End:', endTotalMinutes - currentTotalMinutes);
+  // console.log('-------------------------------');
 
   if (currentTotalMinutes < startTotalMinutes || currentTotalMinutes > endTotalMinutes) {
     throw new ForbiddenException(

@@ -5,15 +5,20 @@ import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
+import { NestExpressApplication } from '@nestjs/platform-express'; //
 import { join } from 'path';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // 'uploads' papkasini static qilish (http://localhost:3001/uploads/students/file.jpg)
   // app.useStaticAssets(join(__dirname, '..', 'uploads'), {
   //   prefix: '/uploads/',
   // });
+
+  app.useStaticAssets(join(__dirname, '..', 'uploads'), {
+    prefix: '/uploads/',
+  });
 
   // 1. Cookie Parser
   app.use(cookieParser());
