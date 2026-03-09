@@ -2,12 +2,13 @@ import { Module } from '@nestjs/common';
 import { StudentsService } from './students.service';
 import { StudentsController } from './students.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Student } from 'src/entities/students.entity';
-import { Group } from 'src/entities/group.entity';
-import { StudentDiscount } from 'src/entities/studentDiscount';
+import { Student } from '../entities/students.entity';
+import { Group } from '../entities/group.entity';
+import { StudentDiscount } from '../entities/studentDiscount';
+import { FaceModule } from 'src/common/faceId/faceId.module';
 
 @Module({
-  imports:[TypeOrmModule.forFeature([Student,Group,StudentDiscount])],
+  imports:[TypeOrmModule.forFeature([Student,Group,StudentDiscount]),FaceModule],
   controllers: [StudentsController],
   providers: [StudentsService],
 })

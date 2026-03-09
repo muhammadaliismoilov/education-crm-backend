@@ -17,10 +17,10 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { SalaryService } from './salary.service';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { Roles } from 'src/common/guards/roles.decarator';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { UserRole } from 'src/entities/user.entity';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { Roles } from '../common/guards/roles.decarator';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { UserRole } from '../entities/user.entity';
 import { PaySalaryDto } from './salary.dto';
 
 @ApiTags('Oyliklar (Salary)')

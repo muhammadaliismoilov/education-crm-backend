@@ -5,12 +5,12 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Payment } from '../entities/payment.entity';
 import { Group } from '../entities/group.entity';
 import { Attendance } from '../entities/attendance.entity';
-import { Student } from 'src/entities/students.entity';
+import { Student } from '../entities/students.entity';
 import type { Cache } from 'cache-manager';
-import { User, UserRole } from 'src/entities/user.entity';
+import { User, UserRole } from '../entities/user.entity';
 import * as ExcelJS from 'exceljs';
 import * as express from 'express';
-import { SalaryService } from 'src/salarys/salary.service';
+import { SalaryService } from '../salarys/salary.service';
 
 const CACHE_TTL = 3 * 60 * 1000; // 3 daqiqa (ms)
 

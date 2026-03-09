@@ -2,10 +2,10 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { SalaryService } from './salary.service';
 import { SalaryController } from './salary.controller';
-import { User } from 'src/entities/user.entity';
-import { Payment } from 'src/entities/payment.entity';
-import { SalaryPayout } from 'src/entities/salaryPayout.entity';
-import { Attendance } from 'src/entities/attendance.entity';
+import { User } from '../entities/user.entity';
+import { Payment } from '../entities/payment.entity';
+import { SalaryPayout } from '../entities/salaryPayout.entity';
+import { Attendance } from '../entities/attendance.entity';
 
 
 @Module({

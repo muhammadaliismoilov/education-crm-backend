@@ -19,10 +19,10 @@ import {
 } from '@nestjs/swagger';
 import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto } from './users.dto';
-import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
-import { RolesGuard } from 'src/common/guards/roles.guard';
-import { UserRole } from 'src/entities/user.entity';
-import { Roles } from 'src/common/guards/roles.decarator';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { UserRole } from '../entities/user.entity';
+import { Roles } from '../common/guards/roles.decarator';
 
 @ApiTags('Foydalanuvchilar (Users)')
 // @ApiBearerAuth()

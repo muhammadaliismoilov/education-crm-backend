@@ -13,7 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { DocumentType } from 'src/entities/students.entity';
+import { DocumentType } from '../entities/students.entity';
 
 // — Imtiyoz DTO
 export class DiscountItemDto {
