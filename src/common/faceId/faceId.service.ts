@@ -10,7 +10,10 @@ export class FaceService implements OnModuleInit {
   async onModuleInit() {
     await this.loadModels();
   }
+  
 
+
+  
   private async loadModels() {
     if (this.modelsLoaded) return;
 
