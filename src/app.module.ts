@@ -14,6 +14,7 @@ import { DashboardModule } from './dashboards/dashboards.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
 import { CronModule } from './cron/cron.module';
+import { FaceModule } from './common/faceId/faceId.module';
 
 
 
@@ -49,7 +50,8 @@ import { CronModule } from './cron/cron.module';
     PaymentModule,
     ReportsModule,
     DashboardModule,
-    CronModule
+    CronModule,
+    FaceModule
     
   ],
 })
