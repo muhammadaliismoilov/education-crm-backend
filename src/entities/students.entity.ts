@@ -56,7 +56,10 @@ export class Student {
   direction: string; // Yo'nalish
 
   @Column({ nullable: true })
-  photo: string; // Rasm 3x4
+  photoUrl: string;
+
+  @Column({ type: 'jsonb', nullable: true })
+  faceDescriptor: number[];
 
   @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
   balance: number;
