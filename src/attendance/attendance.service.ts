@@ -28,13 +28,13 @@
 //   // ─────────────────────────────────────────────
 // private checkLessonTime(group: Group, role: UserRole): void {
 //   if (role === UserRole.ADMIN) return;
-  
-//   const rawStart = group.startTime.includes('-') 
-//     ? group.startTime.split('-')[0].trim() 
+
+//   const rawStart = group.startTime.includes('-')
+//     ? group.startTime.split('-')[0].trim()
 //     : group.startTime;
-    
-//   const rawEnd = group.startTime.includes('-') 
-//     ? group.startTime.split('-')[1].trim() 
+
+//   const rawEnd = group.startTime.includes('-')
+//     ? group.startTime.split('-')[1].trim()
 //     : group.endTime;
 
 //   if (!rawStart || !rawEnd) return;
@@ -277,7 +277,6 @@
 //   }
 // }
 
-
 import {
   Injectable,
   NotFoundException,
@@ -450,10 +449,7 @@ export class AttendanceService {
   // ─────────────────────────────────────────────
   // BITTA DAVOMAT YANGILASH
   // ─────────────────────────────────────────────
-  async updateSingleAttendance(
-    dto: UpdateSingleAttendanceDto,
-    role: UserRole,
-  ) {
+  async updateSingleAttendance(dto: UpdateSingleAttendanceDto, role: UserRole) {
     const { groupId, date, studentId, isPresent } = dto;
 
     const group = await this.groupRepo.findOne({ where: { id: groupId } });
@@ -482,144 +478,153 @@ export class AttendanceService {
   // ─────────────────────────────────────────────
   // YUZ ORQALI DAVOMAT
   // ─────────────────────────────────────────────
- async faceVerifyAttendance(
-  groupId: string,
-  date: string,
-  base64: string,
-  role: UserRole,
-) {
-  if (!base64 || !base64.startsWith('data:image')) {
-    throw new BadRequestException(
-      "base64 formati noto'g'ri! data:image/jpeg;base64,... ko'rinishida yuboring",
-    );
-  }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-    throw new BadRequestException(
-      "Sana formati noto'g'ri. To'g'ri format: YYYY-MM-DD",
-    );
-  }
-
-  const group = await this.groupRepo.findOne({
-    where: { id: groupId },
-    relations: ['students'],
-  });
-  if (!group) throw new NotFoundException('Guruh topilmadi');
-
-  this.checkLessonTime(group, role);
-
-  // ✅ faceDescriptor tekshiruvi
-  const studentsWithFace = group.students.filter(
-    (s) => s.faceDescriptor && s.faceDescriptor.length === 128,
-  );
-
-  // ✅ DEBUG LOG
-  this.logger.log(`👥 Guruh: ${group.name}, jami student: ${group.students.length}`);
-  this.logger.log(`👥 Yuzli studentlar: ${studentsWithFace.length}`);
-
-  if (studentsWithFace.length > 0) {
-    const first = studentsWithFace[0];
-    this.logger.log(`🔍 Descriptor[0] type: ${typeof first.faceDescriptor[0]}`);
-    this.logger.log(`🔍 Descriptor[0] value: ${first.faceDescriptor[0]}`);
-  }
-
-  if (studentsWithFace.length === 0) {
-    throw new BadRequestException(
-      "Bu guruhda yuz ma'lumoti saqlangan talaba yo'q!",
-    );
-  }
-
-  // ✅ Frontend rasmdan descriptor
-  let incomingDescriptor: number[];
-  try {
-    incomingDescriptor = await this.faceService.getDescriptorFromBase64(base64);
-    this.logger.log(`✅ Incoming descriptor olindi`);
-  } catch (e) {
-    throw new BadRequestException(
-      'Rasmda yuz topilmadi! Aniqroq rasm yuboring.',
-    );
-  }
-
-  // ✅ Mosini topish
-  let matchedStudent: Student | null = null;
-  let highestSimilarity = 0;
-
-  for (const student of studentsWithFace) {
-    // ✅ jsonb dan kelgan descriptorni to'g'ri parse qilish
-    const storedDescriptor = Array.isArray(student.faceDescriptor)
-      ? student.faceDescriptor.map(Number)
-      : JSON.parse(student.faceDescriptor as any);
-
-    const similarity = this.faceService.getSimilarity(
-      storedDescriptor,
-      incomingDescriptor,
-    );
-
-    this.logger.log(`👤 ${student.fullName}: ${similarity}%`);
-
-    if (similarity > highestSimilarity) {
-      highestSimilarity = similarity;
-      matchedStudent = student;
+  async faceVerifyAttendance(
+    groupId: string,
+    date: string,
+    base64: string,
+    role: UserRole,
+  ) {
+    if (!base64 || !base64.startsWith('data:image')) {
+      throw new BadRequestException(
+        "base64 formati noto'g'ri! data:image/jpeg;base64,... ko'rinishida yuboring",
+      );
     }
-  }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new BadRequestException(
+        "Sana formati noto'g'ri. To'g'ri format: YYYY-MM-DD",
+      );
+    }
 
-  this.logger.log(
-    `🎯 Face verify: guruh=${group.name}, eng yuqori o'xshashlik=${highestSimilarity}%`,
-  );
+    const group = await this.groupRepo.findOne({
+      where: { id: groupId },
+      relations: ['students'],
+    });
+    if (!group) throw new NotFoundException('Guruh topilmadi');
 
-  if (!matchedStudent || highestSimilarity < 55) {
-    return {
-      success: false,
-      message: 'Talaba tanilmadi',
-      similarity: highestSimilarity,
-    };
-  }
+    this.checkLessonTime(group, role);
 
-  // Davomatni belgilash
-  let attendance = await this.attendanceRepo.findOne({
-    where: {
-      group: { id: groupId },
-      date,
-      student: { id: matchedStudent.id },
-    },
-  });
+    // ✅ faceDescriptor tekshiruvi
+    const studentsWithFace = group.students.filter(
+      (s) => s.faceDescriptor && s.faceDescriptor.length === 128,
+    );
 
-  if (attendance?.isPresent) {
+    // ✅ DEBUG LOG
+    this.logger.log(
+      `👥 Guruh: ${group.name}, jami student: ${group.students.length}`,
+    );
+    this.logger.log(`👥 Yuzli studentlar: ${studentsWithFace.length}`);
+
+    if (studentsWithFace.length > 0) {
+      const first = studentsWithFace[0];
+      this.logger.log(
+        `🔍 Descriptor[0] type: ${typeof first.faceDescriptor[0]}`,
+      );
+      this.logger.log(`🔍 Descriptor[0] value: ${first.faceDescriptor[0]}`);
+    }
+
+    if (studentsWithFace.length === 0) {
+      throw new BadRequestException(
+        "Bu guruhda yuz ma'lumoti saqlangan talaba yo'q!",
+      );
+    }
+
+    // ✅ Frontend rasmdan descriptor
+    let incomingDescriptor: number[];
+    try {
+      incomingDescriptor =
+        await this.faceService.getDescriptorFromBase64(base64);
+      this.logger.log(`✅ Incoming descriptor olindi`);
+    } catch (e) {
+      throw new BadRequestException(
+        'Rasmda yuz topilmadi! Aniqroq rasm yuboring.',
+      );
+    }
+    this.logger.log(`🔢 Incoming[0..3]: ${incomingDescriptor.slice(0, 3)}`);
+    this.logger.log(
+      `🔢 Stored[0..3]:   ${studentsWithFace[0].faceDescriptor.slice(0, 3)}`,
+    );
+
+    // ✅ Mosini topish
+    let matchedStudent: Student | null = null;
+    let highestSimilarity = 0;
+
+    for (const student of studentsWithFace) {
+      // ✅ jsonb dan kelgan descriptorni to'g'ri parse qilish
+      const storedDescriptor = Array.isArray(student.faceDescriptor)
+        ? student.faceDescriptor.map(Number)
+        : JSON.parse(student.faceDescriptor as any);
+
+      const similarity = this.faceService.getSimilarity(
+        storedDescriptor,
+        incomingDescriptor,
+      );
+
+      this.logger.log(`👤 ${student.fullName}: ${similarity}%`);
+
+      if (similarity > highestSimilarity) {
+        highestSimilarity = similarity;
+        matchedStudent = student;
+      }
+    }
+
+    this.logger.log(
+      `🎯 Face verify: guruh=${group.name}, eng yuqori o'xshashlik=${highestSimilarity}%`,
+    );
+
+    if (!matchedStudent || highestSimilarity < 55) {
+      return {
+        success: false,
+        message: 'Talaba tanilmadi',
+        similarity: highestSimilarity,
+      };
+    }
+
+    // Davomatni belgilash
+    let attendance = await this.attendanceRepo.findOne({
+      where: {
+        group: { id: groupId },
+        date,
+        student: { id: matchedStudent.id },
+      },
+    });
+
+    if (attendance?.isPresent) {
+      return {
+        success: true,
+        message: `${matchedStudent.fullName} davomat allaqachon belgilangan`,
+        studentId: matchedStudent.id,
+        fullName: matchedStudent.fullName,
+        similarity: highestSimilarity,
+        alreadyMarked: true,
+      };
+    }
+
+    if (attendance) {
+      attendance.isPresent = true;
+    } else {
+      attendance = this.attendanceRepo.create({
+        group: { id: groupId },
+        date,
+        student: { id: matchedStudent.id },
+        isPresent: true,
+      });
+    }
+
+    await this.attendanceRepo.save(attendance);
+
+    this.logger.log(
+      `✅ Davomat belgilandi: ${matchedStudent.fullName} (${highestSimilarity}%)`,
+    );
+
     return {
       success: true,
-      message: `${matchedStudent.fullName} davomat allaqachon belgilangan`,
+      message: `${matchedStudent.fullName} davomatga belgilandi`,
       studentId: matchedStudent.id,
       fullName: matchedStudent.fullName,
       similarity: highestSimilarity,
-      alreadyMarked: true,
+      alreadyMarked: false,
     };
   }
-
-  if (attendance) {
-    attendance.isPresent = true;
-  } else {
-    attendance = this.attendanceRepo.create({
-      group: { id: groupId },
-      date,
-      student: { id: matchedStudent.id },
-      isPresent: true,
-    });
-  }
-
-  await this.attendanceRepo.save(attendance);
-
-  this.logger.log(
-    `✅ Davomat belgilandi: ${matchedStudent.fullName} (${highestSimilarity}%)`,
-  );
-
-  return {
-    success: true,
-    message: `${matchedStudent.fullName} davomatga belgilandi`,
-    studentId: matchedStudent.id,
-    fullName: matchedStudent.fullName,
-    similarity: highestSimilarity,
-    alreadyMarked: false,
-  };
-}
   // ─────────────────────────────────────────────
   // OYLIK DAVOMAT
   // ─────────────────────────────────────────────
