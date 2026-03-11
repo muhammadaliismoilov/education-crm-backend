@@ -83,10 +83,11 @@ export class CreateStudentDto {
 
   @ApiProperty({ example: '2000-01-01', required: false })
   @IsOptional()
+  @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: "Tug'ilgan sana YYYY-MM-DD formatida bo'lishi kerak",
   })
-  birthDate?: Date;
+  birthDate?: string; // ← Date emas, string!
 
   @ApiProperty({ example: 'Matematika', required: false })
   @IsOptional()
@@ -122,7 +123,7 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
   @ApiProperty({
     type: [DiscountItemDto],
     required: false,
-    description: 'Guruh bo\'yicha imtiyozli narxlar',
+    description: "Guruh bo'yicha imtiyozli narxlar",
     example: [
       { groupId: '550e8400-e29b-41d4-a716-446655440000', customPrice: 450000 },
       { groupId: '660e8400-e29b-41d4-a716-446655440001', customPrice: null },
