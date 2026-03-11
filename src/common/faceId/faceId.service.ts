@@ -114,6 +114,7 @@ export class FaceService implements OnModuleInit {
     const d1 = new Float32Array(desc1.map(Number));
     const d2 = new Float32Array(desc2.map(Number));
     const distance = faceapi.euclideanDistance(d1, d2);
+      this.logger.log(`📏 Distance: ${distance.toFixed(4)}`);
     const similarity = Math.max(0, Math.round((1 - distance / 0.6) * 100));
     return similarity;
   }
