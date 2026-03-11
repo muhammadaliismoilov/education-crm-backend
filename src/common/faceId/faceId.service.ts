@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import * as faceapi from '@vladmandic/face-api';
 import { createCanvas, loadImage } from 'canvas';
 import * as path from 'path';
@@ -14,31 +19,31 @@ export class FaceService implements OnModuleInit {
   }
 
   private async loadModels() {
-  if (this.modelsLoaded) return;
+    if (this.modelsLoaded) return;
 
-  // ✅ dist/models yo'q bo'lsa, root/models dan qidiradi
-  const modelsPath = fs.existsSync(path.join(__dirname, '..', '..', 'models'))
-    ? path.join(__dirname, '..', '..', 'models')        // dist/models
-    : path.join(process.cwd(), 'models');                // root/models
+    // ✅ dist/models yo'q bo'lsa, root/models dan qidiradi
+    const modelsPath = fs.existsSync(path.join(__dirname, '..', '..', 'models'))
+      ? path.join(__dirname, '..', '..', 'models') // dist/models
+      : path.join(process.cwd(), 'models'); // root/models
 
-  const { Canvas, Image, ImageData } = require('canvas');
-  faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
+    const { Canvas, Image, ImageData } = require('canvas');
+    faceapi.env.monkeyPatch({ Canvas, Image, ImageData });
 
-  this.logger.log(`📁 Models path: ${modelsPath}`);
-  this.logger.log(`📁 Models exists: ${fs.existsSync(modelsPath)}`);
+    this.logger.log(`📁 Models path: ${modelsPath}`);
+    this.logger.log(`📁 Models exists: ${fs.existsSync(modelsPath)}`);
 
-  if (!fs.existsSync(modelsPath)) {
-    this.logger.error(`❌ Models papkasi topilmadi: ${modelsPath}`);
-    throw new Error(`Models papkasi topilmadi: ${modelsPath}`);
+    if (!fs.existsSync(modelsPath)) {
+      this.logger.error(`❌ Models papkasi topilmadi: ${modelsPath}`);
+      throw new Error(`Models papkasi topilmadi: ${modelsPath}`);
+    }
+
+    await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelsPath);
+    await faceapi.nets.faceLandmark68Net.loadFromDisk(modelsPath);
+    await faceapi.nets.faceRecognitionNet.loadFromDisk(modelsPath);
+
+    this.modelsLoaded = true;
+    this.logger.log('✅ Face recognition modellari yuklandi');
   }
-
-  await faceapi.nets.ssdMobilenetv1.loadFromDisk(modelsPath);
-  await faceapi.nets.faceLandmark68Net.loadFromDisk(modelsPath);
-  await faceapi.nets.faceRecognitionNet.loadFromDisk(modelsPath);
-
-  this.modelsLoaded = true;
-  this.logger.log('✅ Face recognition modellari yuklandi');
-}
 
   // ✅ Fayl yo'lidan descriptor olish
   async getDescriptorFromFile(imagePath: string): Promise<number[]> {
@@ -64,7 +69,9 @@ export class FaceService implements OnModuleInit {
       throw new BadRequestException('Rasmda yuz topilmadi!');
     }
 
-    this.logger.log(`✅ Descriptor olindi, score: ${detection.detection.score}`);
+    this.logger.log(
+      `✅ Descriptor olindi, score: ${detection.detection.score}`,
+    );
     return Array.from(detection.descriptor);
   }
 
@@ -72,7 +79,8 @@ export class FaceService implements OnModuleInit {
   async getDescriptorFromBase64(base64: string): Promise<number[]> {
     await this.loadModels();
 
-    const base64Data = base64.replace(/^data:image\/\w+;base64,/, '');
+    const cleanBase64 = base64.replace(/\s+/g, '');
+    const base64Data = cleanBase64.replace(/^data:image\/\w+;base64,/, '');
     const buffer = Buffer.from(base64Data, 'base64');
 
     this.logger.log(`📸 Base64 buffer size: ${buffer.length} bytes`);
@@ -94,7 +102,9 @@ export class FaceService implements OnModuleInit {
       throw new BadRequestException('Rasmda yuz topilmadi!');
     }
 
-    this.logger.log(`✅ Base64 descriptor olindi, score: ${detection.detection.score}`);
+    this.logger.log(
+      `✅ Base64 descriptor olindi, score: ${detection.detection.score}`,
+    );
     return Array.from(detection.descriptor);
   }
 
