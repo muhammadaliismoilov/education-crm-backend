@@ -26,14 +26,14 @@ import { UserRole } from '../entities/user.entity';
 import { Roles } from '../common/guards/roles.decarator';
 
 @ApiTags('Foydalanuvchilar (Users)')
-@ApiBearerAuth()
-@UseGuards(JwtAuthGuard, RolesGuard) // TUZATISH: himoya yoqildi
+// @ApiBearerAuth()
+// @UseGuards(JwtAuthGuard, RolesGuard) // TUZATISH: himoya yoqildi
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN) // TUZATISH: role tekshiruvi yoqildi
+  // @Roles(UserRole.ADMIN) // TUZATISH: role tekshiruvi yoqildi
   @ApiOperation({ summary: "Yangi foydalanuvchi qo'shish" })
   @ApiResponse({
     status: 201,
@@ -61,7 +61,7 @@ export class UsersController {
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER) // TUZATISH: role tekshiruvi yoqildi
+  // @Roles(UserRole.ADMIN, UserRole.TEACHER) // TUZATISH: role tekshiruvi yoqildi
   @ApiOperation({ summary: "Foydalanuvchilar ro'yxati (Pagination & Search)" })
   @ApiQuery({ name: 'role', enum: UserRole, required: false })
   @ApiQuery({ name: 'search', required: false })
@@ -98,7 +98,7 @@ export class UsersController {
   }
 
   @Get('all/deleted')
-  @Roles(UserRole.ADMIN)
+  // @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: "O'chirilgan foydalanuvchilar ro'yxati" })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
@@ -116,7 +116,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER) // TUZATISH: role tekshiruvi yoqildi
+  // @Roles(UserRole.ADMIN, UserRole.TEACHER) // TUZATISH: role tekshiruvi yoqildi
   @ApiOperation({ summary: "ID bo'yicha foydalanuvchi olish" })
   @ApiResponse({
     status: 200,
@@ -140,7 +140,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN) // TUZATISH: role tekshiruvi yoqildi
+  // @Roles(UserRole.ADMIN) // TUZATISH: role tekshiruvi yoqildi
   @ApiOperation({ summary: 'Foydalanuvchini qisman tahrirlash' })
   @ApiResponse({
     status: 200,
@@ -159,7 +159,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  // @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Foydalanuvchini soft-delete qilish (arxivlash)' })
   @ApiResponse({
     status: 200,
@@ -184,7 +184,7 @@ export class UsersController {
   }
 
   @Post(':id/restore')
-  @Roles(UserRole.ADMIN)
+  // @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: "O'chirilgan foydalanuvchini tiklash" })
   @ApiResponse({
     status: 201,
