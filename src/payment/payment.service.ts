@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Inject,
   InternalServerErrorException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, In } from 'typeorm';
@@ -17,6 +18,8 @@ import { StudentDiscount } from '../entities/studentDiscount';
 
 @Injectable()
 export class PaymentService {
+  private readonly logger = new Logger(PaymentService.name);
+
   constructor(
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
     @InjectRepository(StudentDiscount)
@@ -25,7 +28,7 @@ export class PaymentService {
     private dataSource: DataSource,
   ) {}
 
-  //  HELPER — talabaning guruh uchun HAQIQIY narxini olish
+  // HELPER — talabaning guruh uchun haqiqiy narxini olish
   private async getEffectivePrice(
     studentId: string,
     groupId: string,
@@ -37,8 +40,55 @@ export class PaymentService {
         group: { id: groupId },
       },
     });
-    // Discount bor bo'lsa — imtiyozli narx, yo'q bo'lsa — standart narx
     return discount ? Number(discount.customPrice) : groupPrice;
+  }
+
+  // HELPER — student umumiy balansini hisoblash va yangilash
+  // TUZATISH: create, update, remove da bir xil kod 3 marta takrorlanardi —
+  // alohida helper ga chiqarildi
+  private async recalculateStudentBalance(
+    queryRunner: any,
+    studentId: string,
+    excludePaymentId?: string,
+  ): Promise<void> {
+    const student = await queryRunner.manager.findOne(Student, {
+      where: { id: studentId },
+      relations: ['enrolledGroups'],
+    });
+
+    if (!student) return;
+
+    const allPaymentsQuery = queryRunner.manager
+      .createQueryBuilder(Payment, 'p')
+      .select('SUM(CAST(p.amount AS DECIMAL))', 'totalPaid')
+      .where('p.studentId = :studentId', { studentId });
+
+    if (excludePaymentId) {
+      allPaymentsQuery.andWhere('p.id != :id', { id: excludePaymentId });
+    }
+
+    const allPaymentsResult = await allPaymentsQuery.getRawOne();
+    const allTotalPaid = Number(allPaymentsResult?.totalPaid || 0);
+
+    const allDiscounts = await queryRunner.manager.find(StudentDiscount, {
+      where: { student: { id: studentId } },
+      relations: ['group'],
+    });
+
+    const totalMonthlyPrice =
+      student.enrolledGroups?.reduce((sum, g) => {
+        const gDiscount = allDiscounts.find((d) => d.group?.id === g.id);
+        return (
+          sum +
+          (gDiscount ? Number(gDiscount.customPrice) : Number(g.price || 0))
+        );
+      }, 0) || 0;
+
+    await queryRunner.manager.update(
+      Student,
+      { id: studentId },
+      { balance: allTotalPaid - totalMonthlyPrice },
+    );
   }
 
   async create(dto: CreatePaymentDto) {
@@ -64,32 +114,28 @@ export class PaymentService {
       if (!student) throw new BadRequestException('Talaba topilmadi');
       if (!student.enrolledGroups || student.enrolledGroups.length === 0)
         throw new BadRequestException('Talaba hech qanday guruhga yozilmagan');
-
-      if(!student.enrolledGroups.some((g) => g.id === groupId)) {
+      if (!student.enrolledGroups.some((g) => g.id === groupId))
         throw new BadRequestException('Talaba bu guruhga yozilmagan');
-      }
 
       const group = await queryRunner.manager.findOne(Group, {
         where: { id: groupId },
       });
       if (!group) throw new BadRequestException('Guruh topilmadi');
 
-      //  Talabaning bu guruh uchun HAQIQIY narxi
-      // Imtiyoz bor bo'lsa — customPrice, yo'q bo'lsa — group.price
       const discount = await queryRunner.manager.findOne(StudentDiscount, {
         where: {
           student: { id: studentId },
           group: { id: groupId },
         },
       });
+
       const coursePrice = discount
-        ? Number(discount.customPrice) //  Imtiyozli narx
-        : Number(group.price); //  Standart narx
+        ? Number(discount.customPrice)
+        : Number(group.price);
 
       if (coursePrice === 0)
         throw new BadRequestException('Guruh narxi belgilanmagan');
 
-      // Oldingi to'lovlar
       const previousPayments = await queryRunner.manager.find(Payment, {
         where: { student: { id: studentId }, group: { id: groupId } },
       });
@@ -101,21 +147,8 @@ export class PaymentService {
 
       const totalPaid = totalPaidAmount + newPayment;
       const balance = totalPaid - coursePrice;
-
-      let debt = 0;
-      let advanceBalance = 0;
-
-      if (balance < 0) {
-        debt = Math.abs(balance);
-        advanceBalance = 0;
-      } else if (balance > 0) {
-        debt = 0;
-        advanceBalance = balance;
-      } else {
-        debt = 0;
-        advanceBalance = 0;
-      }
-
+      const debt = balance < 0 ? Math.abs(balance) : 0;
+      const advanceBalance = balance > 0 ? balance : 0;
       const isFullyPaid = totalPaid >= coursePrice;
       const coverageMonths = Math.floor(totalPaid / coursePrice);
 
@@ -129,41 +162,15 @@ export class PaymentService {
 
       const saved = await queryRunner.manager.save(payment);
 
-      //  Student UMUMIY balansini yangilash
-      // Har bir guruh uchun effectivePrice (imtiyozli yoki standart)
-      const allPayments = await queryRunner.manager.find(Payment, {
-        where: { student: { id: studentId } },
-        relations: ['group'],
-      });
-
-      const allTotalPaid = allPayments.reduce(
-        (sum, p) => sum + Number(p.amount || 0),
-        0,
-      );
-
-      //  Barcha guruhlar uchun imtiyozli narxlarni hisoblaymiz
-      const allDiscounts = await queryRunner.manager.find(StudentDiscount, {
-        where: { student: { id: studentId } },
-        relations: ['group'],
-      });
-
-      const totalMonthlyPrice = student.enrolledGroups.reduce((sum, g) => {
-        const groupDiscount = allDiscounts.find((d) => d.group?.id === g.id);
-        const price = groupDiscount
-          ? Number(groupDiscount.customPrice) //  Imtiyozli narx
-          : Number(g.price); //  Standart narx
-        return sum + price;
-      }, 0);
-
-      const overallBalance = allTotalPaid - totalMonthlyPrice;
-
-      await queryRunner.manager.update(
-        Student,
-        { id: studentId },
-        { balance: overallBalance },
-      );
+      // TUZATISH: helper ishlatildi — takroriy kod olib tashlandi
+      await this.recalculateStudentBalance(queryRunner, studentId);
 
       await queryRunner.commitTransaction();
+
+      // SABABI: Moliyaviy operatsiya — kim, qancha to'ladi audit uchun
+      this.logger.log(
+        `To'lov yaratildi [id: ${saved.id}] [student: ${studentId}] [group: ${groupId}] [summa: ${newPayment}]`,
+      );
 
       try {
         const cache = this.cacheManager as any;
@@ -175,14 +182,16 @@ export class PaymentService {
         debt,
         advanceBalance,
         coverageMonths,
-        coursePrice, //  Imtiyozli yoki standart narx
+        coursePrice,
         paidAmount: totalPaid,
         isFullyPaid,
-        hasDiscount: !!discount, //  Imtiyoz bor-yo'qligi
+        hasDiscount: !!discount,
       };
     } catch (err) {
       await queryRunner.rollbackTransaction();
       if (err instanceof BadRequestException) throw err;
+      // SABABI: Kutilmagan xatolik — stack bilan loglansin
+      this.logger.error("To'lov yaratishda xatolik", err.stack);
       throw new InternalServerErrorException(
         "To'lov saqlashda xatolik yuz berdi",
       );
@@ -198,7 +207,9 @@ export class PaymentService {
       .leftJoinAndSelect('payment.group', 'group');
 
     if (search) {
-      query.where('student.fullName ILike :search', { search: `%${search}%` });
+      query.where('student.fullName ILike :search', {
+        search: `%${search}%`,
+      });
     }
 
     const [items, total] = await query
@@ -246,10 +257,10 @@ export class PaymentService {
       });
     }
 
-    //  Discountlarni bitta query da olamiz
     const studentIds = [
       ...new Set(items.map((p) => p.student?.id).filter(Boolean)),
     ];
+
     const discounts =
       studentIds.length > 0
         ? await this.discountRepo.find({
@@ -262,12 +273,12 @@ export class PaymentService {
       const key = `${payment.student?.id}_${payment.group?.id}`;
       const totalPaid = totalPaidMap.get(key) || Number(payment.amount || 0);
 
-      //  Imtiyozli narx yoki standart narx
       const discount = discounts.find(
         (d) =>
           d.student?.id === payment.student?.id &&
           d.group?.id === payment.group?.id,
       );
+
       const coursePrice = discount
         ? Number(discount.customPrice)
         : Number(payment.group?.price || 0);
@@ -276,10 +287,10 @@ export class PaymentService {
 
       return {
         ...payment,
-        coursePrice, //  Haqiqiy narx
+        coursePrice,
         paidAmount: totalPaid,
         isFullyPaid: debt <= 0,
-        hasDiscount: !!discount, //  Imtiyoz bor-yo'qligi
+        hasDiscount: !!discount,
       };
     });
 
@@ -307,7 +318,6 @@ export class PaymentService {
       .andWhere('p.groupId = :groupId', { groupId: payment.group?.id })
       .getRawOne();
 
-    //  Imtiyozli narxni tekshirish
     const discount = await this.discountRepo.findOne({
       where: {
         student: { id: payment.student?.id },
@@ -339,7 +349,6 @@ export class PaymentService {
     });
     if (!payment) throw new NotFoundException("To'lov topilmadi");
 
-    //  Imtiyozli narxni tekshirish
     const discount = await this.discountRepo.findOne({
       where: {
         student: { id: payment.student?.id },
@@ -371,14 +380,14 @@ export class PaymentService {
       },
       group: {
         name: payment.group.name,
-        originalPrice: Number(payment.group.price), //  Standart narx
-        price: coursePrice, //  Haqiqiy to'laydigan narx
+        originalPrice: Number(payment.group.price),
+        price: coursePrice,
         hasDiscount: !!discount,
       },
       payment: {
         amount: Number(payment.amount),
         totalPaid,
-        debt: balance < 0 ? 0 : balance,
+        debt: balance < 0 ? Math.abs(balance) : 0,
         overpayment: balance > 0 ? balance : 0,
         isFullyPaid: balance >= 0,
       },
@@ -404,10 +413,10 @@ export class PaymentService {
       if (dto.amount !== undefined) {
         const newAmount = Number(dto.amount);
 
-        //  Imtiyozli narxni tekshirish
         const discount = await queryRunner.manager.findOne(StudentDiscount, {
           where: { student: { id: studentId }, group: { id: groupId } },
         });
+
         const coursePrice = discount
           ? Number(discount.customPrice)
           : Number(payment.group?.price || 0);
@@ -423,7 +432,6 @@ export class PaymentService {
         const otherPaid = Number(otherPaymentsResult?.totalPaid || 0);
         const totalPaid = otherPaid + newAmount;
         const balance = totalPaid - coursePrice;
-
         const debt = balance < 0 ? Math.abs(balance) : 0;
         const advanceBalance = balance > 0 ? balance : 0;
 
@@ -438,52 +446,24 @@ export class PaymentService {
           },
         );
 
-        //  Student umumiy balansini imtiyozli narxlar bilan hisoblash
-        const student = await queryRunner.manager.findOne(Student, {
-          where: { id: studentId },
-          relations: ['enrolledGroups'],
-        });
-
-        const allPaymentsResult = await queryRunner.manager
-          .createQueryBuilder(Payment, 'p')
-          .select('SUM(CAST(p.amount AS DECIMAL))', 'totalPaid')
-          .where('p.studentId = :studentId', { studentId })
-          .andWhere('p.id != :id', { id })
-          .getRawOne();
-
-        const allOtherPaid = Number(allPaymentsResult?.totalPaid || 0);
-        const allTotalPaid = allOtherPaid + newAmount;
-
-        const allDiscounts = await queryRunner.manager.find(StudentDiscount, {
-          where: { student: { id: studentId } },
-          relations: ['group'],
-        });
-
-        const totalMonthlyPrice =
-          student?.enrolledGroups?.reduce((sum, g) => {
-            const gDiscount = allDiscounts.find((d) => d.group?.id === g.id);
-            return (
-              sum +
-              (gDiscount ? Number(gDiscount.customPrice) : Number(g.price || 0))
-            );
-          }, 0) || 0;
-
-        await queryRunner.manager.update(
-          Student,
-          { id: studentId },
-          {
-            balance: allTotalPaid - totalMonthlyPrice,
-          },
-        );
+        // TUZATISH: helper ishlatildi — takroriy kod olib tashlandi
+        await this.recalculateStudentBalance(queryRunner, studentId, id);
       } else if (dto.paymentDate) {
         await queryRunner.manager.update(
           Payment,
           { id },
-          { paymentDate: dto.paymentDate },
+          {
+            paymentDate: dto.paymentDate,
+          },
         );
       }
 
       await queryRunner.commitTransaction();
+
+      // SABABI: Moliyaviy o'zgarish — audit uchun
+      this.logger.log(
+        `To'lov yangilandi [id: ${id}] [student: ${payment.student.id}]`,
+      );
 
       return await this.findOne(id);
     } catch (err) {
@@ -491,6 +471,7 @@ export class PaymentService {
         await queryRunner.rollbackTransaction();
       if (err instanceof NotFoundException) throw err;
       if (err instanceof BadRequestException) throw err;
+      this.logger.error(`To'lovni yangilashda xatolik [id: ${id}]`, err.stack);
       throw new InternalServerErrorException(
         "To'lovni yangilashda xatolik yuz berdi",
       );
@@ -515,43 +496,15 @@ export class PaymentService {
 
       await queryRunner.manager.delete(Payment, { id });
 
-      const remainingResult = await queryRunner.manager
-        .createQueryBuilder(Payment, 'p')
-        .select('SUM(CAST(p.amount AS DECIMAL))', 'totalPaid')
-        .where('p.studentId = :studentId', { studentId })
-        .getRawOne();
-
-      const remainingPaid = Number(remainingResult?.totalPaid || 0);
-
-      const student = await queryRunner.manager.findOne(Student, {
-        where: { id: studentId },
-        relations: ['enrolledGroups'],
-      });
-
-      //  Imtiyozli narxlar bilan hisoblash
-      const allDiscounts = await queryRunner.manager.find(StudentDiscount, {
-        where: { student: { id: studentId } },
-        relations: ['group'],
-      });
-
-      const totalMonthlyPrice =
-        student?.enrolledGroups?.reduce((sum, g) => {
-          const gDiscount = allDiscounts.find((d) => d.group?.id === g.id);
-          return (
-            sum +
-            (gDiscount ? Number(gDiscount.customPrice) : Number(g.price || 0))
-          );
-        }, 0) || 0;
-
-      await queryRunner.manager.update(
-        Student,
-        { id: studentId },
-        {
-          balance: remainingPaid - totalMonthlyPrice,
-        },
-      );
+      // TUZATISH: helper ishlatildi — takroriy kod olib tashlandi
+      await this.recalculateStudentBalance(queryRunner, studentId);
 
       await queryRunner.commitTransaction();
+
+      // SABABI: Moliyaviy yozuv o'chirildi — audit uchun muhim
+      this.logger.log(
+        `To'lov o'chirildi [id: ${id}] [student: ${studentId}] [summa: ${payment.amount}]`,
+      );
 
       return {
         success: true,
@@ -561,6 +514,7 @@ export class PaymentService {
       if (queryRunner.isTransactionActive)
         await queryRunner.rollbackTransaction();
       if (err instanceof NotFoundException) throw err;
+      this.logger.error(`To'lovni o'chirishda xatolik [id: ${id}]`, err.stack);
       throw new InternalServerErrorException(
         "To'lovni o'chirishda xatolik yuz berdi",
       );

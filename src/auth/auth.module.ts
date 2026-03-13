@@ -1,3 +1,4 @@
+// auth.module.ts
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -22,6 +23,6 @@ import { ConfigService } from '@nestjs/config';
   ],
   providers: [AuthService, JwtStrategy],
   controllers: [AuthController],
-  exports: [AuthService, JwtStrategy,JwtModule ,PassportModule],
+  exports: [AuthService, JwtStrategy, JwtModule],
 })
 export class AuthModule {}

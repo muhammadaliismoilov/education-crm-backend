@@ -1,3 +1,4 @@
+// payment.controller.ts
 import {
   Controller,
   Post,
@@ -23,7 +24,7 @@ import { UserRole } from '../entities/user.entity';
 import { Roles } from '../common/guards/roles.decarator';
 import { CreatePaymentDto, UpdatePaymentDto } from './payment.dto';
 
-@ApiTags('To‘lovlar (Payments)')
+@ApiTags("To'lovlar (Payments)")
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('payments')
@@ -32,18 +33,18 @@ export class PaymentController {
 
   @Post()
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Yangi to‘lov yaratish' })
+  @ApiOperation({ summary: "Yangi to'lov yaratish" })
   create(@Body() dto: CreatePaymentDto) {
     return this.paymentService.create(dto);
   }
 
   @Get()
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Barcha to‘lovlarni filtrlash va sahifalab olish' })
+  @ApiOperation({ summary: "Barcha to'lovlarni filtrlash va sahifalab olish" })
   @ApiQuery({
     name: 'search',
     required: false,
-    description: 'Talaba ismi bo‘yicha',
+    description: "Talaba ismi bo'yicha",
   })
   @ApiQuery({ name: 'page', required: false })
   findAll(@Query('search') search?: string, @Query('page') page?: number) {
@@ -52,21 +53,21 @@ export class PaymentController {
 
   @Get(':id/receipt')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'To’lov cheki ma’lumotlarini olish' })
-  async getReceipt(@Param('id') id: string) {
+  @ApiOperation({ summary: "To'lov cheki ma'lumotlarini olish" })
+  async getReceipt(@Param('id', ParseUUIDPipe) id: string) {
     return this.paymentService.getReceiptData(id);
   }
 
   @Get(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'Bitta to‘lov ma’lumotini olish' })
+  @ApiOperation({ summary: "Bitta to'lov ma'lumotini olish" })
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.paymentService.findOne(id);
   }
 
   @Patch(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'To‘lovni tahrirlash' })
+  @ApiOperation({ summary: "To'lovni tahrirlash" })
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePaymentDto,
@@ -76,7 +77,7 @@ export class PaymentController {
 
   @Delete(':id')
   @Roles(UserRole.ADMIN)
-  @ApiOperation({ summary: 'To‘lovni o‘chirish' })
+  @ApiOperation({ summary: "To'lovni o'chirish" })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.paymentService.remove(id);
   }

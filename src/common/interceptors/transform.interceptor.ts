@@ -8,6 +8,7 @@ import { Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
 
 export interface Response<T> {
+  success: boolean;
   data: T;
   statusCode: number;
   timestamp: string;
@@ -26,23 +27,17 @@ export class TransformInterceptor<T> implements NestInterceptor<
 
     return next.handle().pipe(
       map((data) => ({
+        // TUZATISH 1: success field qo'shildi —
+        // frontend statusCode o'rniga success: true/false tekshiradi
+        success: response.statusCode < 400,
         data,
         statusCode: response.statusCode,
-        timestamp: this.formatDate(new Date()), // Maxsus formatlash funksiyasi
+        // TUZATISH 2: formatDate o'rniga toLocaleString —
+        // server Toshkent vaqtida ishlaydi, UTC emas
+        timestamp: new Date().toLocaleString('sv-SE', {
+          timeZone: 'Asia/Tashkent',
+        }),
       })),
     );
-  }
-
-  private formatDate(date: Date): string {
-    const pad = (num: number) => num.toString().padStart(2, '0');
-
-    const year = date.getFullYear();
-    const month = pad(date.getMonth() + 1);
-    const day = pad(date.getDate());
-    const hours = pad(date.getHours());
-    const minutes = pad(date.getMinutes());
-    const seconds = pad(date.getSeconds());
-
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
   }
 }

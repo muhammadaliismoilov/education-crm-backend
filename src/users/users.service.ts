@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -11,6 +12,8 @@ import { User, UserRole } from '../entities/user.entity';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User) private readonly userRepo: Repository<User>,
   ) {}
@@ -18,17 +21,26 @@ export class UsersService {
   async create(dto: CreateUserDto): Promise<User> {
     const isExisting = await this.userRepo.findOne({
       where: [{ login: dto.login }, { phone: dto.phone }],
-      withDeleted: true, // O'chirilganlar orasida ham tekshiramiz
+      withDeleted: true,
     });
 
     if (isExisting) {
-      throw new ConflictException(
-        'Ushbu login yoki telefon raqami allaqachon mavjud',
-      );
+      // TUZATISH: Qaysi maydon band ekanini aniq aytish
+      if (isExisting.login === dto.login)
+        throw new ConflictException('Ushbu login allaqachon mavjud');
+      if (isExisting.phone === dto.phone)
+        throw new ConflictException('Ushbu telefon raqami allaqachon mavjud');
     }
 
     const newUser = this.userRepo.create(dto);
-    return await this.userRepo.save(newUser);
+    const saved = await this.userRepo.save(newUser);
+
+    // SABABI: Kim yaratilganini audit uchun — foydalanuvchi yaratish muhim harakat
+    this.logger.log(
+      `Foydalanuvchi yaratildi [id: ${saved.id}] [login: ${saved.login}] [role: ${saved.role}]`,
+    );
+
+    return saved;
   }
 
   async findAll(role?: UserRole, search?: string, page = 1, limit = 10) {
@@ -66,39 +78,66 @@ export class UsersService {
       where: { id },
       relations: ['teachingGroups'],
     });
-
     if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
     return user;
   }
 
   async update(id: string, dto: UpdateUserDto): Promise<User> {
-    // 1. Foydalanuvchi borligini tekshiramiz
     const user = await this.userRepo.findOne({ where: { id } });
-    if (!user) {
-      throw new NotFoundException('Foydalanuvchi topilmadi');
+    if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
+
+    // TUZATISH: login/phone o'zgarsa conflict tekshiruvi kerak
+    if (dto.login || dto.phone) {
+      const conflictCheck = await this.userRepo.findOne({
+        where: [
+          ...(dto.login ? [{ login: dto.login }] : []),
+          ...(dto.phone ? [{ phone: dto.phone }] : []),
+        ],
+        withDeleted: true,
+      });
+      if (conflictCheck && conflictCheck.id !== id) {
+        if (dto.login && conflictCheck.login === dto.login)
+          throw new ConflictException(
+            'Ushbu login boshqa foydalanuvchida band',
+          );
+        if (dto.phone && conflictCheck.phone === dto.phone)
+          throw new ConflictException(
+            'Ushbu telefon raqami boshqa foydalanuvchida band',
+          );
+      }
     }
 
-    if (dto.password) {
+    // TUZATISH: password hash qilingandan keyin dto ni o'zgartirish xavfli —
+    // alohida object yasash kerak, asl dto ni buzmaslik uchun
+    const updateData: Partial<UpdateUserDto> = { ...dto };
+    if (updateData.password) {
       const salt = await bcrypt.genSalt(10);
-      dto.password = await bcrypt.hash(dto.password, salt);
+      updateData.password = await bcrypt.hash(updateData.password, salt);
     }
 
-    await this.userRepo.update(id, dto);
+    await this.userRepo.update(id, updateData);
+
+    // SABABI: Kim o'zgartirildi, qaysi rolda — audit uchun
+    this.logger.log(`Foydalanuvchi yangilandi [id: ${id}]`);
 
     return this.findOne(id);
   }
 
   async remove(id: string): Promise<void> {
     const user = await this.findOne(id);
-    // Soft Remove - ma'lumot bazada qoladi, lekin deletedAt belgilanadi
     await this.userRepo.softRemove(user);
-  }
-  async findAllDeleted(search?: string, page = 1, limit = 10) {
-    // withDeleted() hammasini olib keladi
-    const query = this.userRepo.createQueryBuilder('user').withDeleted();
 
-    // FAQAT o'chirilganlarni saralab olamiz
-    query.andWhere('user.deletedAt IS NOT NULL');
+    // SABABI: O'chirish qaytarib bo'lmaydigan harakat — kim o'chirildi audit uchun
+    this.logger.log(
+      `Foydalanuvchi arxivlandi [id: ${user.id}] [login: ${user.login}]`,
+    );
+  }
+
+  async findAllDeleted(search?: string, page = 1, limit = 10) {
+    const query = this.userRepo
+      .createQueryBuilder('user')
+      .withDeleted()
+      .where('user.deletedAt IS NOT NULL');
 
     if (search) {
       query.andWhere(
@@ -125,6 +164,10 @@ export class UsersService {
 
   async restore(id: string): Promise<User> {
     await this.userRepo.restore(id);
+
+    // SABABI: Qayta tiklash ham audit uchun muhim
+    this.logger.log(`Foydalanuvchi qayta tiklandi [id: ${id}]`);
+
     return this.findOne(id);
   }
 }
