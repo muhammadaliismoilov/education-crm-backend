@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
@@ -12,6 +13,8 @@ import { PaySalaryDto } from './salary.dto';
 
 @Injectable()
 export class SalaryService {
+  private readonly logger = new Logger(SalaryService.name);
+
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(SalaryPayout)
@@ -44,7 +47,14 @@ export class SalaryService {
         teacher.id,
         start,
         end,
-      ).catch(() => ({ totalSalary: 0, details: [] }));
+      ).catch((err) => {
+        // SABABI: Bitta o'qituvchi hisoblashda xato bo'lsa boshqalari to'xtamasin,
+        // lekin xato logga tushsin — jimgina yutib yubormaslik uchun
+        this.logger.warn(
+          `Oylik hisoblashda xatolik [teacher: ${teacher.id}]: ${err.message}`,
+        );
+        return { totalSalary: 0, details: [] };
+      });
 
       if (salaryData.totalSalary > 0) {
         report.push({
@@ -95,6 +105,7 @@ export class SalaryService {
     };
 
     const groupIds = teacher.teachingGroups.map((g) => g.id);
+
     if (groupIds.length === 0) {
       return {
         teacherName: teacher.fullName,
@@ -105,7 +116,6 @@ export class SalaryService {
       };
     }
 
-    // ✅ 1. Barcha talabalar + discountlar — bitta query
     const studentsWithDiscounts = await this.userRepo.manager
       .createQueryBuilder()
       .select([
@@ -126,7 +136,6 @@ export class SalaryService {
       .andWhere('s."deletedAt" IS NULL')
       .getRawMany();
 
-    // ✅ 2. Students Map — guruh bo'yicha
     const studentsByGroup = new Map<string, typeof studentsWithDiscounts>();
     for (const row of studentsWithDiscounts) {
       if (!studentsByGroup.has(row.groupId)) {
@@ -135,10 +144,8 @@ export class SalaryService {
       studentsByGroup.get(row.groupId)!.push(row);
     }
 
-    // ✅ 3. Oylar ro'yxati
     const months = this.getMonthsInRange(startDate, endDate);
 
-    // ✅ 4. Hisoblash
     let totalSalary = 0;
     const details: {
       groupName: string;
@@ -167,28 +174,27 @@ export class SalaryService {
 
       for (const { year, month } of months) {
         const monthStr = `${year}-${String(month).padStart(2, '0')}`;
-
-        // ✅ TO'LIQ OY darslar soni — perLessonRate uchun
         const monthLessons = this.countSpecificDaysInMonth(
           monthStr,
           numericDays,
         );
+
         if (monthLessons === 0) continue;
 
         lastMonthLessons = monthLessons;
 
-        // Bu oydagi range chegarasi
         const monthStart = new Date(year, month - 1, 1);
         const monthEnd = new Date(year, month, 0);
         const rangeStart =
-          new Date(startDate) > monthStart ? new Date(startDate) : monthStart;
+          new Date(startDate) > monthStart
+            ? new Date(startDate)
+            : monthStart;
         const rangeEnd =
           new Date(endDate) < monthEnd ? new Date(endDate) : monthEnd;
 
         const rangeStartStr = rangeStart.toISOString().split('T')[0];
         const rangeEndStr = rangeEnd.toISOString().split('T')[0];
 
-        // ✅ Bu oydagi davomat — bitta query (guruh bo'yicha)
         const monthAttendance = await this.attendanceRepo
           .createQueryBuilder('a')
           .select('a.studentId', 'studentId')
@@ -202,7 +208,6 @@ export class SalaryService {
           .groupBy('a.studentId')
           .getRawMany();
 
-        // ✅ Map — O(1) qidirish
         const monthAttMap = new Map<string, number>(
           monthAttendance.map((r) => [r.studentId, Number(r.count || 0)]),
         );
@@ -213,11 +218,8 @@ export class SalaryService {
               ? Number(student.customPrice)
               : Number(student.groupPrice);
 
-          // ✅ perLessonRate — HAR DOIM to'liq oydan
           const perLessonRate = effectivePrice / monthLessons;
-
           const attendanceCount = monthAttMap.get(student.studentId) || 0;
-
           const teacherEarned = Math.round(
             ((perLessonRate * percentage) / 100) * attendanceCount,
           );
@@ -230,7 +232,6 @@ export class SalaryService {
 
       if (groupTeacherEarned === 0) continue;
 
-      // O'rtacha perLessonRate — frontend uchun
       const avgPerLessonRate =
         students.length > 0
           ? Math.round(totalPerLessonRate / students.length)
@@ -241,8 +242,8 @@ export class SalaryService {
       details.push({
         groupName: group.name,
         groupDays: numericDays,
-        totalLessonsInMonth: lastMonthLessons, // ✅ To'liq oy
-        perLessonRate: avgPerLessonRate, // ✅ To'liq oydan
+        totalLessonsInMonth: lastMonthLessons,
+        perLessonRate: avgPerLessonRate,
         attendanceCount: groupAttendanceCount,
         teacherEarned: Math.round(groupTeacherEarned),
       });
@@ -274,6 +275,7 @@ export class SalaryService {
       });
       current.setMonth(current.getMonth() + 1);
     }
+
     return months;
   }
 
@@ -292,12 +294,22 @@ export class SalaryService {
       }
       date.setDate(date.getDate() + 1);
     }
+
     return count;
   }
 
   // 3. OYLIK TO'LASH
   async paySalary(dto: PaySalaryDto) {
     const { teacherId, month, amount } = dto;
+
+    // TUZATISH: Teacher mavjudligini oldin tekshirish —
+    // transaction ichida NotFoundException chiqsa rollback ishlaydi,
+    // lekin transaction ochmasdan oldin tekshirish aniqroq va tezroq
+    const teacher = await this.userRepo.findOne({
+      where: { id: teacherId, role: UserRole.TEACHER },
+    });
+    if (!teacher) throw new NotFoundException("O'qituvchi topilmadi");
+
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -306,8 +318,11 @@ export class SalaryService {
       const existing = await queryRunner.manager.findOne(SalaryPayout, {
         where: { teacher: { id: teacherId }, forMonth: month },
       });
+
       if (existing)
-        throw new BadRequestException("Bu oy uchun oylik allaqachon to'langan");
+        throw new BadRequestException(
+          "Bu oy uchun oylik allaqachon to'langan",
+        );
 
       const payout = queryRunner.manager.create(SalaryPayout, {
         amount,
@@ -317,9 +332,20 @@ export class SalaryService {
 
       const saved = await queryRunner.manager.save(payout);
       await queryRunner.commitTransaction();
-      return { message: 'Oylik muvaffaqiyatli saqlandi', payout: saved };
+
+      // SABABI: Moliyaviy to'lov — kim, qanchaga, qaysi oy audit uchun muhim
+      this.logger.log(
+        `Oylik to'landi [teacher: ${teacherId}] [oy: ${month}] [summa: ${amount}]`,
+      );
+
+      return { message: "Oylik muvaffaqiyatli saqlandi", payout: saved };
     } catch (err) {
       await queryRunner.rollbackTransaction();
+      // SABABI: Moliyaviy xatolik — rollback bo'lganini logga yozish
+      this.logger.error(
+        `Oylik to'lashda xatolik [teacher: ${teacherId}] [oy: ${month}]`,
+        err.stack,
+      );
       throw err;
     } finally {
       await queryRunner.release();
@@ -353,6 +379,12 @@ export class SalaryService {
   // 6. TO'LOVNI YANGILASH
   async update(id: string, amount: number) {
     const payout = await this.findOne(id);
+
+    // TUZATISH: Eski summani logga yozish — moliyaviy o'zgarish audit uchun
+    this.logger.log(
+      `Oylik yangilandi [id: ${id}] [eski: ${payout.amount}] [yangi: ${amount}]`,
+    );
+
     payout.amount = amount;
     return await this.payoutRepo.save(payout);
   }
@@ -360,6 +392,12 @@ export class SalaryService {
   // 7. TO'LOVNI O'CHIRISH
   async remove(id: string) {
     const payout = await this.findOne(id);
+
+    // SABABI: Moliyaviy yozuvni o'chirish — qaytarib bo'lmaydigan harakat, audit uchun
+    this.logger.log(
+      `Oylik o'chirildi [id: ${id}] [teacher: ${payout.teacher?.id}] [summa: ${payout.amount}]`,
+    );
+
     return await this.payoutRepo.remove(payout);
   }
 }

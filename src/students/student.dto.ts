@@ -97,41 +97,53 @@ export class CreateStudentDto {
   @ApiProperty({
     type: [String],
     example: ['550e8400-e29b-41d4-a716-446655440000'],
-    description: 'Kamida bitta guruh ID-si yuborilishi shart',
   })
   @IsArray()
   @IsUUID('all', { each: true })
   @ArrayMinSize(1, {
     message: "O'quvchini kamida bitta guruhga biriktirish shart",
   })
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') return [value];
+    return value;
+  })
   groupIds: string[];
 }
 
 export class UpdateStudentDto extends PartialType(CreateStudentDto) {
-  @ApiProperty({
-    type: [String],
-    example: ['550e8400-e29b-41d4-a716-446655440000'],
-    required: false,
-  })
+  // student.dto.ts — UpdateStudentDto ichida
   @IsOptional()
   @IsArray()
   @IsUUID('all', { each: true })
   @ArrayMinSize(1, { message: "O'quvchi kamida bitta guruhda qolishi kerak" })
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return [value];
+      }
+    }
+    return value;
+  })
   groupIds?: string[];
 
-  // — Imtiyoz berish/bekor qilish
-  @ApiProperty({
-    type: [DiscountItemDto],
-    required: false,
-    description: "Guruh bo'yicha imtiyozli narxlar",
-    example: [
-      { groupId: '550e8400-e29b-41d4-a716-446655440000', customPrice: 450000 },
-      { groupId: '660e8400-e29b-41d4-a716-446655440001', customPrice: null },
-    ],
-  })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => DiscountItemDto)
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) return value;
+    if (typeof value === 'string') {
+      try {
+        return JSON.parse(value);
+      } catch {
+        return value;
+      }
+    }
+    return value;
+  })
   discounts?: DiscountItemDto[];
 }

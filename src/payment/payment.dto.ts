@@ -1,3 +1,4 @@
+// payment.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
 import {
   IsNotEmpty,
@@ -7,19 +8,15 @@ import {
   Matches,
   Min,
 } from 'class-validator';
-
 import { PartialType } from '@nestjs/swagger';
 
 export class CreatePaymentDto {
-  @ApiProperty({ example: 500000, description: 'To‘lov summasi' })
+  @ApiProperty({ example: 500000, description: "To'lov summasi" })
   @IsNumber()
-  @Min(0)
+  @Min(1, { message: "To'lov miqdori 0 dan katta bo'lishi kerak" })
   amount: number;
 
-  @ApiProperty({
-    example: '2026-01-26',
-    description: 'To‘lov sanasi (YYYY-MM-DD)',
-  })
+  @ApiProperty({ example: '2026-01-26', description: "To'lov sanasi (YYYY-MM-DD)" })
   @IsString()
   @IsNotEmpty({ message: "To'lov sanasi bo'sh bo'lmasligi kerak" })
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
@@ -27,7 +24,7 @@ export class CreatePaymentDto {
   })
   paymentDate: string;
 
-  @ApiProperty({ example:'studentID' })
+  @ApiProperty({ example: 'studentID' })
   @IsUUID()
   @IsNotEmpty({ message: "Student ID bo'sh bo'lmasligi kerak" })
   studentId: string;

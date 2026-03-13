@@ -1,17 +1,19 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Group } from '../entities/group.entity';
-
 import { Repository } from 'typeorm';
 import { CreateGroupDto, UpdateGroupDto } from './group.dto';
 import { Student } from '../entities/students.entity';
 
 @Injectable()
 export class GroupsService {
+  private readonly logger = new Logger(GroupsService.name);
+
   constructor(
     @InjectRepository(Group) private groupRepo: Repository<Group>,
     @InjectRepository(Student) private studentRepo: Repository<Student>,
@@ -24,14 +26,22 @@ export class GroupsService {
       ...dto,
       teacher: { id: dto.teacherId },
     });
-    return await this.groupRepo.save(group);
+
+    const saved = await this.groupRepo.save(group);
+
+    // SABABI: Yangi guruh yaratildi — audit uchun
+    this.logger.log(
+      `Guruh yaratildi [id: ${saved.id}] [nomi: ${saved.name}] [teacher: ${dto.teacherId}]`,
+    );
+
+    return saved;
   }
 
   async findAll(search?: string, page = 1, limit = 10) {
     const query = this.groupRepo
       .createQueryBuilder('group')
       .leftJoinAndSelect('group.teacher', 'teacher')
-      .loadRelationCountAndMap('group.studentsCount', 'group.students'); // O'quvchilar sonini sanash
+      .loadRelationCountAndMap('group.studentsCount', 'group.students');
 
     if (search) {
       query.andWhere('group.name ILike :search', { search: `%${search}%` });
@@ -77,56 +87,71 @@ export class GroupsService {
     Object.assign(group, dto);
     if (dto.teacherId) group.teacher = { id: dto.teacherId } as any;
 
-    return await this.groupRepo.save(group);
+    const saved = await this.groupRepo.save(group);
+
+    // SABABI: Guruh o'zgartirildi — audit uchun
+    this.logger.log(`Guruh yangilandi [id: ${id}]`);
+
+    return saved;
   }
 
   async remove(id: string) {
     const group = await this.getGroupDetails(id);
-    await this.groupRepo.softRemove(group); // Soft delete ishlatish
+    await this.groupRepo.softRemove(group);
+
+    // SABABI: Arxivlash qaytarib bo'lmaydigan harakat — audit uchun
+    this.logger.log(`Guruh arxivlandi [id: ${id}] [nomi: ${group.name}]`);
+
     return { message: 'Guruh arxivlandi' };
   }
+
   async addStudentToGroup(groupId: string, studentId: string) {
-    // 1. Guruh va student mavjudligini tekshiring
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
       relations: ['students'],
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
-    // 2. Takroriy qo'shishni oldini olish
+    // TUZATISH: student mavjudligini tekshirish yo'q edi —
+    // mavjud bo'lmagan studentId bilan relation yozilishi mumkin edi
+    const student = await this.studentRepo.findOne({
+      where: { id: studentId },
+    });
+    if (!student) throw new NotFoundException('Talaba topilmadi');
+
     const isAlreadyIn = group.students.some((s) => s.id === studentId);
     if (isAlreadyIn)
       throw new BadRequestException("O'quvchi allaqachon guruhda bor");
 
-    // 3. To'g'ridan-to'g'ri bog'lovchi jadvalga yozish (Eng xavfsiz yo'l)
     await this.groupRepo
       .createQueryBuilder()
       .relation(Group, 'students')
       .of(groupId)
       .add(studentId);
 
+    this.logger.log(
+      `Talaba guruhga qo'shildi [group: ${groupId}] [student: ${studentId}]`,
+    );
+
     return { message: "Student guruhga qo'shildi" };
   }
 
-  // Talabani guruhdan chetlatish
   async removeStudentFromGroup(groupId: string, studentId: string) {
     const group = await this.getGroupDetails(groupId);
 
-    // Talaba guruhda borligini tekshirish
     const studentIndex = group.students.findIndex((s) => s.id === studentId);
-
-    if (studentIndex === -1) {
+    if (studentIndex === -1)
       throw new NotFoundException('Bu talaba ushbu guruhda topilmadi');
-    }
 
-    // Talabani massivdan olib tashlash
     group.students.splice(studentIndex, 1);
     await this.groupRepo.save(group);
 
+    this.logger.log(
+      `Talaba guruhdan chiqarildi [group: ${groupId}] [student: ${studentId}]`,
+    );
+
     return { message: 'Talaba guruhdan muvaffaqiyatli chetlatildi' };
   }
-
-  // --- Yordamchi metodlar (Private) ---
 
   private async checkTeacherAvailability(
     teacherId: string,
@@ -147,7 +172,6 @@ export class GroupsService {
       if (hasCommonDay) {
         const existingStart = this.timeToNumber(group.startTime);
         const diff = Math.abs(newStart - existingStart);
-
         if (diff < 2) {
           throw new BadRequestException(
             `O'qituvchi bu vaqtda band. "${group.name}" guruhi bor (${group.startTime}).`,

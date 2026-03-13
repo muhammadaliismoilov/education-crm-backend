@@ -21,7 +21,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { Roles } from '../common/guards/roles.decarator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../entities/user.entity';
-import { PaySalaryDto } from './salary.dto';
+import { PaySalaryDto, UpdateSalaryDto } from './salary.dto';
 
 @ApiTags('Oyliklar (Salary)')
 @ApiBearerAuth()
@@ -98,9 +98,9 @@ export class SalaryController {
   @ApiOperation({ summary: "To'lov miqdorini tahrirlash" })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body('amount') amount: number,
+     @Body() dto: UpdateSalaryDto,
   ) {
-    return this.salaryService.update(id, amount);
+    return this.salaryService.update(id, dto.amount);
   }
 
   // To'lovni o'chirish

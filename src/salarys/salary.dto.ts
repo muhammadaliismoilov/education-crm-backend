@@ -1,5 +1,12 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsNumber, IsString, IsUUID, Matches, Min } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsNumber,
+  IsString,
+  IsUUID,
+  Matches,
+  Min,
+} from 'class-validator';
 
 export class PaySalaryDto {
   @ApiProperty({ example: 'teacherID' })
@@ -7,14 +14,24 @@ export class PaySalaryDto {
   @IsNotEmpty({ message: "O'qituvchi ID bo'sh bo'lmasligi kerak" })
   teacherId: string;
 
-  @ApiProperty({ example: '2026-01', description: 'Oylik qaysi oy uchun berilayotgani' })
+  @ApiProperty({
+    example: '2026-01',
+    description: 'Oylik qaysi oy uchun berilayotgani',
+  })
   @IsString()
   @IsNotEmpty()
-  @Matches(/^\d{4}-\d{2}$/, { message: 'Format YYYY-MM bo\'lishi shart' })
+  @Matches(/^\d{4}-\d{2}$/, { message: "Format YYYY-MM bo'lishi shart" })
   month: string;
 
   @ApiProperty({ example: 5000000 })
   @IsNumber()
   @Min(0)
+  amount: number;
+}
+
+export class UpdateSalaryDto {
+  @ApiProperty({ example: 1500000, description: "Yangi to'lov miqdori" })
+  @IsNumber()
+  @Min(1, { message: "To'lov miqdori 0 dan katta bo'lishi kerak" })
   amount: number;
 }

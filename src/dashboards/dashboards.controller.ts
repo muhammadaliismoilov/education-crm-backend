@@ -18,16 +18,20 @@ import { DashboardService } from './dashboards.service';
 import { Roles } from '../common/guards/roles.decarator';
 import { UserRole } from '../entities/user.entity';
 
-@ApiTags('Dashboard') // Swagger uchun kategoriya
+@ApiTags('Dashboard')
 @ApiBearerAuth()
 @Controller('dashboard')
-@UseGuards(JwtAuthGuard, RolesGuard) // Himoya: faqat login qilganlar
+@UseGuards(JwtAuthGuard, RolesGuard)
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
-  @Roles(UserRole.ADMIN) // Faqat ma'lum rollar ko'ra oladi
-  @ApiOperation({ summary: 'Markaziy dashboard statistikasi',description:"Berilgan sana oraligʻida markaziy dashboard uchun jami daromad, qarzdorlik, faol talabalar soni, yangi talabalar soni, davomat foizi va faol guruhlar sonini taqdim etadi. Keshga saqlangan maʼlumotlar 15 daqiqa davomida yangilanmaydi." })
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'Markaziy dashboard statistikasi',
+    description:
+      "Berilgan sana oralig'ida markaziy dashboard uchun jami daromad, qarzdorlik, faol talabalar soni va boshqa ko'rsatkichlarni taqdim etadi.",
+  })
   @ApiQuery({ name: 'startDate', required: false, example: '2026-01-01' })
   @ApiQuery({ name: 'endDate', required: false, example: '2026-12-31' })
   @ApiResponse({
@@ -38,16 +42,21 @@ export class DashboardController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
-    // Sanalarni default qilish (agar kelmasa oxirgi 30 kun)
     const start = startDate
       ? new Date(startDate)
       : new Date(new Date().setDate(new Date().getDate() - 30));
     const end = endDate ? new Date(endDate) : new Date();
 
-    // Sanalar haqiqiyligini tekshirish
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
       throw new BadRequestException(
-        'Sana formati notoʻgʻri (YYYY-MM-DD kutilmoqda)',
+        "Sana formati noto'g'ri (YYYY-MM-DD kutilmoqda)",
+      );
+    }
+
+    // TUZATISH: start > end tekshiruvi yo'q edi
+    if (start > end) {
+      throw new BadRequestException(
+        "startDate endDate dan katta bo'lishi mumkin emas",
       );
     }
 

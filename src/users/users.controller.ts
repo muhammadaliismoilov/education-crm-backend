@@ -72,7 +72,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  // @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Foydalanuvchini soft-delete qilish' })
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     await this.usersService.remove(id);
@@ -83,7 +83,7 @@ export class UsersController {
   }
 
   @Get('all/deleted')
-  // @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: "O'chirilgan foydalanuvchilar ro'yxati" })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
@@ -97,7 +97,7 @@ export class UsersController {
   }
 
   @Post(':id/restore')
-  // @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: "O'chirilgan foydalanuvchini tiklash" })
   async restore(@Param('id', ParseUUIDPipe) id: string) {
     return await this.usersService.restore(id);
