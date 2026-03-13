@@ -38,41 +38,47 @@ export class AuthService {
   }
 
   // 2. Refresh Tokens - Access va Refresh tokenlarni yangilash
-  async refreshTokens(userId: string, refreshToken: string) {
-    const user = await this.userRepo.findOne({
-      where: { id: userId },
-      select: ['id', 'role', 'refreshToken', 'fullName'],
+  async refreshTokens(refreshToken: string) {
+  // 1. Avval JWT ni verify qilamiz (muddati o'tganini tekshiradi)
+  let payload: any;
+  try {
+    payload = await this.jwtService.verifyAsync(refreshToken, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
     });
-
-    // Bazada foydalanuvchi borligi va token mosligini tekshirish
-    if (!user || !user.refreshToken || user.refreshToken !== refreshToken) {
-      throw new UnauthorizedException(
-        'Refresh token yaroqsiz yoki muddati o’tgan!',
-      );
-    }
-
-    try {
-      // JWT kutubxonasi orqali tokenni verify qilish (muddati o'tganini tekshirish)
-      await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      });
-
-      // Yangi tokenlar juftligini yaratish
-      const tokens = await this.getTokens(user.id, user.role);
-
-      // Bazadagi refresh tokenni yangilash (Rotation)
-      await this.userRepo.update(user.id, {
-        refreshToken: tokens.refreshToken,
-      });
-
-      return {
-        ...tokens,
-        user: { id: user.id, fullName: user.fullName, role: user.role },
-      };
-    } catch (error) {
-      throw new UnauthorizedException('Refresh token muddati tugagan!');
-    }
+  } catch (error) {
+    // verify muvaffaqiyatsiz = token yaroqsiz yoki muddati o'tgan
+    throw new UnauthorizedException('Refresh token muddati tugagan yoki yaroqsiz!');
   }
+
+  const userId = payload?.sub;
+  if (!userId) {
+    throw new UnauthorizedException('Token ichida foydalanuvchi ma\'lumoti yo\'q');
+  }
+
+  // 2. Bazadan foydalanuvchini topamiz
+  const user = await this.userRepo.findOne({
+    where: { id: userId },
+    select: ['id', 'role', 'refreshToken', 'fullName'],
+  });
+
+  // 3. Bazadagi token bilan kelgan tokenni solishtiramiz (Rotation xavfsizligi)
+  if (!user || !user.refreshToken || user.refreshToken !== refreshToken) {
+    throw new UnauthorizedException('Refresh token bazada topilmadi (allaqachon ishlatilgan bo\'lishi mumkin)!');
+  }
+
+  // 4. Yangi tokenlar juftligini yaratamiz
+  const tokens = await this.getTokens(user.id, user.role);
+
+  // 5. Bazadagi refresh tokenni yangilaymiz
+  await this.userRepo.update(user.id, {
+    refreshToken: tokens.refreshToken,
+  });
+
+  return {
+    ...tokens,
+    user: { id: user.id, fullName: user.fullName, role: user.role },
+  };
+}
 
   // 3. Logout - Refresh tokenni o'chirish
   async logout(userId: string) {

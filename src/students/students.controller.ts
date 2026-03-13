@@ -244,123 +244,77 @@ export class StudentsController {
   // ─────────────────────────────────────────────
   // PATCH /students/:id — ma'lumot + ixtiyoriy rasm yangilash
   // ─────────────────────────────────────────────
-  @Patch(':id')
-  @Roles(UserRole.ADMIN)
-  @ApiOperation({
-    summary: "Talaba ma'lumotlarini yangilash (rasm ixtiyoriy)",
-    description:
-      "Talaba ma'lumotlarini yangilaydi. 'photo' maydoni yuborilsa, yuz tahlil qilinib rasm ham yangilanadi. Yuborilmasa, faqat ma'lumotlar yangilanadi.",
-  })
-  @ApiConsumes('multipart/form-data')
-  @ApiBody({
-    schema: {
-      type: 'object',
-      properties: {
-        fullName: {
-          type: 'string',
-          example: 'Ali Valiyev',
-          description: 'To\'liq ism',
-        },
-        phone: {
-          type: 'string',
-          example: '+998901234567',
-        },
-        parentName: {
-          type: 'string',
-          example: 'Vali Valiyev',
-        },
-        parentPhone: {
-          type: 'string',
-          example: '+998901234568',
-        },
-        birthDate: {
-          type: 'string',
-          example: '2000-01-01',
-        },
-        direction: {
-          type: 'string',
-          example: 'nodejs',
-        },
-        documentType: {
-          type: 'string',
-          example: 'passport',
-          enum: ['passport', 'birth_certificate', 'id_card'],
-        },
-        documentNumber: {
-          type: 'string',
-          example: 'AA1234567',
-        },
-        pinfl: {
-          type: 'string',
-          example: '12345678901234',
-        },
-        groupIds: {
-          type: 'string',
-          example: '["uuid-1","uuid-2"]',
-          description: 'JSON string formatida: ["uuid-1","uuid-2"]',
-        },
-        discounts: {
-          type: 'string',
-          example: '[{"groupId":"uuid","customPrice":500000}]',
-          description:
-            'JSON string formatida: [{"groupId":"uuid","customPrice":500000}]',
-        },
-        photo: {
-          type: 'string',
-          format: 'binary',
-          description:
-            'Ixtiyoriy. Yuborilsa yuz tahlil qilinadi va face ID yangilanadi. (JPG, PNG, WEBP, max 5MB)',
-        },
+ @Patch(':id')
+@Roles(UserRole.ADMIN)
+@ApiOperation({
+  summary: "Talaba ma'lumotlarini yangilash (rasm ixtiyoriy)",
+  description:
+    "Faqat yuborilgan maydonlar yangilanadi. Bo'sh yoki yuborilmagan maydonlar o'zgarmaydi.",
+})
+@ApiConsumes('multipart/form-data')
+@ApiBody({
+  schema: {
+    type: 'object',
+    properties: {
+      fullName:       { type: 'string', example: 'Ali Valiyev', description: "To'liq ism" },
+      phone:          { type: 'string', example: '+998901234567' },
+      parentName:     { type: 'string', example: 'Vali Valiyev' },
+      parentPhone:    { type: 'string', example: '+998901234568' },
+      birthDate:      { type: 'string', example: '2000-01-01' },
+      direction:      { type: 'string', example: 'nodejs' },
+      documentType:   { type: 'string', example: 'passport', enum: ['passport', 'birth_certificate', 'id_card'] },
+      documentNumber: { type: 'string', example: 'AA1234567' },
+      pinfl:          { type: 'string', example: '12345678901234' },
+      groupIds:       { type: 'string', example: '["uuid-1","uuid-2"]', description: 'JSON string formatida' },
+      discounts:      { type: 'string', example: '[{"groupId":"uuid","customPrice":500000}]', description: 'JSON string formatida' },
+      photo: {
+        type: 'string',
+        format: 'binary',
+        description: 'Ixtiyoriy. Yuborilsa yuz tahlil qilinib face ID yangilanadi. (JPG, PNG, WEBP, max 5MB)',
       },
     },
-  })
-  @UseInterceptors(
-    FileInterceptor('photo', {
-      dest: './uploads/students/tmp',
-      limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
-      fileFilter: (req, file, cb) => {
-        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
-          cb(
-            new BadRequestException(
-              'Faqat JPG, PNG, WEBP formatidagi rasmlar ruxsat etiladi',
-            ),
-            false,
-          );
-        } else {
-          cb(null, true);
-        }
-      },
-    }),
-  )
-  async update(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: any,
-    @UploadedFile() file?: Express.Multer.File,
-  ) {
-    // multipart/form-data da arrays string sifatida keladi → parse qilamiz
-    if (body.groupIds && typeof body.groupIds === 'string') {
-      try {
-        body.groupIds = JSON.parse(body.groupIds);
-      } catch {
-        throw new BadRequestException(
-          'groupIds noto\'g\'ri format. Misol: ["uuid-1","uuid-2"]',
+  },
+})
+@UseInterceptors(
+  FileInterceptor('photo', {
+    dest: './uploads/students/tmp',
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
+        cb(
+          new BadRequestException('Faqat JPG, PNG, WEBP formatidagi rasmlar ruxsat etiladi'),
+          false,
         );
+      } else {
+        cb(null, true);
       }
+    },
+  }),
+)
+async update(
+  @Param('id', ParseUUIDPipe) id: string,
+  @Body() body: any,
+  @UploadedFile() file?: Express.Multer.File,
+) {
+  // multipart/form-data → JSON parse
+  if (body.groupIds && typeof body.groupIds === 'string') {
+    try {
+      body.groupIds = JSON.parse(body.groupIds);
+    } catch {
+      throw new BadRequestException('groupIds noto\'g\'ri format. Misol: ["uuid-1","uuid-2"]');
     }
-
-    if (body.discounts && typeof body.discounts === 'string') {
-      try {
-        body.discounts = JSON.parse(body.discounts);
-      } catch {
-        throw new BadRequestException(
-          'discounts noto\'g\'ri format. Misol: [{"groupId":"uuid","customPrice":500000}]',
-        );
-      }
-    }
-
-    return this.studentsService.update(id, body, file);
   }
 
+  if (body.discounts && typeof body.discounts === 'string') {
+    try {
+      body.discounts = JSON.parse(body.discounts);
+    } catch {
+      throw new BadRequestException('discounts noto\'g\'ri format. Misol: [{"groupId":"uuid","customPrice":500000}]');
+    }
+  }
+
+  return this.studentsService.update(id, body, file);
+}
   // ─────────────────────────────────────────────
   // DELETE /students/:id — softDelete
   // ─────────────────────────────────────────────
