@@ -1,3 +1,4 @@
+// reports.controller.ts
 import {
   Controller,
   Get,
@@ -21,7 +22,7 @@ import { Roles } from '../common/guards/roles.decarator';
 import { UserRole } from '../entities/user.entity';
 
 @ApiTags('Reports')
-@ApiBearerAuth() 
+@ApiBearerAuth()
 @Controller('reports')
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class ReportsController {
@@ -32,10 +33,33 @@ export class ReportsController {
   @ApiOperation({
     summary: 'Moliyaviy tahlil hisoboti',
     description:
-      "Berilgan sana oralig'ida olingan to'lovlar va qarzdorlar haqida umumiy ma'lumot beradi.",
+      "Berilgan sana oralig'ida olingan to'lovlar va qarzdorlar haqida umumiy ma'lumot.",
   })
   @ApiQuery({ name: 'startDate', required: false, example: '2026-01-01' })
-  @ApiQuery({ name: 'endDate', required: false, example: '2026-02-19' })
+  @ApiQuery({ name: 'endDate', required: false, example: '2026-03-13' })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      example: {
+        data: {
+          totalIncome: 25000000,
+          totalDebtors: 8,
+          totalDebt: 4800000,
+          payments: [
+            {
+              id: 'uuid',
+              amount: 800000,
+              student: { fullName: 'Alisher Karimov' },
+              createdAt: '2026-03-01T10:00:00.000Z',
+            },
+          ],
+        },
+        statusCode: 200,
+        timestamp: '2026-03-13 10:00:00',
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: "Sana formati noto'g'ri" })
   async getFinance(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -49,7 +73,13 @@ export class ReportsController {
   @ApiOperation({
     summary: "Qarzdorlar ro'yxatini Excel formatda yuklab olish",
   })
-  @ApiResponse({ status: 200, description: 'Excel fayli yuklab olinadi' })
+  @ApiResponse({
+    status: 200,
+    description: 'Excel fayli (.xlsx) yuklab olinadi',
+    content: {
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': {},
+    },
+  })
   async exportDebtors(@Res() res: express.Response) {
     return this.reportsService.exportDebtorsToExcel(res);
   }
@@ -57,12 +87,32 @@ export class ReportsController {
   @Get('teachers-performance')
   @Roles(UserRole.ADMIN)
   @ApiOperation({
-    summary: "O'qituvchilar dars berish samaradorligi",
+    summary: "O'qituvchilar samaradorligi hisoboti",
     description:
-      "O'qituvchilarning dars berish samaradorligini baholash uchun darslariga qatnashgan talabalar soni va boshqa ko'rsatkichlarni taqdim etadi.",
+      "O'qituvchilarning dars berish samaradorligini baholash: talabalar soni, davomat foizi va hisoblangan oylik.",
   })
   @ApiQuery({ name: 'startDate', required: false, example: '2026-01-01' })
-  @ApiQuery({ name: 'endDate', required: false, example: '2026-02-19' })
+  @ApiQuery({ name: 'endDate', required: false, example: '2026-03-13' })
+  @ApiResponse({
+    status: 200,
+    schema: {
+      example: {
+        data: [
+          {
+            teacherId: 'uuid',
+            fullName: 'Jasur Toshmatov',
+            groupsCount: 3,
+            totalStudents: 35,
+            attendancePercent: 82,
+            estimatedSalary: 2400000,
+          },
+        ],
+        statusCode: 200,
+        timestamp: '2026-03-13 10:00:00',
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: "Sana formati noto'g'ri" })
   async getTeacherPerformance(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -71,26 +121,19 @@ export class ReportsController {
     return this.reportsService.getTeacherPerformance(start, end);
   }
 
-  // TUZATISH: start > end tekshiruvi yo'q edi —
-  // startDate=2026-12-01 endDate=2026-01-01 bo'lsa noto'g'ri natija qaytarardi
   private validateDates(startDate?: string, endDate?: string) {
     const start = startDate
       ? new Date(startDate)
       : new Date(new Date().setDate(new Date().getDate() - 30));
     const end = endDate ? new Date(endDate) : new Date();
-
-    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+    if (isNaN(start.getTime()) || isNaN(end.getTime()))
       throw new BadRequestException(
         "Sana formati noto'g'ri (YYYY-MM-DD kutilmoqda)",
       );
-    }
-
-    if (start > end) {
+    if (start > end)
       throw new BadRequestException(
         "startDate endDate dan katta bo'lishi mumkin emas",
       );
-    }
-
     return { start, end };
   }
 }
