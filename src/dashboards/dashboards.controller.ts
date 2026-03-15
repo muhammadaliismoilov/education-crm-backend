@@ -31,7 +31,9 @@ export class DashboardController {
   @ApiOperation({
     summary: 'Markaziy dashboard statistikasi',
     description:
-      "Berilgan sana oralig'ida jami daromad, qarzdorlik, faol talabalar va boshqa ko'rsatkichlar. Kesh 10 daqiqa.",
+      "Berilgan sana oralig'ida jami daromad, qarzdorlik, faol talabalar, " +
+      'yangi talabalar, davomat foizi va faol guruhlar soni. ' +
+      'Natija 10 daqiqa keshlanadi.',
   })
   @ApiQuery({
     name: 'startDate',
@@ -84,14 +86,17 @@ export class DashboardController {
       ? new Date(startDate)
       : new Date(new Date().setDate(new Date().getDate() - 30));
     const end = endDate ? new Date(endDate) : new Date();
+
     if (isNaN(start.getTime()) || isNaN(end.getTime()))
       throw new BadRequestException(
         "Sana formati noto'g'ri (YYYY-MM-DD kutilmoqda)",
       );
+
     if (start > end)
       throw new BadRequestException(
         "startDate endDate dan katta bo'lishi mumkin emas",
       );
+
     return this.dashboardService.getSummary(start, end);
   }
 }
