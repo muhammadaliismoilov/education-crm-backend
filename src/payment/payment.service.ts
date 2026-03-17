@@ -11,10 +11,9 @@ import { DataSource, Repository, In } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 import { CreatePaymentDto, UpdatePaymentDto } from './payment.dto';
 import { Student } from '../entities/students.entity';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import type { Cache } from 'cache-manager';
 import { Group } from '../entities/group.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
+import { RedisCacheService } from '../common/redis/redis.cache';
 
 @Injectable()
 export class PaymentService {
@@ -24,8 +23,8 @@ export class PaymentService {
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
     @InjectRepository(StudentDiscount)
     private discountRepo: Repository<StudentDiscount>,
-    @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private dataSource: DataSource,
+    private readonly redisCacheService: RedisCacheService,
   ) {}
 
   // HELPER — talabaning guruh uchun haqiqiy narxini olish
@@ -44,8 +43,6 @@ export class PaymentService {
   }
 
   // HELPER — student umumiy balansini hisoblash va yangilash
-  // TUZATISH: create, update, remove da bir xil kod 3 marta takrorlanardi —
-  // alohida helper ga chiqarildi
   private async recalculateStudentBalance(
     queryRunner: any,
     studentId: string,
@@ -162,20 +159,16 @@ export class PaymentService {
 
       const saved = await queryRunner.manager.save(payment);
 
-      // TUZATISH: helper ishlatildi — takroriy kod olib tashlandi
       await this.recalculateStudentBalance(queryRunner, studentId);
-
       await queryRunner.commitTransaction();
+
+      // ✅ Cache tozalash
+      await this.redisCacheService.invalidateFinanceCache();
 
       // SABABI: Moliyaviy operatsiya — kim, qancha to'ladi audit uchun
       this.logger.log(
         `To'lov yaratildi [id: ${saved.id}] [student: ${studentId}] [group: ${groupId}] [summa: ${newPayment}]`,
       );
-
-      try {
-        const cache = this.cacheManager as any;
-        if (cache?.reset) await cache.reset();
-      } catch (_) {}
 
       return {
         ...saved,
@@ -328,7 +321,6 @@ export class PaymentService {
     const coursePrice = discount
       ? Number(discount.customPrice)
       : Number(payment.group?.price || 0);
-
     const totalPaidAmount = Number(totalPaidResult?.totalPaid || 0);
     const debt = Math.max(0, coursePrice - totalPaidAmount);
 
@@ -446,19 +438,19 @@ export class PaymentService {
           },
         );
 
-        // TUZATISH: helper ishlatildi — takroriy kod olib tashlandi
         await this.recalculateStudentBalance(queryRunner, studentId, id);
       } else if (dto.paymentDate) {
         await queryRunner.manager.update(
           Payment,
           { id },
-          {
-            paymentDate: dto.paymentDate,
-          },
+          { paymentDate: dto.paymentDate },
         );
       }
 
       await queryRunner.commitTransaction();
+
+      // ✅ Cache tozalash
+      await this.redisCacheService.invalidateFinanceCache();
 
       // SABABI: Moliyaviy o'zgarish — audit uchun
       this.logger.log(
@@ -495,11 +487,11 @@ export class PaymentService {
       const studentId = payment.student.id;
 
       await queryRunner.manager.delete(Payment, { id });
-
-      // TUZATISH: helper ishlatildi — takroriy kod olib tashlandi
       await this.recalculateStudentBalance(queryRunner, studentId);
-
       await queryRunner.commitTransaction();
+
+      // ✅ Cache tozalash
+      await this.redisCacheService.invalidateFinanceCache();
 
       // SABABI: Moliyaviy yozuv o'chirildi — audit uchun muhim
       this.logger.log(

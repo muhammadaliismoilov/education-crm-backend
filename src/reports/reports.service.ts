@@ -1,7 +1,6 @@
 import {
   Injectable,
   Inject,
-  BadRequestException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -17,7 +16,12 @@ import * as ExcelJS from 'exceljs';
 import * as express from 'express';
 import { SalaryService } from '../salarys/salary.service';
 
-const CACHE_TTL = 3 * 60 * 1000;
+//  Redis uchun sekundda (millisekund emas!)
+const CACHE_TTL = {
+  monthly: 5 * 60, // 5 daqiqa
+  yearly: 30 * 60, // 30 daqiqa
+  teacher: 5 * 60, // 5 daqiqa
+};
 
 @Injectable()
 export class ReportsService {
@@ -30,9 +34,170 @@ export class ReportsService {
     @InjectRepository(User) private userRepo: Repository<User>,
     private salaryService: SalaryService,
     @InjectRepository(Attendance)
-    private attendanceRepo: Repository<Attendance>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
+
+  async getYearlyFinancialOverview(year: number) {
+    const cacheKey = `finance_yearly_${year}`;
+
+    try {
+      const cached = await this.cacheManager.get(cacheKey);
+      if (cached) return cached;
+    } catch (e) {
+      this.logger.warn(`Cache get xatolik [${cacheKey}]: ${e.message}`);
+    }
+
+    const start = new Date(`${year}-01-01T00:00:00.000Z`);
+    const end = new Date(`${year}-12-31T23:59:59.999Z`);
+
+    // ─── 1. DAROMAD - oylar bo'yicha ─────────────────────────────────
+    const incomeByMonth = await this.paymentRepo
+      .createQueryBuilder('p')
+      .select([
+        `EXTRACT(MONTH FROM p."createdAt") AS month`,
+        `SUM(CAST(p.amount AS DECIMAL))    AS "totalIncome"`,
+      ])
+      .where(`p."createdAt" BETWEEN :start AND :end`, { start, end })
+      .groupBy(`EXTRACT(MONTH FROM p."createdAt")`)
+      .getRawMany();
+
+    // ─── 2. QARZDORLIK - oylar bo'yicha ──────────────────────────────
+    const debtsByMonth = await this.paymentRepo
+      .createQueryBuilder('p')
+      .leftJoin('p.student', 's')
+      .leftJoin('p.group', 'g')
+      .leftJoin(
+        'student_discounts',
+        'sd',
+        'sd."studentId" = s.id AND sd."groupId" = g.id',
+      )
+      .select([
+        `EXTRACT(MONTH FROM p."createdAt")                          AS month`,
+        `s.id                                                        AS "studentId"`,
+        `g.id                                                        AS "groupId"`,
+        `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL))       AS "effectivePrice"`,
+        `SUM(CAST(p.amount AS DECIMAL))                             AS "totalPaid"`,
+      ])
+      .where(`p."createdAt" BETWEEN :start AND :end`, { start, end })
+      .andWhere('s.id IS NOT NULL')
+      .groupBy(
+        `EXTRACT(MONTH FROM p."createdAt"), s.id, g.id, sd."customPrice", g.price`,
+      )
+      .getRawMany();
+
+    // ─── 3. O'QITUVCHILAR OYLIKLARINI - oylar bo'yicha ───────────────
+    const teachers = await this.userRepo.find({
+      where: { role: UserRole.TEACHER },
+    });
+
+    const monthlyNames = [
+      'Yanvar',
+      'Fevral',
+      'Mart',
+      'Aprel',
+      'May',
+      'Iyun',
+      'Iyul',
+      'Avgust',
+      'Sentyabr',
+      'Oktyabr',
+      'Noyabr',
+      'Dekabr',
+    ];
+
+    const monthlySalaries = await Promise.all(
+      Array.from({ length: 12 }, async (_, i) => {
+        const monthNum = i + 1;
+        const monthStr = String(monthNum).padStart(2, '0');
+        const lastDay = new Date(year, monthNum, 0).getDate();
+        const startStr = `${year}-${monthStr}-01`;
+        const endStr = `${year}-${monthStr}-${lastDay}`;
+
+        const results = await Promise.all(
+          teachers.map((teacher) =>
+            this.salaryService
+              .calculateTeacherSalary(teacher.id, startStr, endStr)
+              .catch((e) => {
+                this.logger.warn(
+                  `Oylik xatolik [teacher: ${teacher.id}, oy: ${monthNum}]: ${e.message}`,
+                );
+                return { totalSalary: 0 };
+              }),
+          ),
+        );
+
+        return {
+          month: monthNum,
+          totalSalary: results.reduce(
+            (sum, r) => sum + (r?.totalSalary || 0),
+            0,
+          ),
+        };
+      }),
+    );
+
+    // ─── 4. 12 OYNI MAP QILISH ────────────────────────────────────────
+    let summaryIncome = 0;
+    let summaryPending = 0;
+    let summaryTeacherSal = 0;
+
+    const monthlyData = Array.from({ length: 12 }, (_, i) => {
+      const monthNum = i + 1;
+
+      const incomeRow = incomeByMonth.find((r) => Number(r.month) === monthNum);
+      const totalIncome = Number(incomeRow?.totalIncome || 0);
+
+      const monthDebts = debtsByMonth.filter(
+        (r) => Number(r.month) === monthNum,
+      );
+      let totalPending = 0;
+      for (const row of monthDebts) {
+        const effectivePrice = Number(row.effectivePrice || 0);
+        const totalPaid = Number(row.totalPaid || 0);
+        if (effectivePrice > totalPaid) {
+          totalPending += effectivePrice - totalPaid;
+        }
+      }
+
+      const salaryRow = monthlySalaries.find((r) => r.month === monthNum);
+      const totalTeacherSalaries = salaryRow?.totalSalary || 0;
+      const netProfit = totalIncome - totalTeacherSalaries;
+
+      summaryIncome += totalIncome;
+      summaryPending += totalPending;
+      summaryTeacherSal += totalTeacherSalaries;
+
+      return {
+        month: monthNum,
+        monthName: monthlyNames[i],
+        totalIncome,
+        totalPending,
+        totalTeacherSalaries,
+        netProfit,
+      };
+    });
+
+    // ─── 5. YILLIK SUMMARY ────────────────────────────────────────────
+    const summary = {
+      totalIncome: summaryIncome,
+      totalPending: summaryPending,
+      totalTeacherSalaries: summaryTeacherSal,
+      netProfit: summaryIncome - summaryTeacherSal,
+      currency: "so'm",
+      generatedAt: new Date(),
+      period: { from: start, to: end },
+    };
+
+    const result = { summary, monthlyData };
+
+    try {
+      await this.cacheManager.set(cacheKey, result, CACHE_TTL.yearly);
+    } catch (e) {
+      this.logger.warn(`Cache set xatolik [${cacheKey}]: ${e.message}`);
+    }
+
+    return result;
+  }
 
   // ─────────────────────────────────────────────
   // 1. MOLIYAVIY TAHLIL
@@ -45,7 +210,6 @@ export class ReportsService {
 
     const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
 
-    // TUZATISH: cache xatosi jimgina o'tkazilardi — warn bilan loglansin
     try {
       const cached = await this.cacheManager.get(cacheKey);
       if (cached) return cached;
@@ -57,7 +221,7 @@ export class ReportsService {
       .createQueryBuilder('p')
       .leftJoinAndSelect('p.group', 'g')
       .leftJoinAndSelect('p.student', 's')
-      .where('p.createdAt BETWEEN :start AND :end', { start, end })
+      .where('p."createdAt" BETWEEN :start AND :end', { start, end })
       .getMany();
 
     const totalIncome = paymentsData.reduce(
@@ -65,6 +229,7 @@ export class ReportsService {
       0,
     );
 
+    // ✅ TUZATILDI: date filter qo'shildi
     const allDebts = await this.paymentRepo
       .createQueryBuilder('p')
       .leftJoin('p.student', 's')
@@ -75,12 +240,13 @@ export class ReportsService {
         'sd."studentId" = s.id AND sd."groupId" = g.id',
       )
       .select([
-        's.id                                      AS "studentId"',
-        'g.id                                      AS "groupId"',
+        's.id                                                  AS "studentId"',
+        'g.id                                                  AS "groupId"',
         `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL)) AS "effectivePrice"`,
-        'SUM(CAST(p.amount AS DECIMAL))             AS "totalPaid"',
+        'SUM(CAST(p.amount AS DECIMAL))                       AS "totalPaid"',
       ])
-      .where('s.id IS NOT NULL')
+      .where('p."createdAt" BETWEEN :start AND :end', { start, end }) // ✅
+      .andWhere('s.id IS NOT NULL')
       .groupBy('s.id, g.id, sd."customPrice", g.price')
       .getRawMany();
 
@@ -105,7 +271,6 @@ export class ReportsService {
         this.salaryService
           .calculateTeacherSalary(teacher.id, startStr, endStr)
           .catch((e) => {
-            // TUZATISH: xato jimgina yutilardi — warn bilan loglansin
             this.logger.warn(
               `Oylik hisoblashda xatolik [teacher: ${teacher.id}]: ${e.message}`,
             );
@@ -132,7 +297,7 @@ export class ReportsService {
     };
 
     try {
-      await this.cacheManager.set(cacheKey, result, CACHE_TTL);
+      await this.cacheManager.set(cacheKey, result, CACHE_TTL.monthly);
     } catch (e) {
       this.logger.warn(`Cache set xatolik [${cacheKey}]: ${e.message}`);
     }
@@ -229,8 +394,6 @@ export class ReportsService {
       debt: `${totalDebt.toLocaleString()} so'm`,
     }).font = { bold: true };
 
-    // TUZATISH: totalRow fill asl kodda addRow dan keyin alohida set qilinmagan —
-    // font assign bilan fill yo'qolardi, ikkalasini to'g'ri qo'llash kerak
     const totalRow = worksheet.lastRow!;
     totalRow.fill = {
       type: 'pattern',
@@ -262,8 +425,6 @@ export class ReportsService {
 
     const cacheKey = `teacher_performance_${start.getTime()}_${end.getTime()}`;
 
-    // TUZATISH: getTeacherPerformance da cache xatosi umuman handle qilinmagan —
-    // xato chiqsa butun endpoint ishlamay qolardi
     try {
       const cached = await this.cacheManager.get(cacheKey);
       if (cached) return cached;
@@ -332,9 +493,8 @@ export class ReportsService {
       };
     });
 
-    // TUZATISH: cache set xatosi handle qilinmagan edi
     try {
-      await this.cacheManager.set(cacheKey, result, CACHE_TTL);
+      await this.cacheManager.set(cacheKey, result, CACHE_TTL.teacher);
     } catch (e) {
       this.logger.warn(`Cache set xatolik [${cacheKey}]: ${e.message}`);
     }
