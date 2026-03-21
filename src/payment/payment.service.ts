@@ -12,6 +12,7 @@ import { Payment } from '../entities/payment.entity';
 import { CreatePaymentDto, UpdatePaymentDto } from './payment.dto';
 import { Student } from '../entities/students.entity';
 import { Group } from '../entities/group.entity';
+import { Invoice } from '../entities/invoice.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { RedisCacheService } from '../common/redis/redis.cache';
 
@@ -67,24 +68,18 @@ export class PaymentService {
     const allPaymentsResult = await allPaymentsQuery.getRawOne();
     const allTotalPaid = Number(allPaymentsResult?.totalPaid || 0);
 
-    const allDiscounts = await queryRunner.manager.find(StudentDiscount, {
-      where: { student: { id: studentId } },
-      relations: ['group'],
-    });
+    const allInvoicesQuery = queryRunner.manager
+      .createQueryBuilder(Invoice, 'i')
+      .select('SUM(CAST(i.amount AS DECIMAL))', 'totalInvoiced')
+      .where('i.studentId = :studentId', { studentId });
 
-    const totalMonthlyPrice =
-      student.enrolledGroups?.reduce((sum, g) => {
-        const gDiscount = allDiscounts.find((d) => d.group?.id === g.id);
-        return (
-          sum +
-          (gDiscount ? Number(gDiscount.customPrice) : Number(g.price || 0))
-        );
-      }, 0) || 0;
+    const allInvoicesResult = await allInvoicesQuery.getRawOne();
+    const allTotalInvoiced = Number(allInvoicesResult?.totalInvoiced || 0);
 
     await queryRunner.manager.update(
       Student,
       { id: studentId },
-      { balance: allTotalPaid - totalMonthlyPrice },
+      { balance: allTotalPaid - allTotalInvoiced },
     );
   }
 
@@ -126,9 +121,10 @@ export class PaymentService {
         },
       });
 
-      const coursePrice = discount
-        ? Number(discount.customPrice)
-        : Number(group.price);
+      // ✅ Imtiyoz 0 dan katta bo'lsagina ishlatiladi, aks holda group.price olinadi
+      const rawCustomPrice = discount ? Number(discount.customPrice) : 0;
+      const coursePrice =
+        rawCustomPrice > 0 ? rawCustomPrice : Number(group.price || 0);
 
       if (coursePrice === 0)
         throw new BadRequestException('Guruh narxi belgilanmagan');
@@ -272,17 +268,16 @@ export class PaymentService {
           d.group?.id === payment.group?.id,
       );
 
-      const coursePrice = discount
-        ? Number(discount.customPrice)
-        : Number(payment.group?.price || 0);
-
-      const debt = Math.max(0, coursePrice - totalPaid);
+      // ✅ Imtiyoz bo'lsa customPrice, bo'lmasa yoki 0 bo'lsa group.price
+      const rawCustomPrice = discount ? Number(discount.customPrice) : 0;
+      const coursePrice =
+        rawCustomPrice > 0 ? rawCustomPrice : Number(payment.group?.price || 0);
 
       return {
         ...payment,
         coursePrice,
         paidAmount: totalPaid,
-        isFullyPaid: debt <= 0,
+        isFullyPaid: Number(payment.debt || 0) <= 0,
         hasDiscount: !!discount,
       };
     });
@@ -318,9 +313,10 @@ export class PaymentService {
       },
     });
 
-    const coursePrice = discount
-      ? Number(discount.customPrice)
-      : Number(payment.group?.price || 0);
+    // ✅ Imtiyoz 0 dan katta bo'lsagina ishlatiladi
+    const rawCustomPrice = discount ? Number(discount.customPrice) : 0;
+    const coursePrice =
+      rawCustomPrice > 0 ? rawCustomPrice : Number(payment.group?.price || 0);
     const totalPaidAmount = Number(totalPaidResult?.totalPaid || 0);
     const debt = Math.max(0, coursePrice - totalPaidAmount);
 
@@ -348,9 +344,10 @@ export class PaymentService {
       },
     });
 
-    const coursePrice = discount
-      ? Number(discount.customPrice)
-      : Number(payment.group?.price || 0);
+    // ✅ Imtiyoz 0 dan katta bo'lsagina ishlatiladi
+    const rawCustomPrice = discount ? Number(discount.customPrice) : 0;
+    const coursePrice =
+      rawCustomPrice > 0 ? rawCustomPrice : Number(payment.group?.price || 0);
 
     const totalPaidResult = await this.paymentRepo
       .createQueryBuilder('p')
@@ -409,9 +406,10 @@ export class PaymentService {
           where: { student: { id: studentId }, group: { id: groupId } },
         });
 
-        const coursePrice = discount
-          ? Number(discount.customPrice)
-          : Number(payment.group?.price || 0);
+        // ✅ Imtiyoz 0 dan katta bo'lsagina ishlatiladi, aks holda group.price
+        const rawCustomPrice = discount ? Number(discount.customPrice) : 0;
+        const coursePrice =
+          rawCustomPrice > 0 ? rawCustomPrice : Number(payment.group?.price || 0);
 
         const otherPaymentsResult = await queryRunner.manager
           .createQueryBuilder(Payment, 'p')

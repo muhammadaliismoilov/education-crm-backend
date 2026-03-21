@@ -12,8 +12,20 @@ export class RedisCacheService {
   async invalidateByPatterns(patterns: string[]): Promise<void> {
     try {
       const store = (this.cacheManager as any).store;
+      // Redis client-ga kirish cache-manager-redis-yet da store.client orqali bo'ladi
+      const client = store?.client;
 
-      if (store?.keys) {
+      if (client && typeof client.keys === 'function') {
+        for (const pattern of patterns) {
+          const foundKeys: string[] = await client.keys(pattern);
+          if (foundKeys.length > 0) {
+            await client.del(foundKeys);
+            this.logger.log(
+              `Cache invalidated [pattern: ${pattern}] [${foundKeys.length} ta key]`,
+            );
+          }
+        }
+      } else if (store?.keys) {
         for (const pattern of patterns) {
           const foundKeys: string[] = await store.keys(pattern);
           if (foundKeys.length > 0) {
@@ -27,7 +39,7 @@ export class RedisCacheService {
         }
       } else {
         await (this.cacheManager as any).reset?.();
-        this.logger.warn('store.keys() ishlamadi — reset() ishlatildi');
+        this.logger.warn('store.client.keys() ishlamadi — reset() ishlatildi');
       }
     } catch (e) {
       this.logger.warn(`Cache invalidation xatolik: ${e.message}`);
@@ -38,6 +50,7 @@ export class RedisCacheService {
     await this.invalidateByPatterns([
       'finance_overview_*',
       'finance_yearly_*',
+      'dashboard_summary_*',
     ]);
   }
 }

@@ -9,8 +9,9 @@ import {
   Matches,
   ValidateNested,
   ArrayMinSize,
+  IsOptional,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Type, Transform } from 'class-transformer';
 
 export class StudentAttendanceDto {
   @ApiProperty({
@@ -23,10 +24,14 @@ export class StudentAttendanceDto {
 
   @ApiProperty({
     example: true,
-    description: 'Keldi (true) yoki kelmadi (false)',
+    description: 'Keldi (true), kelmadi (false), belgilanmagan (null)',
+    nullable: true,
+    required: false,
   })
+  @IsOptional()
   @IsBoolean()
-  isPresent: boolean;
+  @Transform(({ value }) => (value === null || value === undefined ? null : Boolean(value)))
+  isPresent: boolean | null;
 }
 
 export class MarkAttendanceDto {

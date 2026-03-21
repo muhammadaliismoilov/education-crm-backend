@@ -213,10 +213,8 @@ export class SalaryService {
         );
 
         for (const student of students) {
-          const effectivePrice =
-            student.customPrice !== null
-              ? Number(student.customPrice)
-              : Number(student.groupPrice);
+          const rawCustom = student.customPrice !== null ? Number(student.customPrice) : 0;
+          const effectivePrice = rawCustom > 0 ? rawCustom : Number(student.groupPrice);
 
           const perLessonRate = effectivePrice / monthLessons;
           const attendanceCount = monthAttMap.get(student.studentId) || 0;
@@ -300,7 +298,7 @@ export class SalaryService {
 
   // 3. OYLIK TO'LASH
   async paySalary(dto: PaySalaryDto) {
-    const { teacherId, month, amount } = dto;
+    const { teacherId, month, amount, startDate, endDate } = dto;
 
     // TUZATISH: Teacher mavjudligini oldin tekshirish —
     // transaction ichida NotFoundException chiqsa rollback ishlaydi,
@@ -316,17 +314,23 @@ export class SalaryService {
 
     try {
       const existing = await queryRunner.manager.findOne(SalaryPayout, {
-        where: { teacher: { id: teacherId }, forMonth: month },
+        where: { 
+          teacher: { id: teacherId }, 
+          startDate: new Date(startDate),
+          endDate: new Date(endDate)
+        },
       });
 
       if (existing)
         throw new BadRequestException(
-          "Bu oy uchun oylik allaqachon to'langan",
+          "Ushbu sana oralig'i uchun oylik allaqachon to'langan",
         );
 
       const payout = queryRunner.manager.create(SalaryPayout, {
         amount,
         forMonth: month,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
         teacher: { id: teacherId },
       });
 

@@ -4,11 +4,13 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Group } from '../entities/group.entity';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { CreateGroupDto, UpdateGroupDto } from './group.dto';
 import { Student } from '../entities/students.entity';
+import { Invoice } from '../entities/invoice.entity';
+import { StudentDiscount } from '../entities/studentDiscount';
 
 @Injectable()
 export class GroupsService {
@@ -17,6 +19,7 @@ export class GroupsService {
   constructor(
     @InjectRepository(Group) private groupRepo: Repository<Group>,
     @InjectRepository(Student) private studentRepo: Repository<Student>,
+    @InjectDataSource() private dataSource: DataSource,
   ) {}
 
   async create(dto: CreateGroupDto) {
@@ -129,8 +132,45 @@ export class GroupsService {
       .of(groupId)
       .add(studentId);
 
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const discount = await queryRunner.manager.findOne(StudentDiscount, {
+        where: { student: { id: studentId }, group: { id: groupId } },
+      });
+
+      const effectivePrice = discount && Number(discount.customPrice) > 0
+        ? Number(discount.customPrice)
+        : Number(group.price || 0);
+
+      if (effectivePrice > 0) {
+        const invoice = queryRunner.manager.create(Invoice, {
+          amount: effectivePrice,
+          type: 'monthly_fee',
+          student: { id: studentId },
+          group: { id: groupId },
+        });
+        await queryRunner.manager.save(invoice);
+        
+        await queryRunner.manager.decrement(
+          Student,
+          { id: studentId },
+          'balance',
+          effectivePrice,
+        );
+      }
+      await queryRunner.commitTransaction();
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error("Guruhga qo'shishda hisob-kitob xatosi", err.stack);
+    } finally {
+      await queryRunner.release();
+    }
+
     this.logger.log(
-      `Talaba guruhga qo'shildi [group: ${groupId}] [student: ${studentId}]`,
+      `Talaba guruhga qo'shildi va to'lov yozildi [group: ${groupId}] [student: ${studentId}]`,
     );
 
     return { message: "Student guruhga qo'shildi" };

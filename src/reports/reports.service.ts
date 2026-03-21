@@ -75,7 +75,7 @@ export class ReportsService {
         `EXTRACT(MONTH FROM p."createdAt")                          AS month`,
         `s.id                                                        AS "studentId"`,
         `g.id                                                        AS "groupId"`,
-        `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL))       AS "effectivePrice"`,
+        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END AS "effectivePrice"`,
         `SUM(CAST(p.amount AS DECIMAL))                             AS "totalPaid"`,
       ])
       .where(`p."createdAt" BETWEEN :start AND :end`, { start, end })
@@ -242,7 +242,7 @@ export class ReportsService {
       .select([
         's.id                                                  AS "studentId"',
         'g.id                                                  AS "groupId"',
-        `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL)) AS "effectivePrice"`,
+        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END AS "effectivePrice"`,
         'SUM(CAST(p.amount AS DECIMAL))                       AS "totalPaid"',
       ])
       .where('p."createdAt" BETWEEN :start AND :end', { start, end }) // ✅
@@ -317,7 +317,7 @@ export class ReportsService {
         's.phone                                                     AS "phone"',
         'g.id                                                        AS "groupId"',
         'g.name                                                      AS "groupName"',
-        `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL))        AS "groupPrice"`,
+        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END AS "groupPrice"`,
         `COALESCE(SUM(CAST(p.amount AS DECIMAL)), 0)                 AS "totalPaid"`,
       ])
       .from('students', 's')
@@ -334,7 +334,7 @@ export class ReportsService {
         's.id, s.fullName, s.phone, g.id, g.name, sd."customPrice", g.price',
       )
       .having(
-        `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL)) > COALESCE(SUM(CAST(p.amount AS DECIMAL)), 0)`,
+        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END > COALESCE(SUM(CAST(p.amount AS DECIMAL)), 0)`,
       )
       .orderBy('s.fullName', 'ASC')
       .getRawMany();

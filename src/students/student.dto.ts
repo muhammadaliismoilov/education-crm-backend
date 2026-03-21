@@ -12,7 +12,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { Transform, Type } from 'class-transformer';
+import { Transform, Type, plainToInstance } from 'class-transformer';
 import { DocumentType } from '../entities/students.entity';
 
 export class DiscountItemDto {
@@ -147,11 +147,39 @@ export class CreateStudentDto {
     message: "O'quvchini kamida bitta guruhga biriktirish shart",
   })
   @Transform(({ value }) => {
-    if (Array.isArray(value)) return value;
-    if (typeof value === 'string') return [value];
-    return value;
+    let parsed = value;
+    if (typeof value === 'string') {
+      try { parsed = JSON.parse(value); } catch {}
+    }
+    if (!Array.isArray(parsed)) return [parsed];
+    return parsed;
   })
   groupIds: string[];
+
+  @ApiProperty({ required: false, type: 'string', format: 'binary' })
+  @IsOptional()
+  photo?: any;
+
+  @ApiProperty({
+    type: [DiscountItemDto],
+    description: "Guruhlar bo'yicha imtiyozli narxlar ro'yxati. Ixtiyoriy.",
+    required: false,
+    example: [
+      { groupId: '550e8400-e29b-41d4-a716-446655440000', customPrice: 450000 },
+    ],
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Transform(({ value }) => {
+    let parsed = value;
+    if (typeof value === 'string') {
+      try { parsed = JSON.parse(value); } catch {}
+    }
+    if (!Array.isArray(parsed)) parsed = [parsed];
+    return plainToInstance(DiscountItemDto, parsed);
+  })
+  discounts?: DiscountItemDto[];
 }
 
 export class UpdateStudentDto extends PartialType(CreateStudentDto) {
@@ -172,15 +200,12 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
   @IsUUID('all', { each: true })
   @ArrayMinSize(1, { message: "O'quvchi kamida bitta guruhda qolishi kerak" })
   @Transform(({ value }) => {
-    if (Array.isArray(value)) return value;
+    let parsed = value;
     if (typeof value === 'string') {
-      try {
-        return JSON.parse(value);
-      } catch {
-        return [value];
-      }
+      try { parsed = JSON.parse(value); } catch {}
     }
-    return value;
+    if (!Array.isArray(parsed)) return [parsed];
+    return parsed;
   })
   groupIds?: string[];
 
@@ -193,19 +218,15 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
     ],
   })
   @IsOptional()
-  // @IsArray()
+  @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => DiscountItemDto)
   @Transform(({ value }) => {
-    if (Array.isArray(value)) return value;
+    let parsed = value;
     if (typeof value === 'string') {
-      try {
-        return JSON.parse(value);
-      } catch {
-        return value;
-      }
+      try { parsed = JSON.parse(value); } catch {}
     }
-    return value;
+    if (!Array.isArray(parsed)) parsed = [parsed];
+    return plainToInstance(DiscountItemDto, parsed);
   })
   discounts?: DiscountItemDto[];
 }

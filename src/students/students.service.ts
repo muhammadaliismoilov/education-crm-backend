@@ -6,11 +6,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import { DataSource, Repository, In } from 'typeorm';
 import { DocumentType, Student } from '../entities/students.entity';
 import { Group } from '../entities/group.entity';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 import { StudentDiscount } from '../entities/studentDiscount';
+import { Invoice } from '../entities/invoice.entity';
 import { FaceService } from '../common/faceId/faceId.service';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -24,6 +25,7 @@ export class StudentsService {
     @InjectRepository(Group) private groupRepo: Repository<Group>,
     @InjectRepository(StudentDiscount)
     private discountRepo: Repository<StudentDiscount>,
+    private dataSource: DataSource,
     private faceService: FaceService,
   ) {}
 
@@ -42,7 +44,9 @@ export class StudentsService {
     } catch (e) {
       // SABABI: O'chirish muvaffaqiyatsiz bo'lsa warn — critical emas,
       // lekin disk yoki permission muammosini erta aniqlash uchun kerak
-      this.logger.warn(`Rasmni o'chirishda xatolik [${cleanPath}]: ${e.message}`);
+      this.logger.warn(
+        `Rasmni o'chirishda xatolik [${cleanPath}]: ${e.message}`,
+      );
     }
   }
 
@@ -70,23 +74,26 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // HELPER — rasm saqlash (create va update uchun umumiy)
   // ─────────────────────────────────────────────
-  private async processPhoto(
-    file: Express.Multer.File,
-    studentId: string,
-    oldPhotoUrl?: string | null,
-  ): Promise<{ photoUrl: string; faceDescriptor: number[] }> {
-    let descriptor: number[];
+  private async verifyFace(file: Express.Multer.File): Promise<number[]> {
     try {
-      descriptor = await this.faceService.getDescriptorFromFile(file.path);
+      return await this.faceService.getDescriptorFromFile(file.path);
     } catch (e) {
       this.deleteFileIfExists(file.path);
-      // SABABI: Yuz topilmasa temp fayl qolmasligi kerak + foydalanuvchiga aniq xabar
       this.logger.warn(`Yuz topilmadi, temp fayl o'chirildi: ${file.path}`);
       throw new BadRequestException(
         "Rasmda yuz topilmadi! Aniqroq, yorug' rasmda yuzingiz ko'rinib tursin.",
       );
     }
+  }
 
+  // ─────────────────────────────────────────────
+  // HELPER — rasmni yakuniy manzilga ko'chirish
+  // ─────────────────────────────────────────────
+  private movePhoto(
+    file: Express.Multer.File,
+    studentId: string,
+    oldPhotoUrl?: string | null,
+  ): string {
     // Eski rasmni o'chirish
     if (oldPhotoUrl) this.deleteFileIfExists(oldPhotoUrl);
 
@@ -95,90 +102,150 @@ export class StudentsService {
     const newPath = path.join('uploads', 'students', newFilename);
     fs.renameSync(file.path, newPath);
 
-    // SABABI: Rasm muvaffaqiyatli saqlangani — monitoring va disk audit uchun muhim
     this.logger.log(`Rasm saqlandi [student: ${studentId}]: ${newPath}`);
-
-    return { photoUrl: `/${newPath}`, faceDescriptor: descriptor };
+    return `/${newPath}`;
   }
 
   // ─────────────────────────────────────────────
   // 1. CREATE
   // ─────────────────────────────────────────────
+
   async create(dto: CreateStudentDto, file?: Express.Multer.File) {
-    const { groupIds, pinfl, documentNumber, ...studentData } = dto;
-
-    const existing = await this.studentRepo.findOne({
-      where: [
-        { phone: dto.phone },
-        ...(pinfl ? [{ pinfl }] : []),
-        ...(documentNumber ? [{ documentNumber }] : []),
-      ],
-    });
-
-    if (existing) {
-      if (existing.phone === dto.phone)
-        throw new ConflictException(
-          "Ushbu telefon raqamli o'quvchi allaqachon mavjud",
-        );
-      if (pinfl && existing.pinfl === pinfl)
-        throw new ConflictException(
-          "Ushbu JSHSHIR (PINFL) raqamli o'quvchi allaqachon mavjud",
-        );
-      if (documentNumber && existing.documentNumber === documentNumber)
-        throw new ConflictException(
-          "Ushbu seria raqamli o'quvchi allaqachon mavjud",
-        );
+    let faceDescriptor: number[] | undefined;
+    if (file) {
+      faceDescriptor = await this.verifyFace(file);
     }
-
-    const groups = await this.groupRepo.findBy({ id: In(groupIds) });
-    if (groups.length !== groupIds.length) {
-      throw new NotFoundException(
-        'Bir yoki bir nechta tanlangan guruhlar topilmadi',
-      );
-    }
-
-    const student = this.studentRepo.create({
-      fullName: studentData.fullName,
-      phone: studentData.phone,
-      parentName: studentData.parentName,
-      parentPhone: studentData.parentPhone,
-      documentNumber,
-      pinfl,
-      birthDate: studentData.birthDate
-        ? new Date(studentData.birthDate)
-        : undefined,
-      documentType: studentData.documentType as DocumentType,
-      direction:
-        dto.direction || (groups.length > 0 ? groups[0].name : undefined),
-      enrolledGroups: groups,
-    });
 
     try {
-      const saved = await this.studentRepo.save(student);
-      // SABABI: Yangi talaba yaratildi — kim, qachon yaratilganini audit uchun saqlash
-      this.logger.log(`Yangi talaba yaratildi [id: ${saved.id}] [tel: ${saved.phone}]`);
+      const { groupIds, pinfl, documentNumber, discounts, ...studentData } = dto;
 
-      if (file) {
-        const { photoUrl, faceDescriptor } = await this.processPhoto(
-          file,
-          saved.id,
+      const existing = await this.studentRepo.findOne({
+        where: [
+          { phone: dto.phone },
+          ...(pinfl ? [{ pinfl }] : []),
+          ...(documentNumber ? [{ documentNumber }] : []),
+        ],
+      });
+
+      if (existing) {
+        if (existing.phone === dto.phone)
+          throw new ConflictException(
+            "Ushbu telefon raqamli o'quvchi allaqachon mavjud",
+          );
+        if (pinfl && existing.pinfl === pinfl)
+          throw new ConflictException(
+            "Ushbu JSHSHIR (PINFL) raqamli o'quvchi allaqachon mavjud",
+          );
+        if (documentNumber && existing.documentNumber === documentNumber)
+          throw new ConflictException(
+            "Ushbu seria raqamli o'quvchi allaqachon mavjud",
+          );
+      }
+
+      const groups = await this.groupRepo.findBy({ id: In(groupIds) });
+      if (groups.length !== groupIds.length) {
+        throw new NotFoundException(
+          'Bir yoki bir nechta tanlangan guruhlar topilmadi',
         );
-        saved.photoUrl = photoUrl;
+      }
+
+      const student = this.studentRepo.create({
+        fullName: studentData.fullName,
+        phone: studentData.phone,
+        parentName: studentData.parentName,
+        parentPhone: studentData.parentPhone,
+        documentNumber,
+        pinfl,
+        birthDate: studentData.birthDate
+          ? new Date(studentData.birthDate)
+          : undefined,
+        documentType: studentData.documentType as DocumentType,
+        direction:
+          dto.direction || (groups.length > 0 ? groups[0].name : undefined),
+        enrolledGroups: groups,
+      });
+
+      let saved = await this.studentRepo.save(student);
+      this.logger.log(
+        `Yangi talaba yaratildi [id: ${saved.id}] [tel: ${saved.phone}]`,
+      );
+
+      // Discountlarni saqlash
+      if (discounts && discounts.length > 0) {
+        for (const discountDto of discounts) {
+          const { groupId, customPrice } = discountDto;
+          if (customPrice === null || customPrice === undefined) continue;
+
+          const group = groups.find((g) => g.id === groupId);
+          if (!group) continue;
+
+          if (customPrice >= Number(group.price))
+            throw new BadRequestException(
+              `Imtiyozli narx ${Number(group.price).toLocaleString()} so'mdan kichik bo'lishi kerak`,
+            );
+          if (customPrice < 0)
+            throw new BadRequestException(
+              "Narx 0 dan kichik bo'lishi mumkin emas",
+            );
+
+          const newDiscount = this.discountRepo.create({
+            student: { id: saved.id },
+            group: { id: groupId },
+            customPrice,
+          });
+          await this.discountRepo.save(newDiscount);
+          this.logger.log(
+            `Imtiyoz saqlandi [student: ${saved.id}] [group: ${groupId}] [narx: ${customPrice}]`,
+          );
+        }
+      }
+
+      // Invoice (Birinchi oylik to'lovni yozish)
+      let initialBalanceDebt = 0;
+      for (const group of groups) {
+        const discount = discounts?.find((d) => d.groupId === group.id);
+        const effectivePrice = discount && Number(discount.customPrice) > 0
+          ? Number(discount.customPrice)
+          : Number(group.price || 0);
+
+        if (effectivePrice > 0) {
+          const invoice = this.dataSource.manager.create(Invoice, {
+            amount: effectivePrice,
+            type: 'monthly_fee',
+            student: { id: saved.id },
+            group: { id: group.id },
+          });
+          await this.dataSource.manager.save(invoice);
+          initialBalanceDebt += effectivePrice;
+        }
+      }
+
+      if (initialBalanceDebt > 0) {
+        saved.balance = -initialBalanceDebt;
+        saved = await this.studentRepo.save(saved);
+        this.logger.log(`Birinchi oylik qarzlar belgilandi: -${initialBalanceDebt} [student: ${saved.id}]`);
+      }
+
+      if (file && faceDescriptor) {
+        saved.photoUrl = this.movePhoto(file, saved.id);
         saved.faceDescriptor = faceDescriptor;
-        await this.studentRepo.save(saved);
+        saved = await this.studentRepo.save(saved);
       }
 
       return await this.findOne(saved.id);
     } catch (error) {
-      // Xatolik bo'lsa temp rasmni tozalash
       this.deleteFileIfExists(file?.path);
-      if (error instanceof BadRequestException) throw error;
+      if (
+        error instanceof ConflictException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
       if (error.code === '23505')
         throw new ConflictException(
           "Ma'lumotlar bazasida takrorlanish yuz berdi.",
         );
-      // SABABI: Kutilmagan xatolikni to'liq stack bilan logga yozish —
-      // production da tez topish uchun
       this.logger.error(
         `Talaba yaratishda xatolik [tel: ${dto.phone}]`,
         error.stack,
@@ -251,137 +318,199 @@ export class StudentsService {
     return newVal;
   }
 
-  async update(
-    id: string,
-    dto: UpdateStudentDto,
-    file?: Express.Multer.File,
-  ) {
-    const student = await this.studentRepo.findOne({
-      where: { id },
-      relations: ['enrolledGroups'],
-    });
-
-    if (!student) {
-      this.deleteFileIfExists(file?.path);
-      throw new NotFoundException('Student topilmadi');
-    }
-
-    const { groupIds, pinfl, documentNumber, phone, discounts, ...updateData } = dto;
-
-    if (phone?.trim() || pinfl?.trim() || documentNumber?.trim()) {
-      const conflictCheck = await this.studentRepo.findOne({
-        where: [
-          ...(phone?.trim() ? [{ phone }] : []),
-          ...(pinfl?.trim() ? [{ pinfl }] : []),
-          ...(documentNumber?.trim() ? [{ documentNumber }] : []),
-        ],
-      });
-      if (conflictCheck && conflictCheck.id !== id) {
-        if (phone?.trim() && conflictCheck.phone === phone)
-          throw new ConflictException("Ushbu telefon raqami boshqa o'quvchida band");
-        if (pinfl?.trim() && conflictCheck.pinfl === pinfl)
-          throw new ConflictException("Ushbu PINFL boshqa o'quvchida band");
-        if (documentNumber?.trim() && conflictCheck.documentNumber === documentNumber)
-          throw new ConflictException("Ushbu hujjat raqami boshqa o'quvchida band");
-      }
-    }
-
-    if (groupIds && groupIds.length > 0) {
-      const groups = await this.groupRepo.findBy({ id: In(groupIds) });
-      if (groups.length !== groupIds.length)
-        throw new NotFoundException(
-          'Bir yoki bir nechta tanlangan guruhlar topilmadi',
-        );
-      student.enrolledGroups = groups;
-      if (!dto.direction?.trim()) student.direction = groups[0].name;
-    }
-
-    student.fullName       = this.keepIfEmpty(updateData.fullName, student.fullName);
-    student.phone          = this.keepIfEmpty(phone, student.phone);
-    student.parentName     = this.keepIfEmpty(updateData.parentName, student.parentName);
-    student.parentPhone    = this.keepIfEmpty(updateData.parentPhone, student.parentPhone);
-    student.pinfl          = this.keepIfEmpty(pinfl, student.pinfl);
-    student.documentNumber = this.keepIfEmpty(documentNumber, student.documentNumber);
-    student.direction      = this.keepIfEmpty(updateData.direction, student.direction);
-
-    if (updateData.documentType?.trim())
-      student.documentType = updateData.documentType as DocumentType;
-    if (updateData.birthDate?.trim())
-      student.birthDate = new Date(updateData.birthDate);
-
-    if (discounts && discounts.length > 0) {
-      for (const discountDto of discounts) {
-        const { groupId, customPrice } = discountDto;
-        const isInGroup = student.enrolledGroups.some((g) => g.id === groupId);
-        if (!isInGroup)
-          throw new BadRequestException('Talaba bu guruhda emas!');
-
-        const group = await this.groupRepo.findOne({ where: { id: groupId } });
-        if (!group) throw new NotFoundException('Guruh topilmadi');
-
-        const existing = await this.discountRepo.findOne({
-          where: { student: { id }, group: { id: groupId } },
-        });
-
-        if (customPrice === null || customPrice === undefined) {
-          if (existing) {
-            await this.discountRepo.remove(existing);
-            // SABABI: Imtiyoz bekor qilinganini moliyaviy audit uchun saqlash
-            this.logger.log(
-              `Imtiyoz bekor qilindi [student: ${id}] [group: ${groupId}]`,
-            );
-          }
-        } else {
-          if (customPrice >= Number(group.price))
-            throw new BadRequestException(
-              `Imtiyozli narx ${Number(group.price).toLocaleString()} so'mdan kichik bo'lishi kerak`,
-            );
-          if (customPrice < 0)
-            throw new BadRequestException(
-              "Narx 0 dan kichik bo'lishi mumkin emas",
-            );
-
-          if (existing) {
-            existing.customPrice = customPrice;
-            await this.discountRepo.save(existing);
-          } else {
-            const newDiscount = this.discountRepo.create({
-              student: { id },
-              group: { id: groupId },
-              customPrice,
-            });
-            await this.discountRepo.save(newDiscount);
-          }
-          // SABABI: Imtiyoz berilgani/o'zgartirilgani — moliyaviy audit uchun muhim
-          this.logger.log(
-            `Imtiyoz yangilandi [student: ${id}] [group: ${groupId}] [narx: ${customPrice}]`,
-          );
-        }
-      }
-    }
-
+  async update(id: string, dto: UpdateStudentDto, file?: Express.Multer.File) {
+    let faceDescriptor: number[] | undefined;
     if (file) {
-      const { photoUrl, faceDescriptor } = await this.processPhoto(
-        file,
-        id,
-        student.photoUrl,
-      );
-      student.photoUrl = photoUrl;
-      student.faceDescriptor = faceDescriptor;
+      faceDescriptor = await this.verifyFace(file);
     }
 
     try {
+      const student = await this.studentRepo.findOne({
+        where: { id },
+        relations: ['enrolledGroups'],
+      });
+
+      if (!student) {
+        throw new NotFoundException('Student topilmadi');
+      }
+
+      const {
+        groupIds,
+        pinfl,
+        documentNumber,
+        phone,
+        discounts,
+        ...updateData
+      } = dto;
+
+      if (phone?.trim() || pinfl?.trim() || documentNumber?.trim()) {
+        const conflictCheck = await this.studentRepo.findOne({
+          where: [
+            ...(phone?.trim() ? [{ phone }] : []),
+            ...(pinfl?.trim() ? [{ pinfl }] : []),
+            ...(documentNumber?.trim() ? [{ documentNumber }] : []),
+          ],
+        });
+        if (conflictCheck && conflictCheck.id !== id) {
+          if (phone?.trim() && conflictCheck.phone === phone)
+            throw new ConflictException(
+              "Ushbu telefon raqami boshqa o'quvchida band",
+            );
+          if (pinfl?.trim() && conflictCheck.pinfl === pinfl)
+            throw new ConflictException("Ushbu PINFL boshqa o'quvchida band");
+          if (
+            documentNumber?.trim() &&
+            conflictCheck.documentNumber === documentNumber
+          )
+            throw new ConflictException(
+              "Ushbu hujjat raqami boshqa o'quvchida band",
+            );
+        }
+      }
+
+      let newGroupsToCharge: Group[] = [];
+      if (groupIds && groupIds.length > 0) {
+        const groups = await this.groupRepo.findBy({ id: In(groupIds) });
+        if (groups.length !== groupIds.length)
+          throw new NotFoundException(
+            'Bir yoki bir nechta tanlangan guruhlar topilmadi',
+          );
+        
+        const oldGroupIds = new Set(student.enrolledGroups.map(g => g.id));
+        newGroupsToCharge = groups.filter(g => !oldGroupIds.has(g.id));
+
+        student.enrolledGroups = groups;
+        if (!dto.direction?.trim()) student.direction = groups[0].name;
+      }
+
+      student.fullName = this.keepIfEmpty(
+        updateData.fullName,
+        student.fullName,
+      );
+      student.phone = this.keepIfEmpty(phone, student.phone);
+      student.parentName = this.keepIfEmpty(
+        updateData.parentName,
+        student.parentName,
+      );
+      student.parentPhone = this.keepIfEmpty(
+        updateData.parentPhone,
+        student.parentPhone,
+      );
+      student.pinfl = this.keepIfEmpty(pinfl, student.pinfl);
+      student.documentNumber = this.keepIfEmpty(
+        documentNumber,
+        student.documentNumber,
+      );
+      student.direction = this.keepIfEmpty(
+        updateData.direction,
+        student.direction,
+      );
+
+      if (updateData.documentType?.trim())
+        student.documentType = updateData.documentType as DocumentType;
+      if (updateData.birthDate?.trim())
+        student.birthDate = new Date(updateData.birthDate);
+
+      if (discounts && discounts.length > 0) {
+        for (const discountDto of discounts) {
+          const { groupId, customPrice } = discountDto;
+          const isInGroup = student.enrolledGroups.some(
+            (g) => g.id === groupId,
+          );
+          if (!isInGroup)
+            throw new BadRequestException('Talaba bu guruhda emas!');
+
+          const group = await this.groupRepo.findOne({
+            where: { id: groupId },
+          });
+          if (!group) throw new NotFoundException('Guruh topilmadi');
+
+          const existing = await this.discountRepo.findOne({
+            where: { student: { id }, group: { id: groupId } },
+          });
+
+          if (customPrice === null || customPrice === undefined) {
+            if (existing) {
+              await this.discountRepo.remove(existing);
+              this.logger.log(
+                `Imtiyoz bekor qilindi [student: ${id}] [group: ${groupId}]`,
+              );
+            }
+          } else {
+            if (customPrice >= Number(group.price))
+              throw new BadRequestException(
+                `Imtiyozli narx ${Number(group.price).toLocaleString()} so'mdan kichik bo'lishi kerak`,
+              );
+            if (customPrice < 0)
+              throw new BadRequestException(
+                "Narx 0 dan kichik bo'lishi mumkin emas",
+              );
+
+            if (existing) {
+              existing.customPrice = customPrice;
+              await this.discountRepo.save(existing);
+            } else {
+              const newDiscount = this.discountRepo.create({
+                student: { id },
+                group: { id: groupId },
+                customPrice,
+              });
+              await this.discountRepo.save(newDiscount);
+            }
+            this.logger.log(
+              `Imtiyoz yangilandi [student: ${id}] [group: ${groupId}] [narx: ${customPrice}]`,
+            );
+          }
+        }
+      }
+
+      // Yangi qo'shilgan guruhlar uchun initial invoice
+      if (newGroupsToCharge.length > 0) {
+        let addedDebt = 0;
+        for (const group of newGroupsToCharge) {
+          const discount = discounts?.find((d) => d.groupId === group.id);
+          const effectivePrice = discount && Number(discount.customPrice) > 0
+            ? Number(discount.customPrice)
+            : Number(group.price || 0);
+
+          if (effectivePrice > 0) {
+              const invoice = this.dataSource.manager.create(Invoice, {
+                amount: effectivePrice,
+                type: 'monthly_fee',
+                student: { id },
+                group: { id: group.id },
+              });
+              await this.dataSource.manager.save(invoice);
+              addedDebt += effectivePrice;
+          }
+        }
+        if (addedDebt > 0) {
+          student.balance = Number(student.balance) - addedDebt;
+          this.logger.log(`Yangi qo'shilgan guruhlar uchun ${addedDebt} so'm qarz yozildi [student: ${id}]`);
+        }
+      }
+
+      if (file && faceDescriptor) {
+        student.photoUrl = this.movePhoto(file, id, student.photoUrl);
+        student.faceDescriptor = faceDescriptor;
+      }
+
       const saved = await this.studentRepo.save(student);
-      // SABABI: Kim, qaysi talaba ma'lumotlari o'zgartirilganini audit uchun saqlash
       this.logger.log(`Talaba yangilandi [id: ${id}]`);
-      return this.findOne(saved.id);
+      return await this.findOne(saved.id);
     } catch (error) {
-      if (error instanceof BadRequestException) throw error;
+      this.deleteFileIfExists(file?.path);
+      if (
+        error instanceof ConflictException ||
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
       if (error.code === '23505')
         throw new ConflictException(
           "Ma'lumotlar bazasida takrorlanish yuz berdi",
         );
-      // SABABI: Kutilmagan DB xatoligi — stack bilan logga yozish
       this.logger.error(`Talaba yangilashda xatolik [id: ${id}]`, error.stack);
       throw error;
     }

@@ -91,7 +91,7 @@ export class AttendanceService {
       return {
         studentId: student.id,
         fullName: student.fullName,
-        isPresent: att ? att.isPresent : true,
+        isPresent: att ? att.isPresent : null,
         balance: student.balance,
         hasPaid: student.balance > 0,
       };
@@ -137,7 +137,7 @@ export class AttendanceService {
       const records = students.map((s) =>
         this.attendanceRepo.create({
           date,
-          isPresent: s.isPresent,
+          isPresent: s.isPresent === null || s.isPresent === undefined ? false : s.isPresent,
           group: { id: groupId },
           student: { id: s.studentId },
         }),

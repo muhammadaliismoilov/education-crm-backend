@@ -19,6 +19,12 @@ export class SalaryPayout {
   @Column()
   forMonth: string;
 
+  @Column({ type: 'date', nullable: true })
+  startDate: Date;
+
+  @Column({ type: 'date', nullable: true })
+  endDate: Date;
+
   @ManyToOne(() => User, (user) => user.payouts)
   teacher: User;
 
