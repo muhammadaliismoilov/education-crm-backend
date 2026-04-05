@@ -20,6 +20,7 @@ import { BranchesModule } from './branches/branches.module';
 import { Branch } from './entities/branch.entity';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
 
 @Module({
   imports: [
@@ -59,7 +60,11 @@ import { APP_GUARD } from '@nestjs/core';
     CronModule,
     FaceModule,
   ],
-  providers: [SubdomainMiddleware, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    SubdomainMiddleware,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: IpWhitelistGuard },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {

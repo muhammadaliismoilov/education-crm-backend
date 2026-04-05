@@ -53,26 +53,27 @@ async function bootstrap() {
     }),
   );
 
+  const clientOrigin = process.env.CLIENT_ORIGIN || 'https://crm-oquv-markaz.vercel.app';
+
   app.enableCors({
     origin: (origin, callback) => {
-      // Ruxsat berilgan originlar:
-      // 1. localhost (development)
-      // 2. *.crm.uz (barcha subdomenlar)
-      // 3. crm.uz (asosiy domen)
-      const allowedPatterns = [
-        /^https?:\/\/localhost(:\d+)?$/,
-        /^https?:\/\/([\w-]+\.)?crm\.uz$/,
-        /^https?:\/\/([\w-]+\.)?bar-bers\.uz$/,
-      ];
-      if (!origin || allowedPatterns.some((p) => p.test(origin))) {
+      // Senior Level CORS: Faqatgina tasdiqlangan origin'larga ruxsat beramiz.
+      // 1. Production frontend
+      // 2. Localhost (development uchun)
+      const allowedOrigins = [clientOrigin];
+      const isLocalhost = origin && (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'));
+      
+      if (!origin || allowedOrigins.includes(origin) || isLocalhost) {
         callback(null, true);
       } else {
-        callback(new Error(`CORS: ${origin} ruxsat etilmagan`));
+        callback(new Error(`CORS: ${origin} bloklandi (Senior Security)`));
       }
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
     allowedHeaders: 'Content-Type, Accept, Authorization, X-Branch-Subdomain',
+    exposedHeaders: ['Authorization'], // Xavfsizlik uchun faqat kerakli headerlarni ko'rsatamiz
+    maxAge: 3600,
   });
 
   const config = new DocumentBuilder()
