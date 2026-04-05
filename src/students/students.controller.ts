@@ -517,9 +517,10 @@ export class StudentsController {
     async update(
       @Param('id', ParseUUIDPipe) id: string,
       @Body() dto: UpdateStudentDto,
+      @Req() req: any,
       @UploadedFile() file?: Express.Multer.File,
     ) {
-      return this.studentsService.update(id, dto, file);
+      return this.studentsService.update(id, dto, req.user, file);
     }
 
   // ─────────────────────────────────────────────
@@ -548,8 +549,8 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.studentsService.remove(id);
+  async remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.studentsService.remove(id, req.user);
   }
 
   // ─────────────────────────────────────────────
@@ -577,7 +578,7 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async restore(@Param('id', ParseUUIDPipe) id: string) {
-    return this.studentsService.restore(id);
+  async restore(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.studentsService.restore(id, req.user);
   }
 }

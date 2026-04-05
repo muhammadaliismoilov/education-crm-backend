@@ -330,7 +330,7 @@ export class StudentsService {
     return newVal;
   }
 
-  async update(id: string, dto: UpdateStudentDto, file?: Express.Multer.File) {
+  async update(id: string, dto: UpdateStudentDto, user: any, file?: Express.Multer.File) {
     let faceDescriptor: number[] | undefined;
     if (file) {
       faceDescriptor = await this.verifyFace(file);
@@ -339,11 +339,16 @@ export class StudentsService {
     try {
       const student = await this.studentRepo.findOne({
         where: { id },
-        relations: ['enrolledGroups'],
+        relations: ['enrolledGroups', 'branch'],
       });
 
       if (!student) {
         throw new NotFoundException('Student topilmadi');
+      }
+
+      // Senior Level: Multi-tenant xavfsizlik tekshiruvi
+      if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
+        throw new NotFoundException('Student topilmadi yoki unga ruxsatingiz yo\'q');
       }
 
       const {
@@ -355,6 +360,12 @@ export class StudentsService {
         branchId,
         ...updateData
       } = dto;
+
+      // Faqat superadmin filialni o'zgartira oladi
+      if (user.role !== 'superadmin' && branchId) {
+        this.logger.warn(`Filialni o'zgartirishga urinish rad etildi: Foydalanuvchi [${user.id}]`);
+        // branchId'ni e'tiborsiz qoldiramiz
+      }
 
       if (phone?.trim() || pinfl?.trim() || documentNumber?.trim()) {
         const conflictCheck = await this.studentRepo.findOne({
@@ -396,8 +407,8 @@ export class StudentsService {
         if (!dto.direction?.trim()) student.direction = groups[0].name;
       }
 
-      if (dto.branchId) {
-        student.branch = { id: dto.branchId } as any;
+      if (user.role === 'superadmin' && branchId) {
+        student.branch = { id: branchId } as any;
       }
 
       student.fullName = this.keepIfEmpty(
@@ -548,9 +559,17 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 5. REMOVE
   // ─────────────────────────────────────────────
-  async remove(id: string) {
-    const student = await this.studentRepo.findOne({ where: { id } });
+  async remove(id: string, user: any) {
+    const student = await this.studentRepo.findOne({ 
+      where: { id },
+      relations: ['branch']
+    });
     if (!student) throw new NotFoundException('Student topilmadi');
+
+    if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
+      throw new NotFoundException('Student topilmadi (ruxsat yo\'q)');
+    }
+
     await this.studentRepo.softRemove(student);
     // SABABI: O'chirish — qaytarib bo'lmaydigan harakat, kim o'chirgani audit uchun muhim
     this.logger.log(`Talaba arxivlandi [id: ${id}] [tel: ${student.phone}]`);
@@ -598,10 +617,21 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 7. RESTORE
   // ─────────────────────────────────────────────
-  async restore(id: string) {
+  async restore(id: string, user: any) {
+    const student = await this.studentRepo.findOne({ 
+      where: { id }, 
+      withDeleted: true,
+      relations: ['branch']
+    });
+    if (!student) throw new NotFoundException('Student topilmadi');
+
+    if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
+      throw new NotFoundException('Student topilmadi (ruxsat yo\'q)');
+    }
+
     await this.studentRepo.restore(id);
     // SABABI: Qayta tiklash ham audit uchun muhim harakat
     this.logger.log(`Talaba qayta tiklandi [id: ${id}]`);
-    return await this.findOne(id);
+    return await this.findOne(id, user); // Userni findOne'ga ham berdik
   }
 }
