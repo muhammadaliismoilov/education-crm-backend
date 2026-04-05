@@ -62,6 +62,7 @@ async function bootstrap() {
       const allowedPatterns = [
         /^https?:\/\/localhost(:\d+)?$/,
         /^https?:\/\/([\w-]+\.)?crm\.uz$/,
+        /^https?:\/\/([\w-]+\.)?bar-bers\.uz$/,
       ];
       if (!origin || allowedPatterns.some((p) => p.test(origin))) {
         callback(null, true);
