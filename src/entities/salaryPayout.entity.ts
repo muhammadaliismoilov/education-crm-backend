@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { User } from './user.entity';
+import { Branch } from './branch.entity';
 
 @Entity('salaryPayouts')
 export class SalaryPayout {
@@ -36,4 +37,7 @@ export class SalaryPayout {
 
   @UpdateDateColumn({ name: 'updatedAt' })
   updatedAt: Date;
+
+  @ManyToOne(() => Branch, { nullable: true })
+  branch: Branch;
 }

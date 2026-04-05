@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Student } from './students.entity';
 import { Group } from './group.entity';
+import { Branch } from './branch.entity';
 
 @Entity('invoices')
 export class Invoice {
@@ -30,4 +31,7 @@ export class Invoice {
   @ManyToOne(() => Group, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'groupId' })
   group: Group;
+
+  @ManyToOne(() => Branch, { nullable: true })
+  branch: Branch;
 }

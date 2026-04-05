@@ -110,7 +110,7 @@ export class StudentsService {
   // 1. CREATE
   // ─────────────────────────────────────────────
 
-  async create(dto: CreateStudentDto, file?: Express.Multer.File) {
+  async create(dto: CreateStudentDto, user: any, file?: Express.Multer.File) {
     let faceDescriptor: number[] | undefined;
     if (file) {
       faceDescriptor = await this.verifyFace(file);
@@ -163,6 +163,7 @@ export class StudentsService {
         direction:
           dto.direction || (groups.length > 0 ? groups[0].name : undefined),
         enrolledGroups: groups,
+        branch: user.role === 'superadmin' && dto.branchId ? { id: dto.branchId } : { id: user.branchId },
       });
 
       let saved = await this.studentRepo.save(student);
@@ -257,12 +258,19 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 2. FIND ALL
   // ─────────────────────────────────────────────
-  async findAll(search?: string, groupName?: string, page = 1, limit = 10) {
+  async findAll(search?: string, groupName?: string, page = 1, limit = 10, user?: any, branchId?: string) {
     const query = this.studentRepo
       .createQueryBuilder('student')
       .leftJoinAndSelect('student.enrolledGroups', 'group')
       .leftJoinAndSelect('student.discounts', 'discount')
+      .leftJoinAndSelect('student.branch', 'branch')
       .leftJoinAndSelect('discount.group', 'discountGroup');
+
+    if (user && user.role !== 'superadmin') {
+      query.andWhere('student.branchId = :branchId', { branchId: user.branchId });
+    } else if (branchId) {
+      query.andWhere('student.branchId = :branchId', { branchId });
+    }
 
     if (search) {
       query.andWhere(
@@ -294,7 +302,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 3. FIND ONE
   // ─────────────────────────────────────────────
-  async findOne(id: string) {
+  async findOne(id: string, user?: any) {
     const student = await this.studentRepo.findOne({
       where: { id },
       relations: [
@@ -303,9 +311,13 @@ export class StudentsService {
         'attendances',
         'discounts',
         'discounts.group',
+        'branch',
       ],
     });
     if (!student) throw new NotFoundException('Student topilmadi');
+    if (user && user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
+      throw new NotFoundException('Student topilmadi');
+    }
     return this.formatStudent(student);
   }
 
@@ -340,6 +352,7 @@ export class StudentsService {
         documentNumber,
         phone,
         discounts,
+        branchId,
         ...updateData
       } = dto;
 
@@ -381,6 +394,10 @@ export class StudentsService {
 
         student.enrolledGroups = groups;
         if (!dto.direction?.trim()) student.direction = groups[0].name;
+      }
+
+      if (dto.branchId) {
+        student.branch = { id: dto.branchId } as any;
       }
 
       student.fullName = this.keepIfEmpty(
@@ -490,13 +507,25 @@ export class StudentsService {
         }
       }
 
-      if (file && faceDescriptor) {
+      // SENIOR APPROACH: Photo & Biometric Integrity
+      // 1. Agar rasm butunlay o'chirilsa
+      if (dto.removePhoto === true) {
+        if (student.photoUrl) {
+          this.deleteFileIfExists(student.photoUrl);
+          student.photoUrl = null;
+          student.faceDescriptor = null;
+          this.logger.log(`Rasm va biometrik ma'lumotlar o'chirildi [student: ${id}]`);
+        }
+      } 
+      // 2. Agar yangi rasm yuklansa (bundan avvalgi logika bilan birga)
+      else if (file && faceDescriptor) {
         student.photoUrl = this.movePhoto(file, id, student.photoUrl);
         student.faceDescriptor = faceDescriptor;
+        this.logger.log(`Rasm va biometrik ma'lumotlar yangilandi [student: ${id}]`);
       }
 
       const saved = await this.studentRepo.save(student);
-      this.logger.log(`Talaba yangilandi [id: ${id}]`);
+      this.logger.log(`Talaba muvaffaqiyatli yangilandi [id: ${id}]`);
       return await this.findOne(saved.id);
     } catch (error) {
       this.deleteFileIfExists(file?.path);
@@ -531,12 +560,16 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 6. FIND DELETED
   // ─────────────────────────────────────────────
-  async findAllDeleted(search?: string, page = 1, limit = 10) {
+  async findAllDeleted(search?: string, page = 1, limit = 10, user?: any) {
     const query = this.studentRepo
       .createQueryBuilder('student')
       .withDeleted()
       .leftJoinAndSelect('student.enrolledGroups', 'groups')
       .where('student.deletedAt IS NOT NULL');
+
+    if (user && user.role !== 'superadmin') {
+      query.andWhere('student.branchId = :branchId', { branchId: user.branchId });
+    }
 
     if (search) {
       query.andWhere(

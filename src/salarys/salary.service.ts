@@ -25,7 +25,7 @@ export class SalaryService {
   ) {}
 
   // 1. BARCHA O'QITUVCHILAR OYLIGI
-  async getEstimatedSalaries(startDate?: string, endDate?: string) {
+  async getEstimatedSalaries(startDate?: string, endDate?: string, user?: any) {
     const now = new Date();
     const start =
       startDate ??
@@ -36,8 +36,13 @@ export class SalaryService {
         .toISOString()
         .split('T')[0];
 
+    const query: any = { role: UserRole.TEACHER };
+    if (user && user.role !== UserRole.SUPERADMIN) {
+      query.branch = { id: user.branchId };
+    }
+
     const teachers = await this.userRepo.find({
-      where: { role: UserRole.TEACHER },
+      where: query,
     });
 
     const report: any[] = [];
@@ -82,9 +87,15 @@ export class SalaryService {
     teacherId: string,
     startDate: string,
     endDate: string,
+    user?: any,
   ) {
+    const query: any = { id: teacherId, role: UserRole.TEACHER };
+    if (user && user.role !== UserRole.SUPERADMIN) {
+      query.branch = { id: user.branchId };
+    }
+
     const teacher = await this.userRepo.findOne({
-      where: { id: teacherId, role: UserRole.TEACHER },
+      where: query,
       relations: ['teachingGroups'],
     });
 
@@ -297,14 +308,17 @@ export class SalaryService {
   }
 
   // 3. OYLIK TO'LASH
-  async paySalary(dto: PaySalaryDto) {
+  async paySalary(dto: PaySalaryDto, user?: any) {
     const { teacherId, month, amount, startDate, endDate } = dto;
 
-    // TUZATISH: Teacher mavjudligini oldin tekshirish —
-    // transaction ichida NotFoundException chiqsa rollback ishlaydi,
-    // lekin transaction ochmasdan oldin tekshirish aniqroq va tezroq
+    const query: any = { id: teacherId, role: UserRole.TEACHER };
+    if (user && user.role !== UserRole.SUPERADMIN) {
+      query.branch = { id: user.branchId };
+    }
+
     const teacher = await this.userRepo.findOne({
-      where: { id: teacherId, role: UserRole.TEACHER },
+      where: query,
+      relations: ['branch'],
     });
     if (!teacher) throw new NotFoundException("O'qituvchi topilmadi");
 
@@ -332,6 +346,7 @@ export class SalaryService {
         startDate: new Date(startDate),
         endDate: new Date(endDate),
         teacher: { id: teacherId },
+        branch: teacher.branch ? { id: teacher.branch.id } : null,
       });
 
       const saved = await queryRunner.manager.save(payout);
@@ -357,14 +372,19 @@ export class SalaryService {
   }
 
   // 4. BARCHA TO'LANGAN OYLIKLAR
-  async findAll(searchMonth?: string) {
+  async findAll(searchMonth?: string, user?: any) {
     const query = this.payoutRepo
       .createQueryBuilder('payout')
+      .withDeleted()
       .leftJoinAndSelect('payout.teacher', 'teacher')
       .orderBy('payout.createdAt', 'DESC');
 
+    if (user && user.role !== UserRole.SUPERADMIN) {
+      query.andWhere('payout.branchId = :branchId', { branchId: user.branchId });
+    }
+
     if (searchMonth) {
-      query.where('payout.forMonth = :month', { month: searchMonth });
+      query.andWhere('payout.forMonth = :month', { month: searchMonth });
     }
 
     return await query.getMany();
@@ -375,6 +395,7 @@ export class SalaryService {
     const payout = await this.payoutRepo.findOne({
       where: { id },
       relations: ['teacher'],
+      withDeleted: true,
     });
     if (!payout) throw new NotFoundException("Oylik to'lovi topilmadi");
     return payout;

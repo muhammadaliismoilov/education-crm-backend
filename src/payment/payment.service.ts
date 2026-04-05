@@ -83,7 +83,7 @@ export class PaymentService {
     );
   }
 
-  async create(dto: CreatePaymentDto) {
+  async create(dto: CreatePaymentDto, user: any) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -100,10 +100,13 @@ export class PaymentService {
 
       const student = await queryRunner.manager.findOne(Student, {
         where: { id: studentId },
-        relations: ['enrolledGroups'],
+        relations: ['enrolledGroups', 'branch'],
       });
 
       if (!student) throw new BadRequestException('Talaba topilmadi');
+      if (user && user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
+        throw new BadRequestException('Boshqa filial talabasiga to\'lov qila olmaysiz');
+      }
       if (!student.enrolledGroups || student.enrolledGroups.length === 0)
         throw new BadRequestException('Talaba hech qanday guruhga yozilmagan');
       if (!student.enrolledGroups.some((g) => g.id === groupId))
@@ -151,6 +154,7 @@ export class PaymentService {
         debt,
         student: { id: studentId },
         group: { id: groupId },
+        branch: student.branch ? { id: student.branch.id } : null,
       });
 
       const saved = await queryRunner.manager.save(payment);
@@ -189,22 +193,35 @@ export class PaymentService {
     }
   }
 
-  async findAll(search?: string, page = 1, limit = 10) {
+  async findAll(search?: string, page = 1, limit = 10, user?: any, branchId?: string) {
     const query = this.paymentRepo
       .createQueryBuilder('payment')
+      .withDeleted()
       .leftJoinAndSelect('payment.student', 'student')
-      .leftJoinAndSelect('payment.group', 'group');
+      .leftJoinAndSelect('payment.group', 'group')
+      .leftJoinAndSelect('payment.branch', 'branch');
+    
+    // TypeORM QueryBuilder-da join orqali o'chirilganlarni olish uchun 'withDeleted' parametr sifatida joinValue-da beriladi.
+    
+    // Muhim: O'chirilgan o'quvchilarni ham ko'rish uchun QueryBuilder-da withDeleted student uchun ham kerak
+    // TypeORM QueryBuilder-da leftJoinAndSelect + withDeleted birga ishlaydi.
+
+    if (user && user.role !== 'superadmin') {
+      query.andWhere('payment.branchId = :branchId', { branchId: user.branchId });
+    } else if (branchId) {
+      query.andWhere('payment.branchId = :branchId', { branchId });
+    }
 
     if (search) {
-      query.where('student.fullName ILike :search', {
+      query.andWhere('student.fullName ILike :search', {
         search: `%${search}%`,
       });
     }
 
     const [items, total] = await query
       .orderBy('payment.createdAt', 'DESC')
-      .skip((page - 1) * limit)
-      .take(limit)
+      .offset((page - 1) * limit)
+      .limit(limit)
       .getManyAndCount();
 
     const studentGroupPairs = [
@@ -292,12 +309,16 @@ export class PaymentService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: any) {
     const payment = await this.paymentRepo.findOne({
       where: { id },
-      relations: ['student', 'group'],
+      relations: ['student', 'group', 'branch'],
+      withDeleted: true, // student o'chirilgan bo'lsa ham topishi uchun (TypeORM global withDeleted)
     });
     if (!payment) throw new NotFoundException("To'lov topilmadi");
+    if (user && user.role !== 'superadmin' && payment.branch?.id !== user.branchId) {
+      throw new NotFoundException("To'lov topilmadi");
+    }
 
     const totalPaidResult = await this.paymentRepo
       .createQueryBuilder('p')
@@ -330,12 +351,17 @@ export class PaymentService {
     };
   }
 
-  async getReceiptData(paymentId: string) {
+  async getReceiptData(paymentId: string, user: any) {
     const payment = await this.paymentRepo.findOne({
       where: { id: paymentId },
-      relations: ['student', 'group'],
+      relations: ['student', 'group', 'branch'],
+      withDeleted: true,
     });
     if (!payment) throw new NotFoundException("To'lov topilmadi");
+    if (!payment.student) throw new BadRequestException("Talaba ma'lumoti topilmadi (butkul o'chirilgan)");
+    if (user && user.role !== 'superadmin' && payment.branch?.id !== user.branchId) {
+      throw new NotFoundException("To'lov topilmadi");
+    }
 
     const discount = await this.discountRepo.findOne({
       where: {
@@ -363,9 +389,9 @@ export class PaymentService {
       receiptNumber: payment.id.split('-')[0].toUpperCase(),
       date: payment.createdAt.toLocaleString('sv-SE'),
       student: {
-        fullName: payment.student.fullName,
-        phone: payment.student.phone,
-        currentBalance: payment.student.balance,
+        fullName: payment.student?.fullName || "Arxivlangan talaba",
+        phone: payment.student?.phone || "",
+        currentBalance: payment.student?.balance || 0,
       },
       group: {
         name: payment.group.name,
@@ -384,12 +410,15 @@ export class PaymentService {
     };
   }
 
-  async update(id: string, dto: UpdatePaymentDto) {
+  async update(id: string, dto: UpdatePaymentDto, user: any) {
     const payment = await this.paymentRepo.findOne({
       where: { id },
-      relations: ['student', 'group'],
+      relations: ['student', 'group', 'branch'],
     });
     if (!payment) throw new NotFoundException("To'lov topilmadi");
+    if (user && user.role !== 'superadmin' && payment.branch?.id !== user.branchId) {
+      throw new NotFoundException("To'lov topilmadi");
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -452,10 +481,10 @@ export class PaymentService {
 
       // SABABI: Moliyaviy o'zgarish — audit uchun
       this.logger.log(
-        `To'lov yangilandi [id: ${id}] [student: ${payment.student.id}]`,
+        `To'lov yangilandi [id: ${id}] [student: ${payment.student?.id}]`,
       );
 
-      return await this.findOne(id);
+      return await this.findOne(id, user);
     } catch (err) {
       if (queryRunner.isTransactionActive)
         await queryRunner.rollbackTransaction();
@@ -470,12 +499,15 @@ export class PaymentService {
     }
   }
 
-  async remove(id: string) {
+  async remove(id: string, user: any) {
     const payment = await this.paymentRepo.findOne({
       where: { id },
-      relations: ['student', 'group'],
+      relations: ['student', 'group', 'branch'],
     });
     if (!payment) throw new NotFoundException("To'lov topilmadi");
+    if (user && user.role !== 'superadmin' && payment.branch?.id !== user.branchId) {
+      throw new NotFoundException("To'lov topilmadi");
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

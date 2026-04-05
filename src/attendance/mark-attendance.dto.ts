@@ -67,4 +67,20 @@ export class MarkAttendanceDto {
   @ValidateNested({ each: true })
   @Type(() => StudentAttendanceDto)
   students: StudentAttendanceDto[];
+
+  @ApiProperty({
+    example: 41.387065,
+    description: "O'qituvchining hozirgi kenglik koordinatasi (latitude)",
+    required: false,
+  })
+  @IsOptional()
+  latitude?: number;
+
+  @ApiProperty({
+    example: 60.389046,
+    description: "O'qituvchining hozirgi uzunlik koordinatasi (longitude)",
+    required: false,
+  })
+  @IsOptional()
+  longitude?: number;
 }

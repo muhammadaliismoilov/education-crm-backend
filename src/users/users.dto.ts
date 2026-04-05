@@ -72,6 +72,15 @@ export class CreateUserDto {
   @Min(0)
   @Max(100)
   salaryPercentage?: number;
+
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: "Foydalanuvchi biriktiriladigan filial ID si",
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  branchId?: string;
 }
 
 export class UpdateUserDto extends PartialType(CreateUserDto) {

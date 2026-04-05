@@ -109,19 +109,9 @@ export class CronService {
           }
 
           if (bulkUpdates.length > 0) {
-            await queryRunner.manager
-              .createQueryBuilder()
-              .update(Student)
-              .set({
-                balance: () =>
-                  `CASE "id" ${bulkUpdates
-                    .map(({ id, newBalance }) => `WHEN '${id}' THEN ${newBalance}`)
-                    .join(' ')} ELSE "balance" END`,
-              })
-              .where('id IN (:...ids)', {
-                ids: bulkUpdates.map((u) => u.id),
-              })
-              .execute();
+            for (const { id, newBalance } of bulkUpdates) {
+              await queryRunner.manager.update(Student, { id }, { balance: newBalance });
+            }
           }
 
           await queryRunner.commitTransaction();

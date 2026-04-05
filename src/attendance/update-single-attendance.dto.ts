@@ -1,6 +1,6 @@
 // update-single-attendance.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsString, IsUUID, Matches } from 'class-validator';
+import { IsBoolean, IsNotEmpty, IsString, IsUUID, Matches, IsOptional } from 'class-validator';
 
 export class UpdateSingleAttendanceDto {
   @ApiProperty({
@@ -39,4 +39,20 @@ export class UpdateSingleAttendanceDto {
   })
   @IsBoolean()
   isPresent: boolean;
+
+  @ApiProperty({
+    example: 41.387065,
+    description: "O'qituvchining hozirgi kenglik koordinatasi (latitude)",
+    required: false,
+  })
+  @IsOptional()
+  latitude?: number;
+
+  @ApiProperty({
+    example: 60.389046,
+    description: "O'qituvchining hozirgi uzunlik koordinatasi (longitude)",
+    required: false,
+  })
+  @IsOptional()
+  longitude?: number;
 }

@@ -23,11 +23,12 @@ export class RolesGuard implements CanActivate {
     // 3. Request-dan foydalanuvchini olish (JwtAuthGuard buni tayyorlab beradi)
     const { user } = context.switchToHttp().getRequest();
     // 4. Foydalanuvchining roli kerakli rollar orasida bor-yo'qligini tekshirish
-    const hasPermission = user && requiredRoles.includes(user.role);
+    // Superadmin hamma narsaga ruxsat oladi
+    const hasPermission = user && (requiredRoles.includes(user.role) || user.role === UserRole.SUPERADMIN);
 
     if (!hasPermission) {
       throw new ForbiddenException(
-        `❌ Sizda bu amalni bajarishga ruxsat yo‘q. Talab qilingan rollar: ${requiredRoles.join(', ')}. Sizning rolingiz: ${user?.role || 'Noaniq'}`,
+        `Sizda bu amalni bajarishga ruxsat yo‘q. Talab qilingan rollar: ${requiredRoles.join(', ')}. Sizning rolingiz: ${user?.role || 'Noaniq'}`,
       );
     }
 

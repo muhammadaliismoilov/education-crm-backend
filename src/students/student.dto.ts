@@ -180,6 +180,15 @@ export class CreateStudentDto {
     return plainToInstance(DiscountItemDto, parsed);
   })
   discounts?: DiscountItemDto[];
+
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: "Talaba biriktiriladigan filial ID si (Faqat Superadmin uchun)",
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  branchId?: string;
 }
 
 export class UpdateStudentDto extends PartialType(CreateStudentDto) {
@@ -187,6 +196,15 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
   @ApiProperty({ required: false, type: 'string', format: 'binary' })
   @IsOptional()
   photo?: any;
+
+  @ApiProperty({
+    required: false,
+    type: 'boolean',
+    description: "Rasmni o'chirish uchun true yuboring",
+  })
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  removePhoto?: boolean;
 
   @ApiProperty({
     type: [String],
@@ -229,4 +247,13 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
     return plainToInstance(DiscountItemDto, parsed);
   })
   discounts?: DiscountItemDto[];
+
+  @ApiProperty({
+    example: '123e4567-e89b-12d3-a456-426614174000',
+    description: "Talaba biriktiriladigan filial ID si (Faqat Superadmin uchun)",
+    required: false,
+  })
+  @IsUUID()
+  @IsOptional()
+  branchId?: string;
 }

@@ -1,0 +1,210 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  Put,
+  Delete,
+  UseGuards,
+  ParseUUIDPipe,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiBearerAuth,
+  ApiResponse,
+  ApiParam,
+} from '@nestjs/swagger';
+import { BranchesService } from './branches.service';
+import {
+  CreateBranchDto,
+  UpdateBranchDto,
+  CreateBranchWithAdminDto,
+} from './branches.dto';
+import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/guards/roles.decarator';
+import { UserRole } from '../entities/user.entity';
+
+// ─── Reusable examples ───────────────────────────────────────────────────────
+
+const BRANCH_EXAMPLE = {
+  id: 'b8e9b0e2-7649-416b-b2b9-e1ae9d9b02ae',
+  name: 'Tashkent Branch',
+  address: 'Chilonzor tumani, ...',
+  phone: '+998901234567',
+  subdomain: 'tashkent',
+  customDomain: 'tashkent.crm.uz',
+  isActive: true,
+  createdAt: '2026-03-26T10:00:00.000Z',
+  updatedAt: '2026-03-26T10:00:00.000Z',
+  deletedAt: null,
+};
+
+const WRAP = (data: any, statusCode = 200) => ({
+  data,
+  statusCode,
+  timestamp: '2026-03-26 10:00:00',
+});
+
+const NOT_FOUND = (msg = 'Filial topilmadi') => ({
+  statusCode: 404,
+  message: msg,
+  error: 'Not Found',
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+
+@ApiTags('Filiallar (Branches)')
+// @ApiBearerAuth()
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.SUPERADMIN)
+@Controller('branches')
+export class BranchesController {
+  constructor(private readonly branchesService: BranchesService) {}
+
+  @Post()
+  @ApiOperation({
+    summary: 'Yangi filial yaratish',
+    description:
+      'Yangi filial yaratiladi. Faqat Superadmin uchun ruxsat etilgan.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Filial muvaffaqiyatli yaratildi',
+    schema: { example: WRAP(BRANCH_EXAMPLE, 201) },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Bad Request',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: ['name should not be empty'],
+        error: 'Bad Request',
+      },
+    },
+  })
+  create(@Body() createBranchDto: CreateBranchDto) {
+    return this.branchesService.create(createBranchDto);
+  }
+
+  @Post('with-admin')
+  @ApiOperation({
+    summary: 'Yangi filial + Admin birga yaratish',
+    description:
+      'Filial va uning Admin foydalanuvchisi tranzaksiya ichida birga yaratiladi. ' +
+      'Faqat Superadmin uchun ruxsat etilgan.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Filial va admin muvaffaqiyatli yaratildi',
+    schema: {
+      example: WRAP(
+        {
+          branch: BRANCH_EXAMPLE,
+          admin: {
+            id: 'uuid',
+            fullName: 'Alisher Karimov',
+            login: 'testpro_admin',
+            role: 'admin',
+          },
+        },
+        201,
+      ),
+    },
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Login yoki subdomen allaqachon band',
+    schema: {
+      example: {
+        statusCode: 409,
+        message: '"testpro_admin" login allaqachon band',
+        error: 'Conflict',
+      },
+    },
+  })
+  createWithAdmin(@Body() dto: CreateBranchWithAdminDto) {
+    return this.branchesService.createWithAdmin(dto);
+  }
+
+  @Get()
+  @ApiOperation({
+    summary: 'Barcha filiallarni olish',
+    description: "Barcha filiallar ro'yxati qaytariladi.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Filiallar ro'yxati",
+    schema: { example: WRAP([BRANCH_EXAMPLE]) },
+  })
+  findAll() {
+    return this.branchesService.findAll();
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: "Filial ma'lumotlarini olish",
+    description: "ID bo'yicha filial to'liq ma'lumotlari qaytariladi.",
+  })
+  @ApiParam({ name: 'id', description: 'Filial UUID si', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: "Filial to'liq ma'lumotlari",
+    schema: { example: WRAP(BRANCH_EXAMPLE) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Filial topilmadi',
+    schema: { example: NOT_FOUND() },
+  })
+  findOne(@Param('id', ParseUUIDPipe) id: string) {
+    return this.branchesService.findOne(id);
+  }
+
+  @Put(':id')
+  @ApiOperation({
+    summary: 'Filial sozlamalarini tahrirlash',
+  })
+  @ApiParam({ name: 'id', description: 'Filial UUID si', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: 'Filial muvaffaqiyatli yangilandi',
+    schema: { example: WRAP(BRANCH_EXAMPLE) },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Filial topilmadi',
+    schema: { example: NOT_FOUND() },
+  })
+  update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateBranchDto: UpdateBranchDto,
+  ) {
+    return this.branchesService.update(id, updateBranchDto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({
+    summary: "Filialni arxivga o'tkazish (Soft-delete)",
+    description: "Filial o'chirilmaydi, shunchaki arxivlanadi.",
+  })
+  @ApiParam({ name: 'id', description: 'Filial UUID si', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: 'Filial muvaffaqiyatli arxivlandi',
+    schema: {
+      example: WRAP({ message: 'Filial muvaffaqiyatli arxivlandi' }),
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Filial topilmadi',
+    schema: { example: NOT_FOUND() },
+  })
+  remove(@Param('id', ParseUUIDPipe) id: string) {
+    return this.branchesService.remove(id);
+  }
+}

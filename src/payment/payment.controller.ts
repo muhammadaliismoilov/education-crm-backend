@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
   ParseUUIDPipe,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -79,7 +80,7 @@ export class PaymentController {
   // POST /payments
   // ─────────────────────────────────────────────
   @Post()
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "Yangi to'lov yaratish",
     description:
@@ -123,15 +124,15 @@ export class PaymentController {
       },
     },
   })
-  create(@Body() dto: CreatePaymentDto) {
-    return this.paymentService.create(dto);
+  create(@Body() dto: CreatePaymentDto, @Req() req: any) {
+    return this.paymentService.create(dto, req.user);
   }
 
   // ─────────────────────────────────────────────
   // GET /payments
   // ─────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
   @ApiOperation({
     summary: "Barcha to'lovlarni filtrlash va sahifalab olish",
     description: "Talaba ismi bo'yicha qidiruv va sahifalash imkoniyati.",
@@ -142,27 +143,33 @@ export class PaymentController {
     description: "Talaba ismi bo'yicha qidiruv",
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiQuery({ name: 'branchId', required: false, description: "Filial bo'yicha filter (faqat Superadmin uchun)" })
   @ApiResponse({
     status: 200,
     description: "To'lovlar ro'yxati",
     schema: {
       example: WRAP({
-        // TUZATISH: service { items, meta } qaytaradi — items da
-        // coursePrice, paidAmount, isFullyPaid, hasDiscount bor
         items: [PAYMENT_EXAMPLE],
         meta: { totalItems: 50, totalPages: 5, currentPage: 1 },
       }),
     },
   })
-  findAll(@Query('search') search?: string, @Query('page') page?: number) {
-    return this.paymentService.findAll(search, Number(page) || 1);
+  findAll(
+    @Query('search') search?: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Req() req?: any,
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.paymentService.findAll(search, Number(page) || 1, Number(limit) || 10, req.user, branchId);
   }
 
   // ─────────────────────────────────────────────
   // GET /payments/:id/receipt
   // ─────────────────────────────────────────────
   @Get(':id/receipt')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "To'lov cheki ma'lumotlarini olish",
     description:
@@ -174,8 +181,6 @@ export class PaymentController {
     description: "Chek ma'lumotlari",
     schema: {
       example: WRAP({
-        // TUZATISH: service { receiptNumber, date, student, group, payment, centerName }
-        // qaytaradi — avvalgi example to'liq xato edi
         receiptNumber: 'PAY-F6ED',
         date: '2026-03-13 10:00:00',
         student: {
@@ -205,15 +210,15 @@ export class PaymentController {
     description: "To'lov topilmadi",
     schema: { example: NOT_FOUND },
   })
-  async getReceipt(@Param('id', ParseUUIDPipe) id: string) {
-    return this.paymentService.getReceiptData(id);
+  async getReceipt(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.paymentService.getReceiptData(id, req.user);
   }
 
   // ─────────────────────────────────────────────
   // GET /payments/:id
   // ─────────────────────────────────────────────
   @Get(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "Bitta to'lov ma'lumotini olish",
     description: 'student va group relation bilan birga qaytariladi.',
@@ -231,15 +236,15 @@ export class PaymentController {
     description: "To'lov topilmadi",
     schema: { example: NOT_FOUND },
   })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.paymentService.findOne(id);
+  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.paymentService.findOne(id, req.user);
   }
 
   // ─────────────────────────────────────────────
   // PATCH /payments/:id
   // ─────────────────────────────────────────────
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "To'lovni tahrirlash",
     description:
@@ -250,8 +255,6 @@ export class PaymentController {
   @ApiResponse({
     status: 200,
     description: "To'lov muvaffaqiyatli yangilandi",
-    // TUZATISH: update findOne qaytaradi —
-    // { ...payment, coursePrice, paidAmount, isFullyPaid, debt, hasDiscount }
     schema: { example: WRAP(PAYMENT_EXAMPLE) },
   })
   @ApiResponse({
@@ -262,15 +265,16 @@ export class PaymentController {
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdatePaymentDto,
+    @Req() req: any,
   ) {
-    return this.paymentService.update(id, dto);
+    return this.paymentService.update(id, dto, req.user);
   }
 
   // ─────────────────────────────────────────────
   // DELETE /payments/:id
   // ─────────────────────────────────────────────
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "To'lovni o'chirish (bekor qilish)",
     description:
@@ -282,8 +286,6 @@ export class PaymentController {
     description: "To'lov muvaffaqiyatli o'chirildi",
     schema: {
       example: WRAP({
-        // TUZATISH: service { success: true, message: "To'lov o'chirildi va balans to'g'rilandi" }
-        // qaytaradi — avvalgi { message: "To'lov bekor qilindi" } xato edi
         success: true,
         message: "To'lov o'chirildi va balans to'g'rilandi",
       }),
@@ -294,7 +296,7 @@ export class PaymentController {
     description: "To'lov topilmadi",
     schema: { example: NOT_FOUND },
   })
-  remove(@Param('id', ParseUUIDPipe) id: string) {
-    return this.paymentService.remove(id);
+  remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.paymentService.remove(id, req.user);
   }
 }

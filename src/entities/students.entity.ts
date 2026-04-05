@@ -4,6 +4,7 @@ import {
   DeleteDateColumn,
   Entity,
   ManyToMany,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -13,6 +14,7 @@ import { Payment } from './payment.entity';
 import { Attendance } from './attendance.entity';
 import { StudentDiscount } from './studentDiscount';
 import { Invoice } from './invoice.entity';
+import { Branch } from './branch.entity';
 
 export enum DocumentType {
   PASSPORT = 'passport',
@@ -86,6 +88,9 @@ export class Student {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @DeleteDateColumn({ select: false })
+  @DeleteDateColumn()
   deletedAt: Date;
+
+  @ManyToOne(() => Branch, { nullable: true })
+  branch: Branch;
 }

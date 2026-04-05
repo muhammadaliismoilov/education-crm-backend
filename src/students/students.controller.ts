@@ -14,6 +14,7 @@ import {
   BadRequestException,
   DefaultValuePipe,
   ParseIntPipe,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -108,7 +109,7 @@ export class StudentsController {
   // POST /students
   // ─────────────────────────────────────────────
   @Post()
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @UseInterceptors(
     FileInterceptor('photo', {
       storage: diskStorage({
@@ -242,16 +243,17 @@ export class StudentsController {
   })
   async create(
     @Body() dto: CreateStudentDto,
+    @Req() req: any,
     @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.studentsService.create(dto, file);
+    return this.studentsService.create(dto, req.user, file);
   }
 
   // ─────────────────────────────────────────────
   // GET /students
   // ─────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "Barcha talabalar ro'yxati",
     description:
@@ -279,6 +281,7 @@ export class StudentsController {
     example: 10,
     description: 'Sahifadagi yozuvlar soni',
   })
+  @ApiQuery({ name: 'branchId', required: false, description: 'Filial bo\'yicha filter (faqat Superadmin uchun)' })
   @ApiResponse({
     status: 200,
     description: "Talabalar ro'yxati",
@@ -300,8 +303,10 @@ export class StudentsController {
     @Query('groupName') groupName?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page = 1,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit = 10,
+    @Req() req?: any,
+    @Query('branchId') branchId?: string,
   ) {
-    return this.studentsService.findAll(search, groupName, page, limit);
+    return this.studentsService.findAll(search, groupName, page, limit, req.user, branchId);
   }
 
   // ─────────────────────────────────────────────
@@ -352,8 +357,9 @@ export class StudentsController {
     @Query('search') search?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page = 1,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit = 10,
+    @Req() req?: any,
   ) {
-    return this.studentsService.findAllDeleted(search, page, limit);
+    return this.studentsService.findAllDeleted(search, page, limit, req.user);
   }
 
   // ─────────────────────────────────────────────
@@ -378,8 +384,8 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.studentsService.findOne(id);
+  async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.studentsService.findOne(id, req.user);
   }
 
   // ─────────────────────────────────────────────

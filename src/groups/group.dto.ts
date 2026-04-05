@@ -9,6 +9,7 @@ import {
   Min,
   Matches,
   ArrayMinSize,
+  IsOptional,
 } from 'class-validator';
 
 export class CreateGroupDto {
@@ -65,6 +66,15 @@ export class CreateGroupDto {
   })
   @IsUUID()
   teacherId: string;
+
+  @ApiProperty({
+    example: 'branch-uuid',
+    description: "Filial UUID si (Superadmin uchun)",
+    required: false,
+  })
+  @IsOptional()
+  @IsUUID()
+  branchId?: string;
 }
 
 export class UpdateGroupDto extends PartialType(CreateGroupDto) {}

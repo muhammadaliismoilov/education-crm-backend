@@ -131,7 +131,7 @@ export class AttendanceController {
     return this.attendanceService.getAttendanceSheet(
       groupId,
       date,
-      req.user.role,
+      req.user,
     );
   }
 
@@ -175,7 +175,7 @@ export class AttendanceController {
     schema: { example: NOT_FOUND() },
   })
   async markBulk(@Body() dto: MarkAttendanceDto, @Request() req) {
-    return this.attendanceService.markBulk(dto, req.user.role);
+    return this.attendanceService.markBulk(dto, req.user);
   }
 
   // ─────────────────────────────────────────────
@@ -218,7 +218,7 @@ export class AttendanceController {
     schema: { example: NOT_FOUND() },
   })
   async updateSingle(@Body() dto: UpdateSingleAttendanceDto, @Request() req) {
-    return this.attendanceService.updateSingleAttendance(dto, req.user.role);
+    return this.attendanceService.updateSingleAttendance(dto, req.user);
   }
 
   // ─────────────────────────────────────────────
@@ -304,8 +304,9 @@ export class AttendanceController {
   async getMonthlyReport(
     @Query('groupId', ParseUUIDPipe) groupId: string,
     @Query('month') month?: string,
+    @Request() req?: any,
   ) {
-    return this.attendanceService.getGroupMonthlyAttendance(groupId, month);
+    return this.attendanceService.getGroupMonthlyAttendance(groupId, month, req?.user);
   }
 
   // ─────────────────────────────────────────────
@@ -415,14 +416,16 @@ export class AttendanceController {
     schema: { example: NOT_FOUND() },
   })
   async faceVerify(
-    @Body() body: { groupId: string; date: string; base64: string },
+    @Body() body: { groupId: string; date: string; base64: string; latitude?: number; longitude?: number },
     @Request() req,
   ) {
     return this.attendanceService.faceVerifyAttendance(
       body.groupId,
       body.date,
       body.base64,
-      req.user.role,
+      req.user,
+      body.latitude,
+      body.longitude
     );
   }
 }

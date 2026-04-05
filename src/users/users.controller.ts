@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
   ParseUUIDPipe,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -25,6 +26,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../entities/user.entity';
 import { Roles } from '../common/guards/roles.decarator';
+import { UUID } from 'typeorm/driver/mongodb/bson.typings';
 
 // ─── Reusable examples ───────────────────────────────────────────────────────
 
@@ -64,14 +66,14 @@ const CONFLICT = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 @ApiTags('Foydalanuvchilar (Users)')
-@ApiBearerAuth()
+// @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles(UserRole.ADMIN)
+  // @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
   @ApiOperation({
     summary: "Yangi foydalanuvchi qo'shish",
     description: 'Admin tomonidan yangi teacher yoki admin yaratish.',
@@ -117,12 +119,12 @@ export class UsersController {
       },
     },
   })
-  async create(@Body() dto: CreateUserDto) {
-    return await this.usersService.create(dto);
+  async create(@Body() dto: CreateUserDto, @Req() req: any) {
+    return await this.usersService.create(dto, req.user);
   }
 
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.TEACHER)
   @ApiOperation({
     summary: "Foydalanuvchilar ro'yxati",
     description: "Role, ism yoki login bo'yicha qidirish va sahifalash.",
@@ -140,6 +142,7 @@ export class UsersController {
   })
   @ApiQuery({ name: 'page', required: false, type: Number, example: 1 })
   @ApiQuery({ name: 'limit', required: false, type: Number, example: 10 })
+  @ApiQuery({ name: 'branchId', required: false, type: UUID })
   @ApiResponse({
     status: 200,
     description: "Foydalanuvchilar ro'yxati",
@@ -156,12 +159,21 @@ export class UsersController {
     @Query('search') search?: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
+    @Req() req?: any,
+    @Query('branchId') branchId?: string,
   ) {
-    return await this.usersService.findAll(role, search, page, limit);
+    return await this.usersService.findAll(
+      role,
+      search,
+      page,
+      limit,
+      req.user,
+      branchId,
+    );
   }
 
   @Get('all/deleted')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
   @ApiOperation({
     summary: "O'chirilgan foydalanuvchilar ro'yxati",
     description:
@@ -195,8 +207,16 @@ export class UsersController {
     @Query('search') search?: string,
     @Query('page') page: number = 1,
     @Query('limit') limit: number = 10,
+    @Req() req?: any,
+    @Query('branchId') branchId?: string,
   ) {
-    return await this.usersService.findAllDeleted(search, page, limit);
+    return await this.usersService.findAllDeleted(
+      search,
+      page,
+      limit,
+      req.user,
+      branchId,
+    );
   }
 
   @Get(':id')

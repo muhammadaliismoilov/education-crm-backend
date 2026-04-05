@@ -1,10 +1,10 @@
-// dashboard.controller.ts
 import {
   Controller,
   Get,
   Query,
   UseGuards,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,7 +27,7 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: 'Markaziy dashboard statistikasi',
     description:
@@ -78,9 +78,16 @@ export class DashboardController {
       },
     },
   })
+  @ApiQuery({
+    name: 'branchId',
+    required: false,
+    description: "Filial bo'yicha filter (faqat Superadmin uchun)",
+  })
   async getSummary(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Req() req?: any,
+    @Query('branchId') branchId?: string,
   ) {
     const start = startDate
       ? new Date(startDate)
@@ -97,6 +104,6 @@ export class DashboardController {
         "startDate endDate dan katta bo'lishi mumkin emas",
       );
 
-    return this.dashboardService.getSummary(start, end);
+    return this.dashboardService.getSummary(start, end, req.user, branchId);
   }
 }

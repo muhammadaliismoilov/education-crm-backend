@@ -3,6 +3,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -14,7 +15,7 @@ async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
   // Kerakli papkalarni avtomatik yaratish
-  const requiredDirs = ['uploads/students', 'uploads/students/'];
+  const requiredDirs = ['uploads/students'];
   requiredDirs.forEach((dir) => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
@@ -37,6 +38,7 @@ async function bootstrap() {
   });
 
   app.use(cookieParser());
+  app.use(helmet({ contentSecurityPolicy: false }));
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());
 
@@ -52,14 +54,24 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: [
-      'https://crm-oquv-markaz-v2.vercel.app',
-      'https://crm-oquv-markaz.vercel.app',
-      'http://localhost:5173',
-    ],
+    origin: (origin, callback) => {
+      // Ruxsat berilgan originlar:
+      // 1. localhost (development)
+      // 2. *.crm.uz (barcha subdomenlar)
+      // 3. crm.uz (asosiy domen)
+      const allowedPatterns = [
+        /^https?:\/\/localhost(:\d+)?$/,
+        /^https?:\/\/([\w-]+\.)?crm\.uz$/,
+      ];
+      if (!origin || allowedPatterns.some((p) => p.test(origin))) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS: ${origin} ruxsat etilmagan`));
+      }
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
-    allowedHeaders: 'Content-Type, Accept, Authorization',
+    allowedHeaders: 'Content-Type, Accept, Authorization, X-Branch-Subdomain',
   });
 
   const config = new DocumentBuilder()
@@ -76,6 +88,17 @@ async function bootstrap() {
   });
 
   const PORT = process.env.PORT || 3001;
+
+  // Health check endpoint
+  const expressInstance = app.getHttpAdapter().getInstance();
+  expressInstance.get('/health', (req: any, res: any) => {
+    res.status(200).json({
+      status: 'ok',
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+    });
+  });
+
   await app.listen(PORT);
 
   console.log(`🚀 CRM Backend muvaffaqiyatli ishga tushdi!`);

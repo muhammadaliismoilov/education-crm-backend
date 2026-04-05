@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
+import { LoginDto } from './login.dto';
 
 @Injectable()
 export class AuthService {
@@ -16,21 +17,29 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
-  async login(loginDto: any) {
+  async login(loginDto: LoginDto) {
     const user = await this.userRepo.findOne({
       where: { login: loginDto.login },
       select: ['id', 'password', 'role', 'fullName'],
+      relations: ['branch'],
     });
-
-    if (!user || !(await bcrypt.compare(loginDto.password, user.password))) {
-      // SABABI: Muvaffaqiyatsiz login urinishi — xavfsizlik audit uchun
+    if (!user) {
       this.logger.warn(
-        `Muvaffaqiyatsiz login urinishi [login: ${loginDto.login}]`,
+        `Muvaffaqiyatsiz login urinishi - Foydalanuvchi topilmadi [login: ${loginDto.login}]`,
       );
-      throw new UnauthorizedException('Login yoki parol xato!');
+      throw new UnauthorizedException('Login xato!');
     }
 
-    const tokens = await this.getTokens(user.id, user.role);
+    if (!(await bcrypt.compare(loginDto.password, user.password))) {
+      // SABABI: Muvaffaqiyatsiz login urinishi - xavfsizlik audit uchun
+      this.logger.warn(
+        `Muvaffaqiyatsiz login urinishi - Parol noto'g'ri [login: ${loginDto.login}]`,
+      );
+      throw new UnauthorizedException('Parol xato!');
+    }
+
+    const branchId = user.branch ? user.branch.id : null;
+    const tokens = await this.getTokens(user.id, user.role, branchId);
     await this.userRepo.update(user.id, { refreshToken: tokens.refreshToken });
 
     // SABABI: Kim, qachon tizimga kirdi — audit uchun
@@ -40,7 +49,7 @@ export class AuthService {
 
     return {
       ...tokens,
-      user: { id: user.id, fullName: user.fullName, role: user.role },
+      user: { id: user.id, fullName: user.fullName, role: user.role, branchId },
     };
   }
 
@@ -66,6 +75,7 @@ export class AuthService {
     const user = await this.userRepo.findOne({
       where: { id: userId },
       select: ['id', 'role', 'refreshToken', 'fullName'],
+      relations: ['branch'],
     });
 
     if (!user || !user.refreshToken || user.refreshToken !== refreshToken) {
@@ -78,12 +88,13 @@ export class AuthService {
       );
     }
 
-    const tokens = await this.getTokens(user.id, user.role);
+    const branchId = user.branch ? user.branch.id : null;
+    const tokens = await this.getTokens(user.id, user.role, branchId);
     await this.userRepo.update(user.id, { refreshToken: tokens.refreshToken });
 
     return {
       ...tokens,
-      user: { id: user.id, fullName: user.fullName, role: user.role },
+      user: { id: user.id, fullName: user.fullName, role: user.role, branchId },
     };
   }
 
@@ -94,7 +105,11 @@ export class AuthService {
     return { success: true, message: 'Tizimdan muvaffaqiyatli chiqildi' };
   }
 
-  private async getTokens(userId: number | string, role: string) {
+  private async getTokens(
+    userId: number | string,
+    role: string,
+    branchId: string | null,
+  ) {
     // TUZATISH: JWT_SECRET va JWT_REFRESH_SECRET undefined bo'lsa
     // token imzosiz yaratiladi — .env da bo'lmasa darhol xato bersin
     const jwtSecret = this.configService.get<string>('JWT_SECRET');
@@ -106,7 +121,7 @@ export class AuthService {
       throw new Error('JWT secret konfiguratsiyasi topilmadi');
     }
 
-    const payload = { sub: userId, role };
+    const payload = { sub: userId, role, branchId };
 
     const [accessToken, refreshToken] = await Promise.all([
       this.jwtService.signAsync(payload, {

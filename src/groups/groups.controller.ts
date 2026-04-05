@@ -10,6 +10,7 @@ import {
   Query,
   UseGuards,
   ParseUUIDPipe,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -73,7 +74,7 @@ export class GroupsController {
   // POST /groups
   // ─────────────────────────────────────────────
   @Post()
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "Yangi o'quv guruhi yaratish",
     description:
@@ -86,8 +87,6 @@ export class GroupsController {
     schema: {
       example: WRAP(
         {
-          // TUZATISH: create teacher relation yuklamaydi —
-          // faqat { id: teacherId } bo'ladi, fullName yo'q
           ...GROUP_EXAMPLE,
           teacher: { id: 'f6ed8de6-1f66-4f20-b1da-aecd5bc2b5a8' },
         },
@@ -106,15 +105,15 @@ export class GroupsController {
       },
     },
   })
-  create(@Body() dto: CreateGroupDto) {
-    return this.groupsService.create(dto);
+  create(@Body() dto: CreateGroupDto, @Req() req: any) {
+    return this.groupsService.create(dto, req.user);
   }
 
   // ─────────────────────────────────────────────
   // GET /groups
   // ─────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: 'Barcha guruhlarni qidirish va sahifalab olish',
     description:
@@ -126,6 +125,7 @@ export class GroupsController {
     description: "Guruh nomi bo'yicha qidiruv",
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'branchId', required: false, description: 'Filial bo\'yicha filter (faqat Superadmin uchun)' })
   @ApiResponse({
     status: 200,
     description: "Guruhlar ro'yxati",
@@ -134,7 +134,6 @@ export class GroupsController {
         items: [
           {
             ...GROUP_EXAMPLE,
-            // loadRelationCountAndMap bilan qo'shiladi
             studentsCount: 12,
             teacher: TEACHER_EXAMPLE,
           },
@@ -143,8 +142,8 @@ export class GroupsController {
       }),
     },
   })
-  findAll(@Query('search') search?: string, @Query('page') page?: number) {
-    return this.groupsService.findAll(search, Number(page) || 1);
+  findAll(@Query('search') search?: string, @Query('page') page?: number, @Req() req?: any, @Query('branchId') branchId?: string) {
+    return this.groupsService.findAll(search, Number(page) || 1, 10, req.user, branchId);
   }
 
   // ─────────────────────────────────────────────

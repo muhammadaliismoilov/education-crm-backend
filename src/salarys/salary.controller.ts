@@ -10,6 +10,7 @@ import {
   Query,
   Delete,
   Patch,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -122,8 +123,9 @@ export class SalaryController {
   async getAllEstimated(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Req() req?: any,
   ) {
-    return this.salaryService.getEstimatedSalaries(startDate, endDate);
+    return this.salaryService.getEstimatedSalaries(startDate, endDate, req?.user);
   }
 
   // ─────────────────────────────────────────────
@@ -206,11 +208,13 @@ export class SalaryController {
     @Query('teacherId') teacherId: string,
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
+    @Req() req?: any,
   ) {
     return this.salaryService.calculateTeacherSalary(
       teacherId,
       startDate,
       endDate,
+      req?.user
     );
   }
 
@@ -255,8 +259,8 @@ export class SalaryController {
     description: "O'qituvchi topilmadi",
     schema: { example: NOT_FOUND("O'qituvchi topilmadi") },
   })
-  async pay(@Body() dto: PaySalaryDto) {
-    return this.salaryService.paySalary(dto);
+  async pay(@Body() dto: PaySalaryDto, @Req() req?: any) {
+    return this.salaryService.paySalary(dto, req?.user);
   }
 
   // ─────────────────────────────────────────────
@@ -285,8 +289,8 @@ export class SalaryController {
       ),
     },
   })
-  async findAll(@Query('month') month?: string) {
-    return this.salaryService.findAll(month);
+  async findAll(@Query('month') month?: string, @Req() req?: any) {
+    return this.salaryService.findAll(month, req?.user);
   }
 
   // ─────────────────────────────────────────────

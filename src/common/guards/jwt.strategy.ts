@@ -4,15 +4,17 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../entities/user.entity';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     @InjectRepository(User) private userRepo: Repository<User>,
+    private configService: ConfigService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
-        // 1. Headerdan "Bearer <token>" formatida qidirish (Sizning holatingizda shu ishlaydi)
+        // 1. Headerdan "Bearer <token>" formatida qidirish
         ExtractJwt.fromAuthHeaderAsBearerToken(),
         // 2. Cookiedan "access_token" formatida qidirish (Zaxira uchun)
         (request: any) => {
@@ -20,7 +22,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         },
       ]),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_SECRET, 
+      secretOrKey: configService.get<string>('JWT_SECRET'),
     });
   }
 
@@ -28,6 +30,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Payload ichidagi 'sub' (User ID) orqali foydalanuvchini topamiz
     const user = await this.userRepo.findOne({ where: { id: payload.sub } });
     if (!user) throw new UnauthorizedException('Foydalanuvchi topilmadi yoki token xato');
-    return user;
+
+    // MUHIM: JWT payload dan branchId va role ni req.user ga biriktirish
+    // Bu barcha servislar uchun branch filtrlash asosi
+    return {
+      ...user,
+      branchId: payload.branchId ?? null,
+    };
   }
 }

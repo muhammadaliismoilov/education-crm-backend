@@ -1,6 +1,6 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import type { Cache } from 'cache-manager';
 import { Student } from '../entities/students.entity';
@@ -21,8 +21,15 @@ export class DashboardService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  async getSummary(startDate: Date, endDate: Date) {
-    const cacheKey = `dashboard_summary_${startDate.getTime()}_${endDate.getTime()}`;
+  async getSummary(startDate: Date, endDate: Date, user?: any, branchIdFilter?: string) {
+    let branchId = null;
+    if (user && user.role !== 'superadmin') {
+      branchId = user.branchId;
+    } else if (branchIdFilter) {
+      branchId = branchIdFilter;
+    }
+
+    const cacheKey = `dashboard_summary_${startDate.getTime()}_${endDate.getTime()}_${branchId || 'all'}`;
 
     try {
       const cachedData = await this.cacheManager.get(cacheKey);
@@ -31,55 +38,62 @@ export class DashboardService {
       this.logger.warn(`Cache get xatolik [${cacheKey}]: ${e.message}`);
     }
 
+    const paymentQuery = this.paymentRepo
+      .createQueryBuilder('p')
+      .select('SUM(p.amount)', 'total')
+      .where('p.createdAt BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    if (branchId) paymentQuery.andWhere('p.branchId = :branchId', { branchId });
+
+    const studentDebtQuery = this.studentRepo
+      .createQueryBuilder('s')
+      .select('SUM(s.balance)', 'totalDebt')
+      .where('s.balance < 0')
+      .andWhere('s.deletedAt IS NULL');
+    if (branchId) studentDebtQuery.andWhere('s.branchId = :branchId', { branchId });
+
+    const activeStudentsQuery = this.studentRepo
+      .createQueryBuilder('s')
+      .where('s.deletedAt IS NULL');
+    if (branchId) activeStudentsQuery.andWhere('s.branchId = :branchId', { branchId });
+
+    const newStudentsQuery = this.studentRepo
+      .createQueryBuilder('s')
+      .where('s.deletedAt IS NULL')
+      .andWhere('s.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate });
+    if (branchId) newStudentsQuery.andWhere('s.branchId = :branchId', { branchId });
+
+    const attendanceQuery = this.attendanceRepo
+      .createQueryBuilder('a')
+      .select([
+        'COUNT(a.id) as total',
+        'SUM(CASE WHEN a.isPresent = true THEN 1 ELSE 0 END) as present',
+      ])
+      .where('a.createdAt BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    if (branchId) attendanceQuery.andWhere('a.branchId = :branchId', { branchId });
+
+    const groupsQuery = this.groupRepo
+      .createQueryBuilder('g')
+      .where('g.isActive = true');
+    if (branchId) groupsQuery.andWhere('g.branchId = :branchId', { branchId });
+
     const [incomeRes, debtRes, activeStudents, newStudents, attendance, activeGroups] =
       await Promise.all([
-        // Jami daromad (davr ichida)
-        this.paymentRepo
-          .createQueryBuilder('p')
-          .select('SUM(p.amount)', 'total')
-          .where('p.createdAt BETWEEN :start AND :end', {
-            start: startDate,
-            end: endDate,
-          })
-          .getRawOne(),
-
-        // ✅ Jami qarzdorlik — student.balance < 0 (haqiqiy joriy qarz)
-        // Bu eng aniq ma'lumot: har bir to'lov amalga oshirilganda balance yangilanadi
-        this.studentRepo
-          .createQueryBuilder('s')
-          .select('SUM(s.balance)', 'totalDebt')
-          .where('s.balance < 0')
-          .andWhere('s.deletedAt IS NULL')
-          .getRawOne(),
-
-        // Faol talabalar (jami)
-        this.studentRepo.count(),
-
-        // Yangi talabalar (davr ichida)
-        this.studentRepo.countBy({
-          createdAt: Between(startDate, endDate),
-        }),
-
-        // Davomat foizi
-        this.attendanceRepo
-          .createQueryBuilder('a')
-          .select([
-            'COUNT(a.id) as total',
-            'SUM(CASE WHEN a.isPresent = true THEN 1 ELSE 0 END) as present',
-          ])
-          .where('a.createdAt BETWEEN :start AND :end', {
-            start: startDate,
-            end: endDate,
-          })
-          .getRawOne(),
-
-        // Faol guruhlar
-        this.groupRepo.countBy({ isActive: true }),
+        paymentQuery.getRawOne(),
+        studentDebtQuery.getRawOne(),
+        activeStudentsQuery.getCount(),
+        newStudentsQuery.getCount(),
+        attendanceQuery.getRawOne(),
+        groupsQuery.getCount(),
       ]);
 
     const result = {
       totalIncome: Number(incomeRes?.total) || 0,
-      // Math.abs: manfiy sonni musbatga aylantirish (masalan: -1950000 → 1950000)
       totalPending: Math.abs(Number(debtRes?.totalDebt) || 0),
       activeStudents,
       newStudents,

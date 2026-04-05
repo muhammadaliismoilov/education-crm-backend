@@ -1,4 +1,3 @@
-// reports.controller.ts
 import {
   Controller,
   Get,
@@ -6,6 +5,7 @@ import {
   Res,
   UseGuards,
   BadRequestException,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -45,7 +45,7 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
 @Get('finance/yearly')
-@Roles(UserRole.ADMIN)
+@Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
 @ApiOperation({
   summary: 'Yillik moliyaviy tahlil hisoboti',
   description:
@@ -187,7 +187,7 @@ export class ReportsController {
     },
   },
 })
-async getYearlyFinance(@Query('year') yearStr?: string) {
+async getYearlyFinance(@Query('year') yearStr?: string, @Req() req?: any) {
   const currentYear = new Date().getFullYear();
   const year = yearStr ? parseInt(yearStr, 10) : currentYear;
 
@@ -197,13 +197,13 @@ async getYearlyFinance(@Query('year') yearStr?: string) {
     );
   }
 
-  return this.reportsService.getYearlyFinancialOverview(year);
+  return this.reportsService.getYearlyFinancialOverview(year, req?.user);
 }
   // ─────────────────────────────────────────────
   // GET /reports/finance
   // ─────────────────────────────────────────────
   @Get('finance')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: 'Moliyaviy tahlil hisoboti',
     description:
@@ -227,8 +227,6 @@ async getYearlyFinance(@Query('year') yearStr?: string) {
     description: 'Moliyaviy hisobot muvaffaqiyatli qaytarildi',
     schema: {
       example: WRAP({
-        // TUZATISH: service { totalIncome, totalPending, totalTeacherSalaries,
-        // netProfit, currency, generatedAt, period } qaytaradi
         totalIncome: 25000000,
         totalPending: 4800000,
         totalTeacherSalaries: 7200000,
@@ -250,16 +248,17 @@ async getYearlyFinance(@Query('year') yearStr?: string) {
   async getFinance(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Req() req?: any,
   ) {
     const { start, end } = this.validateDates(startDate, endDate);
-    return this.reportsService.getFinancialOverview(start, end);
+    return this.reportsService.getFinancialOverview(start, end, req?.user);
   }
 
   // ─────────────────────────────────────────────
   // GET /reports/export/debtors
   // ─────────────────────────────────────────────
   @Get('export/debtors')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "Qarzdorlar ro'yxatini Excel formatda yuklab olish",
     description:
@@ -281,15 +280,15 @@ async getYearlyFinance(@Query('year') yearStr?: string) {
       },
     },
   })
-  async exportDebtors(@Res() res: express.Response) {
-    return this.reportsService.exportDebtorsToExcel(res);
+  async exportDebtors(@Res() res: express.Response, @Req() req?: any) {
+    return this.reportsService.exportDebtorsToExcel(res, req?.user);
   }
 
   // ─────────────────────────────────────────────
   // GET /reports/teachers-performance
   // ─────────────────────────────────────────────
   @Get('teachers-performance')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "O'qituvchilar samaradorligi hisoboti",
     description:
@@ -359,9 +358,10 @@ async getYearlyFinance(@Query('year') yearStr?: string) {
   async getTeacherPerformance(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Req() req?: any,
   ) {
     const { start, end } = this.validateDates(startDate, endDate);
-    return this.reportsService.getTeacherPerformance(start, end);
+    return this.reportsService.getTeacherPerformance(start, end, req?.user);
   }
 
   // ─────────────────────────────────────────────

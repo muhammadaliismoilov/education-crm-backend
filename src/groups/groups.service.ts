@@ -22,12 +22,13 @@ export class GroupsService {
     @InjectDataSource() private dataSource: DataSource,
   ) {}
 
-  async create(dto: CreateGroupDto) {
+  async create(dto: CreateGroupDto, user: any) {
     await this.checkTeacherAvailability(dto.teacherId, dto.days, dto.startTime);
 
     const group = this.groupRepo.create({
       ...dto,
       teacher: { id: dto.teacherId },
+      branch: dto.branchId ? { id: dto.branchId } : (user.role !== 'superadmin' ? { id: user.branchId } : null),
     });
 
     const saved = await this.groupRepo.save(group);
@@ -40,11 +41,18 @@ export class GroupsService {
     return saved;
   }
 
-  async findAll(search?: string, page = 1, limit = 10) {
+  async findAll(search?: string, page = 1, limit = 10, user?: any, branchId?: string) {
     const query = this.groupRepo
       .createQueryBuilder('group')
       .leftJoinAndSelect('group.teacher', 'teacher')
+      .leftJoinAndSelect('group.branch', 'branch')
       .loadRelationCountAndMap('group.studentsCount', 'group.students');
+
+    if (user && user.role !== 'superadmin') {
+      query.andWhere('group.branchId = :branchId', { branchId: user.branchId });
+    } else if (branchId) {
+      query.andWhere('group.branchId = :branchId', { branchId });
+    }
 
     if (search) {
       query.andWhere('group.name ILike :search', { search: `%${search}%` });
@@ -89,6 +97,7 @@ export class GroupsService {
 
     Object.assign(group, dto);
     if (dto.teacherId) group.teacher = { id: dto.teacherId } as any;
+    if (dto.branchId) group.branch = { id: dto.branchId } as any;
 
     const saved = await this.groupRepo.save(group);
 

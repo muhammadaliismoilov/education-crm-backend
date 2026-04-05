@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Student } from './students.entity';
 import { Group } from './group.entity';
+import { Branch } from './branch.entity';
 
 @Entity('student_discounts')
 export class StudentDiscount {
@@ -33,4 +34,7 @@ export class StudentDiscount {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @ManyToOne(() => Branch, { nullable: true })
+  branch: Branch;
 }
