@@ -53,15 +53,15 @@ async function bootstrap() {
     }),
   );
 
-  const clientOrigin =
+  const clientOriginConfig =
     process.env.CLIENT_ORIGIN || 'https://crm-oquv-markaz.vercel.app';
+  const allowedOrigins = clientOriginConfig.split(',').map(o => o.trim());
 
   app.enableCors({
     origin: (origin, callback) => {
       // Senior Level CORS: Faqatgina tasdiqlangan origin'larga ruxsat beramiz.
-      // 1. Production frontend
+      // 1. Production frontend (yoki bir nechta domen vergul bilan yozilgan bo'lsa)
       // 2. Localhost (development uchun)
-      const allowedOrigins = [clientOrigin];
       const isLocalhost =
         origin &&
         (origin.startsWith('http://localhost') ||
