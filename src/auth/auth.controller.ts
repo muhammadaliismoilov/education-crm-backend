@@ -103,7 +103,8 @@ export class AuthController {
     const { accessToken, refreshToken, user } =
       await this.authService.login(loginDto);
     this.setCookies(res, accessToken, refreshToken);
-    return { message: 'Xush kelibsiz!', user };
+    // Tokenlarni Cookie'ga qo'shib JSON formatda ham qaytaramiz (Frontend Third-Party xatosi oldini olish uchun)
+    return { message: 'Xush kelibsiz!', user, accessToken, refreshToken };
   }
 
   // ─────────────────────────────────────────────
@@ -170,7 +171,7 @@ export class AuthController {
     } = await this.authService.refreshTokens(refreshToken);
 
     this.setCookies(res, accessToken, newRefreshToken);
-    return { user };
+    return { user, accessToken, refreshToken: newRefreshToken };
   }
 
   // ─────────────────────────────────────────────
