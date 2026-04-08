@@ -55,7 +55,7 @@ async function bootstrap() {
 
   const clientOriginConfig =
     process.env.CLIENT_ORIGIN || 'https://crm-oquv-markaz.vercel.app';
-  const allowedOrigins = clientOriginConfig.split(',').map(o => o.trim());
+  const allowedOrigins = clientOriginConfig.split(',').map((o) => o.trim());
 
   app.enableCors({
     origin: (origin, callback) => {
@@ -67,7 +67,16 @@ async function bootstrap() {
         (origin.startsWith('http://localhost') ||
           origin.startsWith('http://127.0.0.1'));
 
-      if (!origin || allowedOrigins.includes(origin) || isLocalhost) {
+      const isVpsOrDomain =
+        origin &&
+        (origin.includes('bar-bers.uz') || origin.includes('31.128.45.119'));
+
+      if (
+        !origin ||
+        allowedOrigins.includes(origin) ||
+        isLocalhost ||
+        isVpsOrDomain
+      ) {
         callback(null, true);
       } else {
         callback(new Error(`CORS: ${origin} bloklandi (Senior Security)`));
