@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Student } from '../entities/students.entity';
+import { Invoice } from '../entities/invoice.entity';
 import { DataSource, Repository } from 'typeorm';
 
 const CHUNK_SIZE = 100;
@@ -55,52 +56,69 @@ export class CronService {
 
         try {
           const bulkUpdates: { id: string; newBalance: number }[] = [];
+          const invoicesToInsert: any[] = [];
 
           for (const student of students) {
-            if (!student.enrolledGroups || student.enrolledGroups.length === 0) {
+            if (
+              !student.enrolledGroups ||
+              student.enrolledGroups.length === 0
+            ) {
               totalSkipped++;
               continue;
             }
 
-            const totalMonthlyPrice = student.enrolledGroups.reduce(
-              (sum, g) => {
-                const discount = student.discounts?.find(
-                  (d) => d.group?.id === g.id,
-                );
-                return (
-                  sum +
-                  (discount
-                    ? Number(discount.customPrice)
-                    : Number(g.price || 0))
-                );
-              },
-              0,
-            );
+            let studentMonthlyCharge = 0;
 
-            if (totalMonthlyPrice === 0) {
+            for (const g of student.enrolledGroups) {
+              const discount = student.discounts?.find(
+                (d) => d.group?.id === g.id,
+              );
+              const effectivePrice = discount
+                ? Number(discount.customPrice)
+                : Number(g.price || 0);
+
+              if (effectivePrice > 0) {
+                studentMonthlyCharge += effectivePrice;
+                invoicesToInsert.push({
+                  amount: effectivePrice,
+                  type: 'monthly_fee',
+                  student: { id: student.id },
+                  group: { id: g.id },
+                });
+              }
+            }
+
+            if (studentMonthlyCharge === 0) {
               totalSkipped++;
               continue;
             }
 
             const currentBalance = Number(student.balance || 0);
-            const newBalance = currentBalance - totalMonthlyPrice;
+            const newBalance = currentBalance - studentMonthlyCharge;
             bulkUpdates.push({ id: student.id, newBalance });
           }
 
+          if (invoicesToInsert.length > 0) {
+            // Chunks for bulk insert to avoid query limits
+            for (let i = 0; i < invoicesToInsert.length; i += 100) {
+              const chunk = invoicesToInsert.slice(i, i + 100);
+              await queryRunner.manager
+                .createQueryBuilder()
+                .insert()
+                .into(Invoice)
+                .values(chunk)
+                .execute();
+            }
+          }
+
           if (bulkUpdates.length > 0) {
-            await queryRunner.manager
-              .createQueryBuilder()
-              .update(Student)
-              .set({
-                balance: () =>
-                  `CASE "id" ${bulkUpdates
-                    .map(({ id, newBalance }) => `WHEN '${id}' THEN ${newBalance}`)
-                    .join(' ')} ELSE "balance" END`,
-              })
-              .where('id IN (:...ids)', {
-                ids: bulkUpdates.map((u) => u.id),
-              })
-              .execute();
+            for (const { id, newBalance } of bulkUpdates) {
+              await queryRunner.manager.update(
+                Student,
+                { id },
+                { balance: newBalance },
+              );
+            }
           }
 
           await queryRunner.commitTransaction();

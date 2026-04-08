@@ -92,10 +92,22 @@ export class FaceService implements OnModuleInit {
   }
 
   getSimilarity(desc1: number[], desc2: number[]): number {
+    if (!desc1 || !desc2 || desc1.length === 0 || desc2.length === 0) return 0;
+
     const d1 = new Float32Array(desc1.map(Number));
     const d2 = new Float32Array(desc2.map(Number));
+
     const distance = faceapi.euclideanDistance(d1, d2);
-    const similarity = Math.max(0, Math.round((1 - distance / 0.7) * 100));
+
+    // Odatda face-api.js da 0.6 dan past masofa bitta odam deb hisoblanadi.
+    // Biz 0.6 ni 0% oxshashlik nuqtasi qilib belgilaymiz (yani qat'iyroq).
+    // Masofa qancha kichik bo'lsa, similarity shuncha yuqori bo'ladi.
+    const threshold = 0.6;
+    const similarity = Math.max(
+      0,
+      Math.round((1 - distance / threshold) * 100),
+    );
+
     return similarity;
   }
 }

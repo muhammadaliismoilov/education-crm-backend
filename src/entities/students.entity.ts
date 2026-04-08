@@ -3,7 +3,9 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  Index,
   ManyToMany,
+  ManyToOne,
   OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
@@ -12,6 +14,8 @@ import { Group } from './group.entity';
 import { Payment } from './payment.entity';
 import { Attendance } from './attendance.entity';
 import { StudentDiscount } from './studentDiscount';
+import { Invoice } from './invoice.entity';
+import { Branch } from './branch.entity';
 
 export enum DocumentType {
   PASSPORT = 'passport',
@@ -23,9 +27,11 @@ export class Student {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
   @Column()
   fullName: string;
 
+  @Index({ unique: true })
   @Column({ unique: true })
   phone: string;
 
@@ -46,6 +52,7 @@ export class Student {
   @Column({ unique: true, nullable: true })
   documentNumber: string; // Seriya va raqam birga: 'AB1234567'
 
+  @Index({ unique: true, where: 'pinfl IS NOT NULL' })
   @Column({ unique: true, length: 14, nullable: true })
   pinfl: string; // 14 xonali JSHSHIR - bu eng aniq identifikator
 
@@ -73,6 +80,9 @@ export class Student {
   @OneToMany(() => Payment, (payment) => payment.student)
   payments: Payment[];
 
+  @OneToMany(() => Invoice, (invoice) => invoice.student)
+  invoices: Invoice[];
+
   @OneToMany(() => Attendance, (attendance) => attendance.student)
   attendances: Attendance[];
 
@@ -82,6 +92,9 @@ export class Student {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @DeleteDateColumn({ select: false })
+  @DeleteDateColumn()
   deletedAt: Date;
+
+  @ManyToOne(() => Branch, { nullable: true })
+  branch: Branch;
 }

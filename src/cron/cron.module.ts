@@ -4,12 +4,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CronService } from './cron.service';
 import { Student } from '../entities/students.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
-
+import { Invoice } from '../entities/invoice.entity';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Student,StudentDiscount]),
-  ],
+  imports: [TypeOrmModule.forFeature([Student, StudentDiscount, Invoice])],
   providers: [CronService],
   exports: [CronService], // Agar boshqa modullarda kerak bo'lsa
 })

@@ -15,6 +15,7 @@ import { Attendance } from './attendance.entity';
 import { Payment } from './payment.entity';
 import { Student } from './students.entity';
 import { StudentDiscount } from './studentDiscount';
+import { Branch } from './branch.entity';
 
 @Entity('groups')
 export class Group {
@@ -67,4 +68,7 @@ export class Group {
 
   @DeleteDateColumn({ select: false })
   deletedAt: Date;
+
+  @ManyToOne(() => Branch, { nullable: true })
+  branch: Branch;
 }

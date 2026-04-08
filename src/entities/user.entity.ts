@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   OneToMany,
+  ManyToOne,
   UpdateDateColumn,
   CreateDateColumn,
   BeforeInsert,
@@ -12,9 +13,11 @@ import {
 import * as bcrypt from 'bcrypt';
 import { Group } from './group.entity';
 import { SalaryPayout } from './salaryPayout.entity';
+import { Branch } from './branch.entity';
 
 // Faqat xodimlar rollari qoldi
 export enum UserRole {
+  SUPERADMIN = 'superadmin',
   ADMIN = 'admin',
   TEACHER = 'teacher',
 }
@@ -39,6 +42,9 @@ export class User {
   @Column({ type: 'enum', enum: UserRole, default: UserRole.TEACHER })
   role: UserRole;
 
+  @ManyToOne(() => Branch, (branch) => branch.users, { nullable: true })
+  branch: Branch;
+
   @Column({ type: 'int', nullable: true })
   salaryPercentage: number; // Faqat o'qituvchilar uchun foiz stavkasi
 
@@ -57,7 +63,7 @@ export class User {
   @UpdateDateColumn()
   updatedAt: Date;
 
-  @DeleteDateColumn({ select: false })
+  @DeleteDateColumn()
   deletedAt: Date;
 
   // --- Hooks ---

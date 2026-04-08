@@ -25,7 +25,7 @@ export class SalaryService {
   ) {}
 
   // 1. BARCHA O'QITUVCHILAR OYLIGI
-  async getEstimatedSalaries(startDate?: string, endDate?: string) {
+  async getEstimatedSalaries(startDate?: string, endDate?: string, user?: any) {
     const now = new Date();
     const start =
       startDate ??
@@ -36,8 +36,13 @@ export class SalaryService {
         .toISOString()
         .split('T')[0];
 
+    const query: any = { role: UserRole.TEACHER };
+    if (user && user.role !== UserRole.SUPERADMIN) {
+      query.branch = { id: user.branchId };
+    }
+
     const teachers = await this.userRepo.find({
-      where: { role: UserRole.TEACHER },
+      where: query,
     });
 
     const report: any[] = [];
@@ -82,9 +87,15 @@ export class SalaryService {
     teacherId: string,
     startDate: string,
     endDate: string,
+    user?: any,
   ) {
+    const query: any = { id: teacherId, role: UserRole.TEACHER };
+    if (user && user.role !== UserRole.SUPERADMIN) {
+      query.branch = { id: user.branchId };
+    }
+
     const teacher = await this.userRepo.findOne({
-      where: { id: teacherId, role: UserRole.TEACHER },
+      where: query,
       relations: ['teachingGroups'],
     });
 
@@ -141,7 +152,7 @@ export class SalaryService {
       if (!studentsByGroup.has(row.groupId)) {
         studentsByGroup.set(row.groupId, []);
       }
-      studentsByGroup.get(row.groupId)!.push(row);
+      studentsByGroup.get(row.groupId).push(row);
     }
 
     const months = this.getMonthsInRange(startDate, endDate);
@@ -186,9 +197,7 @@ export class SalaryService {
         const monthStart = new Date(year, month - 1, 1);
         const monthEnd = new Date(year, month, 0);
         const rangeStart =
-          new Date(startDate) > monthStart
-            ? new Date(startDate)
-            : monthStart;
+          new Date(startDate) > monthStart ? new Date(startDate) : monthStart;
         const rangeEnd =
           new Date(endDate) < monthEnd ? new Date(endDate) : monthEnd;
 
@@ -213,10 +222,10 @@ export class SalaryService {
         );
 
         for (const student of students) {
+          const rawCustom =
+            student.customPrice !== null ? Number(student.customPrice) : 0;
           const effectivePrice =
-            student.customPrice !== null
-              ? Number(student.customPrice)
-              : Number(student.groupPrice);
+            rawCustom > 0 ? rawCustom : Number(student.groupPrice);
 
           const perLessonRate = effectivePrice / monthLessons;
           const attendanceCount = monthAttMap.get(student.studentId) || 0;
@@ -299,14 +308,17 @@ export class SalaryService {
   }
 
   // 3. OYLIK TO'LASH
-  async paySalary(dto: PaySalaryDto) {
-    const { teacherId, month, amount } = dto;
+  async paySalary(dto: PaySalaryDto, user?: any) {
+    const { teacherId, month, amount, startDate, endDate } = dto;
 
-    // TUZATISH: Teacher mavjudligini oldin tekshirish —
-    // transaction ichida NotFoundException chiqsa rollback ishlaydi,
-    // lekin transaction ochmasdan oldin tekshirish aniqroq va tezroq
+    const query: any = { id: teacherId, role: UserRole.TEACHER };
+    if (user && user.role !== UserRole.SUPERADMIN) {
+      query.branch = { id: user.branchId };
+    }
+
     const teacher = await this.userRepo.findOne({
-      where: { id: teacherId, role: UserRole.TEACHER },
+      where: query,
+      relations: ['branch'],
     });
     if (!teacher) throw new NotFoundException("O'qituvchi topilmadi");
 
@@ -316,18 +328,25 @@ export class SalaryService {
 
     try {
       const existing = await queryRunner.manager.findOne(SalaryPayout, {
-        where: { teacher: { id: teacherId }, forMonth: month },
+        where: {
+          teacher: { id: teacherId },
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+        },
       });
 
       if (existing)
         throw new BadRequestException(
-          "Bu oy uchun oylik allaqachon to'langan",
+          "Ushbu sana oralig'i uchun oylik allaqachon to'langan",
         );
 
       const payout = queryRunner.manager.create(SalaryPayout, {
         amount,
         forMonth: month,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
         teacher: { id: teacherId },
+        branch: teacher.branch ? { id: teacher.branch.id } : null,
       });
 
       const saved = await queryRunner.manager.save(payout);
@@ -338,7 +357,7 @@ export class SalaryService {
         `Oylik to'landi [teacher: ${teacherId}] [oy: ${month}] [summa: ${amount}]`,
       );
 
-      return { message: "Oylik muvaffaqiyatli saqlandi", payout: saved };
+      return { message: 'Oylik muvaffaqiyatli saqlandi', payout: saved };
     } catch (err) {
       await queryRunner.rollbackTransaction();
       // SABABI: Moliyaviy xatolik — rollback bo'lganini logga yozish
@@ -353,14 +372,21 @@ export class SalaryService {
   }
 
   // 4. BARCHA TO'LANGAN OYLIKLAR
-  async findAll(searchMonth?: string) {
+  async findAll(searchMonth?: string, user?: any) {
     const query = this.payoutRepo
       .createQueryBuilder('payout')
+      .withDeleted()
       .leftJoinAndSelect('payout.teacher', 'teacher')
       .orderBy('payout.createdAt', 'DESC');
 
+    if (user && user.role !== UserRole.SUPERADMIN) {
+      query.andWhere('payout.branchId = :branchId', {
+        branchId: user.branchId,
+      });
+    }
+
     if (searchMonth) {
-      query.where('payout.forMonth = :month', { month: searchMonth });
+      query.andWhere('payout.forMonth = :month', { month: searchMonth });
     }
 
     return await query.getMany();
@@ -371,6 +397,7 @@ export class SalaryService {
     const payout = await this.payoutRepo.findOne({
       where: { id },
       relations: ['teacher'],
+      withDeleted: true,
     });
     if (!payout) throw new NotFoundException("Oylik to'lovi topilmadi");
     return payout;

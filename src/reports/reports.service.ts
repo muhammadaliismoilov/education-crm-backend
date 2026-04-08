@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Inject,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -32,13 +28,15 @@ export class ReportsService {
     @InjectRepository(Payment) private paymentRepo: Repository<Payment>,
     @InjectRepository(Group) private groupRepo: Repository<Group>,
     @InjectRepository(User) private userRepo: Repository<User>,
-    private salaryService: SalaryService,
     @InjectRepository(Attendance)
+    private attendanceRepo: Repository<Attendance>,
+    private salaryService: SalaryService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  async getYearlyFinancialOverview(year: number) {
-    const cacheKey = `finance_yearly_${year}`;
+  async getYearlyFinancialOverview(year: number, user?: any) {
+    const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
+    const cacheKey = `finance_yearly_${year}_${branchId || 'all'}`;
 
     try {
       const cached = await this.cacheManager.get(cacheKey);
@@ -51,18 +49,20 @@ export class ReportsService {
     const end = new Date(`${year}-12-31T23:59:59.999Z`);
 
     // ─── 1. DAROMAD - oylar bo'yicha ─────────────────────────────────
-    const incomeByMonth = await this.paymentRepo
+    const incomeQuery = this.paymentRepo
       .createQueryBuilder('p')
       .select([
         `EXTRACT(MONTH FROM p."createdAt") AS month`,
         `SUM(CAST(p.amount AS DECIMAL))    AS "totalIncome"`,
       ])
-      .where(`p."createdAt" BETWEEN :start AND :end`, { start, end })
+      .where(`p."createdAt" BETWEEN :start AND :end`, { start, end });
+    if (branchId) incomeQuery.andWhere('p.branchId = :branchId', { branchId });
+    const incomeByMonth = await incomeQuery
       .groupBy(`EXTRACT(MONTH FROM p."createdAt")`)
       .getRawMany();
 
     // ─── 2. QARZDORLIK - oylar bo'yicha ──────────────────────────────
-    const debtsByMonth = await this.paymentRepo
+    const debtQuery = this.paymentRepo
       .createQueryBuilder('p')
       .leftJoin('p.student', 's')
       .leftJoin('p.group', 'g')
@@ -75,19 +75,23 @@ export class ReportsService {
         `EXTRACT(MONTH FROM p."createdAt")                          AS month`,
         `s.id                                                        AS "studentId"`,
         `g.id                                                        AS "groupId"`,
-        `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL))       AS "effectivePrice"`,
+        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END AS "effectivePrice"`,
         `SUM(CAST(p.amount AS DECIMAL))                             AS "totalPaid"`,
       ])
       .where(`p."createdAt" BETWEEN :start AND :end`, { start, end })
-      .andWhere('s.id IS NOT NULL')
+      .andWhere('s.id IS NOT NULL');
+    if (branchId) debtQuery.andWhere('p.branchId = :branchId', { branchId });
+    const debtsByMonth = await debtQuery
       .groupBy(
         `EXTRACT(MONTH FROM p."createdAt"), s.id, g.id, sd."customPrice", g.price`,
       )
       .getRawMany();
 
     // ─── 3. O'QITUVCHILAR OYLIKLARINI - oylar bo'yicha ───────────────
+    const teacherQuery: any = { role: UserRole.TEACHER };
+    if (branchId) teacherQuery.branch = { id: branchId };
     const teachers = await this.userRepo.find({
-      where: { role: UserRole.TEACHER },
+      where: teacherQuery,
     });
 
     const monthlyNames = [
@@ -200,15 +204,16 @@ export class ReportsService {
   }
 
   // ─────────────────────────────────────────────
-  // 1. MOLIYAVIY TAHLIL
+  // 1. MOLIYAVIY TAHLIL (Kunlik va Oylik)
   // ─────────────────────────────────────────────
-  async getFinancialOverview(startDate: Date, endDate: Date) {
+  async getFinancialOverview(startDate: Date, endDate: Date, user?: any) {
+    const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
     const start = new Date(startDate);
     start.setUTCHours(0, 0, 0, 0);
     const end = new Date(endDate);
     end.setUTCHours(23, 59, 59, 999);
 
-    const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}`;
+    const cacheKey = `finance_overview_${start.getTime()}_${end.getTime()}_${branchId || 'all'}`;
 
     try {
       const cached = await this.cacheManager.get(cacheKey);
@@ -217,20 +222,27 @@ export class ReportsService {
       this.logger.warn(`Cache get xatolik [${cacheKey}]: ${e.message}`);
     }
 
-    const paymentsData = await this.paymentRepo
+    // 1. Kunlik daromad (Income by day)
+    const incomeQuery = this.paymentRepo
       .createQueryBuilder('p')
-      .leftJoinAndSelect('p.group', 'g')
-      .leftJoinAndSelect('p.student', 's')
-      .where('p."createdAt" BETWEEN :start AND :end', { start, end })
-      .getMany();
+      .select([
+        "TO_CHAR(p.createdAt AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM-DD') AS date",
+        'SUM(CAST(p.amount AS DECIMAL)) AS income',
+      ])
+      .where('p."createdAt" BETWEEN :start AND :end', { start, end });
+    if (branchId) incomeQuery.andWhere('p.branchId = :branchId', { branchId });
+    const dailyIncomeRaw = await incomeQuery
+      .groupBy(
+        "TO_CHAR(p.createdAt AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM-DD')",
+      )
+      .getRawMany();
 
-    const totalIncome = paymentsData.reduce(
-      (sum, p) => sum + Number(p.amount || 0),
-      0,
+    const incomeMap = new Map(
+      dailyIncomeRaw.map((r) => [r.date, Number(r.income || 0)]),
     );
 
-    // ✅ TUZATILDI: date filter qo'shildi
-    const allDebts = await this.paymentRepo
+    // 2. Qarzdorlik (Pending amount)
+    const debtQuery = this.paymentRepo
       .createQueryBuilder('p')
       .leftJoin('p.student', 's')
       .leftJoin('p.group', 'g')
@@ -242,11 +254,13 @@ export class ReportsService {
       .select([
         's.id                                                  AS "studentId"',
         'g.id                                                  AS "groupId"',
-        `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL)) AS "effectivePrice"`,
+        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END AS "effectivePrice"`,
         'SUM(CAST(p.amount AS DECIMAL))                       AS "totalPaid"',
       ])
-      .where('p."createdAt" BETWEEN :start AND :end', { start, end }) // ✅
-      .andWhere('s.id IS NOT NULL')
+      .where('p."createdAt" BETWEEN :start AND :end', { start, end })
+      .andWhere('s.id IS NOT NULL');
+    if (branchId) debtQuery.andWhere('p.branchId = :branchId', { branchId });
+    const allDebts = await debtQuery
       .groupBy('s.id, g.id, sd."customPrice", g.price')
       .getRawMany();
 
@@ -259,23 +273,19 @@ export class ReportsService {
       }
     }
 
-    const teachers = await this.userRepo.find({
-      where: { role: UserRole.TEACHER },
-    });
+    // 3. O'qituvchilar oyligi (Salaries)
+    const teacherQuery: any = { role: UserRole.TEACHER };
+    if (branchId) teacherQuery.branch = { id: branchId };
+    const teachers = await this.userRepo.find({ where: teacherQuery });
 
     const startStr = start.toISOString().split('T')[0];
     const endStr = end.toISOString().split('T')[0];
 
     const salaryResults = await Promise.all(
-      teachers.map((teacher) =>
+      teachers.map((t) =>
         this.salaryService
-          .calculateTeacherSalary(teacher.id, startStr, endStr)
-          .catch((e) => {
-            this.logger.warn(
-              `Oylik hisoblashda xatolik [teacher: ${teacher.id}]: ${e.message}`,
-            );
-            return { totalSalary: 0 };
-          }),
+          .calculateTeacherSalary(t.id, startStr, endStr)
+          .catch(() => ({ totalSalary: 0 })),
       ),
     );
 
@@ -284,13 +294,17 @@ export class ReportsService {
       0,
     );
 
-    const netProfit = totalIncome - totalTeacherSalaries;
-
+    // 4. O'qituvchilar joriy oyi uchun jami oyliklarni summaryda ko'rsatamiz
     const result = {
-      totalIncome,
+      totalIncome: Math.round(
+        Array.from(incomeMap.values()).reduce((a, b) => a + b, 0),
+      ),
       totalPending,
-      totalTeacherSalaries,
-      netProfit,
+      totalTeacherSalaries: Math.round(totalTeacherSalaries),
+      netProfit: Math.round(
+        Array.from(incomeMap.values()).reduce((a, b) => a + b, 0) -
+          totalTeacherSalaries,
+      ),
       currency: "so'm",
       generatedAt: new Date(),
       period: { from: start, to: end },
@@ -308,8 +322,9 @@ export class ReportsService {
   // ─────────────────────────────────────────────
   // 2. QARZDORLAR EXCEL EXPORT
   // ─────────────────────────────────────────────
-  async exportDebtorsToExcel(res: express.Response) {
-    const rawDebts = await this.studentRepo.manager
+  async exportDebtorsToExcel(res: express.Response, user?: any) {
+    const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
+    const rawQuery = this.studentRepo.manager
       .createQueryBuilder()
       .select([
         's.id                                                        AS "studentId"',
@@ -317,7 +332,7 @@ export class ReportsService {
         's.phone                                                     AS "phone"',
         'g.id                                                        AS "groupId"',
         'g.name                                                      AS "groupName"',
-        `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL))        AS "groupPrice"`,
+        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END AS "groupPrice"`,
         `COALESCE(SUM(CAST(p.amount AS DECIMAL)), 0)                 AS "totalPaid"`,
       ])
       .from('students', 's')
@@ -329,12 +344,14 @@ export class ReportsService {
         'sd."studentId" = s.id AND sd."groupId" = g.id',
       )
       .leftJoin('payments', 'p', 'p."studentId" = s.id AND p."groupId" = g.id')
-      .where('s."deletedAt" IS NULL')
+      .where('s."deletedAt" IS NULL');
+    if (branchId) rawQuery.andWhere('s."branchId" = :branchId', { branchId });
+    const rawDebts = await rawQuery
       .groupBy(
         's.id, s.fullName, s.phone, g.id, g.name, sd."customPrice", g.price',
       )
       .having(
-        `COALESCE(sd."customPrice", CAST(g.price AS DECIMAL)) > COALESCE(SUM(CAST(p.amount AS DECIMAL)), 0)`,
+        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END > COALESCE(SUM(CAST(p.amount AS DECIMAL)), 0)`,
       )
       .orderBy('s.fullName', 'ASC')
       .getRawMany();
@@ -394,15 +411,14 @@ export class ReportsService {
       debt: `${totalDebt.toLocaleString()} so'm`,
     }).font = { bold: true };
 
-    const totalRow = worksheet.lastRow!;
+    const totalRow = worksheet.lastRow;
     totalRow.fill = {
       type: 'pattern',
       pattern: 'solid',
       fgColor: { argb: 'F9EBEA' },
     };
 
-    const today = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
-    const fileName = `Qarzdorlar_${today}.xlsx`;
+    const fileName = `Qarzdorlar_${new Date().toISOString().split('T')[0]}.xlsx`;
 
     res.setHeader(
       'Content-Type',
@@ -417,13 +433,14 @@ export class ReportsService {
   // ─────────────────────────────────────────────
   // 3. O'QITUVCHILAR SAMARADORLIGI
   // ─────────────────────────────────────────────
-  async getTeacherPerformance(startDate: Date, endDate: Date) {
+  async getTeacherPerformance(startDate: Date, endDate: Date, user?: any) {
+    const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
     const end = new Date(endDate);
     end.setHours(23, 59, 59, 999);
 
-    const cacheKey = `teacher_performance_${start.getTime()}_${end.getTime()}`;
+    const cacheKey = `teacher_performance_${start.getTime()}_${end.getTime()}_${branchId || 'all'}`;
 
     try {
       const cached = await this.cacheManager.get(cacheKey);
@@ -432,7 +449,7 @@ export class ReportsService {
       this.logger.warn(`Cache get xatolik [${cacheKey}]: ${e.message}`);
     }
 
-    const attendanceData = await this.groupRepo
+    const attQuery = this.groupRepo
       .createQueryBuilder('g')
       .leftJoin('g.teacher', 't')
       .leftJoin('g.attendances', 'a', 'a.date BETWEEN :start AND :end', {
@@ -447,7 +464,9 @@ export class ReportsService {
         'COUNT(DISTINCT a.date)                               AS total_lessons',
         'SUM(CASE WHEN a.isPresent = true THEN 1 ELSE 0 END) AS attended_count',
       ])
-      .where('t.id IS NOT NULL')
+      .where('t.id IS NOT NULL');
+    if (branchId) attQuery.andWhere('g.branchId = :branchId', { branchId });
+    const attendanceData = await attQuery
       .groupBy('t.id, t.fullName, g.id, g.name')
       .getRawMany();
 

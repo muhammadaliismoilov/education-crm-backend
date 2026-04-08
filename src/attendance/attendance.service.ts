@@ -28,7 +28,7 @@ export class AttendanceService {
   ) {}
 
   private checkLessonTime(group: Group, role: UserRole): void {
-    if (role === UserRole.ADMIN) return;
+    if (role === UserRole.ADMIN || role === UserRole.SUPERADMIN) return;
 
     const rawStart = group.startTime?.includes('-')
       ? group.startTime.split('-')[0].trim()
@@ -62,7 +62,67 @@ export class AttendanceService {
     }
   }
 
-  async getAttendanceSheet(groupId: string, date: string, role: UserRole) {
+  private calculateDistance(
+    lat1: number,
+    lon1: number,
+    lat2: number,
+    lon2: number,
+  ): number {
+    const R = 6371e3; // Yer radiusi metrlarda
+    const phi1 = (lat1 * Math.PI) / 180;
+    const phi2 = (lat2 * Math.PI) / 180;
+    const deltaPhi = ((lat2 - lat1) * Math.PI) / 180;
+    const deltaLambda = ((lon2 - lon1) * Math.PI) / 180;
+
+    const a =
+      Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+      Math.cos(phi1) *
+        Math.cos(phi2) *
+        Math.sin(deltaLambda / 2) *
+        Math.sin(deltaLambda / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c;
+  }
+
+  private checkLocation(
+    group: Group,
+    user: any,
+    incomingLat?: number,
+    incomingLon?: number,
+  ): void {
+    if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN)
+      return;
+    if (user.role !== UserRole.TEACHER) return;
+
+    const branch = group.branch;
+    if (!branch) return;
+
+    if (!branch.latitude || !branch.longitude) {
+      return; // Agar filialda koordinatalar kiritilmagan bo'lsa, tekshirmaymiz
+    }
+
+    if (!incomingLat || !incomingLon) {
+      throw new ForbiddenException(
+        "Yo'qlama qilish uchun joylashuvingizni taqdim etishingiz shart (O'qituvchilar uchun)",
+      );
+    }
+
+    const distance = this.calculateDistance(
+      Number(branch.latitude),
+      Number(branch.longitude),
+      incomingLat,
+      incomingLon,
+    );
+
+    if (distance > 50) {
+      throw new ForbiddenException(
+        `Siz O'quv markazdan juda uzoqdasiz. Markazgacha masofa: ${Math.round(distance)} metr. Ruxsat etilgan masofa: 50 metr.`,
+      );
+    }
+  }
+
+  async getAttendanceSheet(groupId: string, date: string, user: any) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new BadRequestException(
         "Sana formati noto'g'ri. To'g'ri format: YYYY-MM-DD",
@@ -71,31 +131,48 @@ export class AttendanceService {
 
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
-      relations: ['students'],
+      relations: ['students', 'branch'],
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
-    this.checkLessonTime(group, role);
+    if (
+      user.role !== UserRole.SUPERADMIN &&
+      group.branch?.id !== user.branchId
+    ) {
+      throw new ForbiddenException(
+        "Sizda ushbu guruh davomatini ko'rish huquqi yo'q",
+      );
+    }
+
+    this.checkLessonTime(group, user.role);
 
     const existingAttendance = await this.attendanceRepo.find({
       where: { group: { id: groupId }, date },
       relations: ['student'],
     });
 
-    const paidStudentsCount = group.students.filter(
-      (s) => s.balance > 0,
+    const activeStudents = (group.students || []).filter(
+      (s) => s && !s.deletedAt,
+    );
+
+    const paidStudentsCount = activeStudents.filter(
+      (s) => s && Number(s.balance) > 0,
     ).length;
 
-    const studentsList = group.students.map((student) => {
-      const att = existingAttendance.find((a) => a.student.id === student.id);
-      return {
-        studentId: student.id,
-        fullName: student.fullName,
-        isPresent: att ? att.isPresent : true,
-        balance: student.balance,
-        hasPaid: student.balance > 0,
-      };
-    });
+    const studentsList = activeStudents
+      .filter((student) => student != null)
+      .map((student) => {
+        const att = existingAttendance.find(
+          (a) => a.student?.id === student.id,
+        );
+        return {
+          studentId: student.id,
+          fullName: student.fullName,
+          isPresent: att ? att.isPresent : null,
+          balance: student.balance,
+          hasPaid: Number(student.balance) > 0,
+        };
+      });
 
     return {
       groupInfo: {
@@ -104,13 +181,13 @@ export class AttendanceService {
         startTime: group.startTime,
         endTime: group.endTime,
         paidStudentsCount,
-        totalStudents: group.students.length,
+        totalStudents: activeStudents.length,
       },
       students: studentsList,
     };
   }
 
-  async markBulk(dto: MarkAttendanceDto, role: UserRole) {
+  async markBulk(dto: MarkAttendanceDto, user: any) {
     const { groupId, date, students } = dto;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -119,10 +196,36 @@ export class AttendanceService {
       );
     }
 
-    const group = await this.groupRepo.findOne({ where: { id: groupId } });
+    const group = await this.groupRepo.findOne({
+      where: { id: groupId },
+      relations: ['branch', 'students'],
+    });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
-    this.checkLessonTime(group, role);
+    if (
+      user.role !== UserRole.SUPERADMIN &&
+      group.branch?.id !== user.branchId
+    ) {
+      throw new ForbiddenException(
+        "Sizda ushbu guruhga davomat qilish huquqi yo'q",
+      );
+    }
+
+    this.checkLessonTime(group, user.role);
+    this.checkLocation(group, user, dto.latitude, dto.longitude);
+
+    const activeStudentIds = new Set(
+      (group.students || []).filter((s) => s && !s.deletedAt).map((s) => s.id),
+    );
+
+    const invalidStudentId = students.find(
+      (s) => !activeStudentIds.has(s.studentId),
+    );
+    if (invalidStudentId) {
+      throw new BadRequestException(
+        'Davomat faqat guruhdagi aktiv talabalar uchun saqlanishi mumkin',
+      );
+    }
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -137,9 +240,13 @@ export class AttendanceService {
       const records = students.map((s) =>
         this.attendanceRepo.create({
           date,
-          isPresent: s.isPresent,
+          isPresent:
+            s.isPresent === null || s.isPresent === undefined
+              ? false
+              : s.isPresent,
           group: { id: groupId },
           student: { id: s.studentId },
+          branch: group.branch ? { id: group.branch.id } : null,
         }),
       );
 
@@ -166,13 +273,35 @@ export class AttendanceService {
     }
   }
 
-  async updateSingleAttendance(dto: UpdateSingleAttendanceDto, role: UserRole) {
+  async updateSingleAttendance(dto: UpdateSingleAttendanceDto, user: any) {
     const { groupId, date, studentId, isPresent } = dto;
 
-    const group = await this.groupRepo.findOne({ where: { id: groupId } });
+    const group = await this.groupRepo.findOne({
+      where: { id: groupId },
+      relations: ['branch', 'students'],
+    });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
-    this.checkLessonTime(group, role);
+    if (
+      user.role !== UserRole.SUPERADMIN &&
+      group.branch?.id !== user.branchId
+    ) {
+      throw new ForbiddenException(
+        "Sizda ushbu guruh davomatini tahrirlash huquqi yo'q",
+      );
+    }
+
+    this.checkLessonTime(group, user.role);
+    this.checkLocation(group, user, dto.latitude, dto.longitude);
+
+    const isActiveInGroup = (group.students || []).some(
+      (s) => s.id === studentId && !s.deletedAt,
+    );
+    if (!isActiveInGroup) {
+      throw new BadRequestException(
+        'Davomat faqat guruhdagi aktiv talabalar uchun tahrirlanadi',
+      );
+    }
 
     let attendance = await this.attendanceRepo.findOne({
       where: { group: { id: groupId }, date, student: { id: studentId } },
@@ -186,6 +315,7 @@ export class AttendanceService {
         date,
         student: { id: studentId },
         isPresent,
+        branch: group.branch ? { id: group.branch.id } : null,
       });
     }
 
@@ -196,7 +326,9 @@ export class AttendanceService {
     groupId: string,
     date: string,
     base64: string,
-    role: UserRole,
+    user: any,
+    latitude?: number,
+    longitude?: number,
   ) {
     if (!base64 || !base64.startsWith('data:image')) {
       throw new BadRequestException(
@@ -211,14 +343,26 @@ export class AttendanceService {
 
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
-      relations: ['students'],
+      relations: ['students', 'branch'],
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
-    this.checkLessonTime(group, role);
+    if (
+      user.role !== UserRole.SUPERADMIN &&
+      group.branch?.id !== user.branchId
+    ) {
+      throw new ForbiddenException(
+        "Sizda ushbu guruhda yuz orqali davomat qilish huquqi yo'q",
+      );
+    }
 
-    const studentsWithFace = group.students.filter(
-      (s) => s.faceDescriptor && s.faceDescriptor.length === 128,
+    this.checkLessonTime(group, user.role);
+    this.checkLocation(group, user, latitude, longitude);
+    // ... (rest as before)
+
+    const studentsWithFace = (group.students || []).filter(
+      (s) =>
+        !s.deletedAt && s.faceDescriptor && s.faceDescriptor.length === 128,
     );
 
     if (studentsWithFace.length === 0) {
@@ -315,7 +459,7 @@ export class AttendanceService {
     };
   }
 
-  async getGroupMonthlyAttendance(groupId: string, month?: string) {
+  async getGroupMonthlyAttendance(groupId: string, month?: string, user?: any) {
     if (month && !/^\d{4}-\d{2}$/.test(month)) {
       throw new BadRequestException(
         "Month formati noto'g'ri. To'g'ri format: YYYY-MM (masalan: 2026-02)",
@@ -329,16 +473,27 @@ export class AttendanceService {
 
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
-      relations: ['students'],
+      relations: ['students', 'branch'],
       order: { students: { fullName: 'ASC' } },
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
+
+    if (
+      user &&
+      user.role !== UserRole.SUPERADMIN &&
+      group.branch?.id !== user.branchId
+    ) {
+      throw new ForbiddenException(
+        "Sizda ushbu guruhning oyma-oy davomatini ko'rish huquqi yo'q",
+      );
+    }
 
     const attendanceRecords = await this.attendanceRepo
       .createQueryBuilder('attendance')
       .leftJoinAndSelect('attendance.student', 'student')
       .leftJoinAndSelect('attendance.group', 'group')
       .where('attendance.groupId = :groupId', { groupId })
+      .andWhere('student.deletedAt IS NULL')
       .andWhere('attendance.date >= :startDate', { startDate })
       .andWhere('attendance.date < :endDate', { endDate })
       .orderBy('attendance.date', 'ASC')
@@ -366,7 +521,11 @@ export class AttendanceService {
       }
     });
 
-    const reportData = group.students.map((student) => {
+    const activeStudents = (group.students || []).filter(
+      (s) => s && !s.deletedAt,
+    );
+
+    const reportData = activeStudents.map((student) => {
       let totalPresent = 0;
       const dailyStatus: Record<string, number | null> = {};
 
@@ -395,7 +554,7 @@ export class AttendanceService {
       groupInfo: {
         id: group.id,
         name: group.name,
-        totalStudents: group.students.length,
+        totalStudents: activeStudents.length,
       },
       month: targetMonth,
       columns: distinctColumns,

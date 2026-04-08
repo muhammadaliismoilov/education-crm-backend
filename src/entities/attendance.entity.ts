@@ -8,6 +8,7 @@ import {
 } from 'typeorm';
 import { Group } from './group.entity';
 import { Student } from './students.entity';
+import { Branch } from './branch.entity';
 
 @Entity('attendances')
 export class Attendance {
@@ -23,7 +24,9 @@ export class Attendance {
   @ManyToOne(() => Group, (group) => group.attendances, { onDelete: 'CASCADE' })
   group: Group;
 
-  @ManyToOne(() => Student, (student) => student.attendances, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Student, (student) => student.attendances, {
+    onDelete: 'CASCADE',
+  })
   student: Student;
 
   @CreateDateColumn()
@@ -31,4 +34,7 @@ export class Attendance {
 
   @UpdateDateColumn()
   updatedAt: Date;
+
+  @ManyToOne(() => Branch, { nullable: true })
+  branch: Branch;
 }

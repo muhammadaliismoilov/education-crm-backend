@@ -35,9 +35,24 @@ export class PaySalaryDto {
     minimum: 1,
   })
   @IsNumber()
-  @Min(1, { message: "To'lov miqdori 0 dan katta bo'lishi kerak" })
   // TUZATISH: @Min(0) → @Min(1) — 0 so'm to'lov mantiqsiz
   amount: number;
+
+  @ApiProperty({
+    example: '2026-03-01',
+    description: 'Hisoblash boshlangan sana (YYYY-MM-DD)',
+  })
+  @IsString()
+  @IsNotEmpty()
+  startDate: string;
+
+  @ApiProperty({
+    example: '2026-03-31',
+    description: 'Hisoblash tugagan sana (YYYY-MM-DD)',
+  })
+  @IsString()
+  @IsNotEmpty()
+  endDate: string;
 }
 
 export class UpdateSalaryDto {
