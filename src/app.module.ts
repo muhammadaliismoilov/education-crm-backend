@@ -43,7 +43,7 @@ import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
       useFactory: (configService: ConfigService) => ({
         type: 'postgres',
         host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
+        port: parseInt(configService.get<string>('DB_PORT'), 10),
         username: configService.get<string>('DB_USER'),
         password: configService.get<string>('DB_PASS'),
         database: configService.get<string>('DB_NAME'),
