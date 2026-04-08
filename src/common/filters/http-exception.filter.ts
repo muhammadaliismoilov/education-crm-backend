@@ -29,10 +29,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const res = exception.getResponse();
       message = typeof res === 'object' ? res['message'] : res;
     } else {
-      // SENIOR: Ma'lumotlarni yashirish (Sanitize) - DB xatolarini "Internal server error" bilan almashtiraman
-      // Ammo asil xato loglarni o'qish uchun terminalda ko'rinib turishi kerak
-      message =
-        "Internal server error yuz berdi. Iltimos keyinroq urinib ko'ring.";
+      // DEBUG: Temporarily exposing error stack for debugging
+      message = exception instanceof Error ? exception.stack : 'Unknown Error: ' + String(exception);
     }
 
     // 3. Terminalda (Log) xatoni to'liq ko'rish (Stack trace bilan)
