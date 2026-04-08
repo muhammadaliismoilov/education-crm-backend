@@ -87,14 +87,17 @@ export class StudentsService {
     return { start, end };
   }
 
-  private async recalculateStudentBalance(studentId: string): Promise<void> {
-    const paidRow = await this.dataSource.manager
+  private async recalculateStudentBalance(
+    queryRunner: any,
+    studentId: string,
+  ): Promise<void> {
+    const paidRow = await queryRunner.manager
       .createQueryBuilder(Payment, 'p')
       .select('SUM(CAST(p.amount AS DECIMAL))', 'totalPaid')
       .where('p.studentId = :studentId', { studentId })
       .getRawOne();
 
-    const invoicedRow = await this.dataSource.manager
+    const invoicedRow = await queryRunner.manager
       .createQueryBuilder(Invoice, 'i')
       .select('SUM(CAST(i.amount AS DECIMAL))', 'totalInvoiced')
       .where('i.studentId = :studentId', { studentId })
@@ -103,7 +106,8 @@ export class StudentsService {
     const totalPaid = Number(paidRow?.totalPaid || 0);
     const totalInvoiced = Number(invoicedRow?.totalInvoiced || 0);
 
-    await this.studentRepo.update(
+    await queryRunner.manager.update(
+      Student,
       { id: studentId },
       { balance: totalPaid - totalInvoiced },
     );
@@ -154,11 +158,16 @@ export class StudentsService {
       faceDescriptor = await this.verifyFace(file);
     }
 
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    let finalPhotoPath: string | null = null; // SENIOR: Garbage Collector (Orphan fayllar uchun)
+
     try {
       const { groupIds, pinfl, documentNumber, discounts, ...studentData } =
         dto;
 
-      const existing = await this.studentRepo.findOne({
+      const existing = await queryRunner.manager.findOne(Student, {
         where: [
           { phone: dto.phone },
           ...(pinfl ? [{ pinfl }] : []),
@@ -181,14 +190,16 @@ export class StudentsService {
           );
       }
 
-      const groups = await this.groupRepo.findBy({ id: In(groupIds) });
+      const groups = await queryRunner.manager.findBy(Group, {
+        id: In(groupIds),
+      });
       if (groups.length !== groupIds.length) {
         throw new NotFoundException(
           'Bir yoki bir nechta tanlangan guruhlar topilmadi',
         );
       }
 
-      const student = this.studentRepo.create({
+      const student = queryRunner.manager.create(Student, {
         fullName: studentData.fullName,
         phone: studentData.phone,
         parentName: studentData.parentName,
@@ -208,12 +219,13 @@ export class StudentsService {
             : { id: user.branchId },
       });
 
-      let saved = await this.studentRepo.save(student);
+      let saved = await queryRunner.manager.save(Student, student);
       this.logger.log(
         `Yangi talaba yaratildi [id: ${saved.id}] [tel: ${saved.phone}]`,
       );
 
-      // Discountlarni saqlash
+      // SENIOR: Batch Insert for Discounts (N+1 muammosi hal qilindi)
+      const discountsToSave: StudentDiscount[] = [];
       if (discounts && discounts.length > 0) {
         for (const discountDto of discounts) {
           const { groupId, customPrice } = discountDto;
@@ -231,20 +243,25 @@ export class StudentsService {
               "Narx 0 dan kichik bo'lishi mumkin emas",
             );
 
-          const newDiscount = this.discountRepo.create({
-            student: { id: saved.id },
-            group: { id: groupId },
-            customPrice,
-          });
-          await this.discountRepo.save(newDiscount);
+          discountsToSave.push(
+            queryRunner.manager.create(StudentDiscount, {
+              student: { id: saved.id },
+              group: { id: groupId },
+              customPrice,
+            }),
+          );
+        }
+        if (discountsToSave.length > 0) {
+          await queryRunner.manager.save(StudentDiscount, discountsToSave);
           this.logger.log(
-            `Imtiyoz saqlandi [student: ${saved.id}] [group: ${groupId}] [narx: ${customPrice}]`,
+            `Imtiyozlar Batch saqlandi: jami ${discountsToSave.length} ta`,
           );
         }
       }
 
-      // Invoice (Birinchi oylik to'lovni yozish)
+      // SENIOR: Batch Insert for Invoices
       let initialBalanceDebt = 0;
+      const invoicesToSave: Invoice[] = [];
       for (const group of groups) {
         const discount = discounts?.find((d) => d.groupId === group.id);
         const effectivePrice =
@@ -253,20 +270,25 @@ export class StudentsService {
             : Number(group.price || 0);
 
         if (effectivePrice > 0) {
-          const invoice = this.dataSource.manager.create(Invoice, {
-            amount: effectivePrice,
-            type: 'monthly_fee',
-            student: { id: saved.id },
-            group: { id: group.id },
-          });
-          await this.dataSource.manager.save(invoice);
+          invoicesToSave.push(
+            queryRunner.manager.create(Invoice, {
+              amount: effectivePrice,
+              type: 'monthly_fee',
+              student: { id: saved.id },
+              group: { id: group.id },
+            }),
+          );
           initialBalanceDebt += effectivePrice;
         }
       }
 
+      if (invoicesToSave.length > 0) {
+        await queryRunner.manager.save(Invoice, invoicesToSave);
+      }
+
       if (initialBalanceDebt > 0) {
         saved.balance = -initialBalanceDebt;
-        saved = await this.studentRepo.save(saved);
+        saved = await queryRunner.manager.save(Student, saved);
         this.logger.log(
           `Birinchi oylik qarzlar belgilandi: -${initialBalanceDebt} [student: ${saved.id}]`,
         );
@@ -274,13 +296,22 @@ export class StudentsService {
 
       if (file && faceDescriptor) {
         saved.photoUrl = this.movePhoto(file, saved.id);
+        finalPhotoPath = saved.photoUrl; // Agar pastda commit qulab tushsa o'chirish uchun belgilash
         saved.faceDescriptor = faceDescriptor;
-        saved = await this.studentRepo.save(saved);
+        saved = await queryRunner.manager.save(Student, saved);
       }
 
+      await queryRunner.commitTransaction();
+
+      // Transaction tashqarisida findOne chaqiramiz (o'qish xavfsiz)
       return await this.findOne(saved.id);
     } catch (error) {
-      this.deleteFileIfExists(file?.path);
+      await queryRunner.rollbackTransaction();
+      this.deleteFileIfExists(file?.path); // Temp faylni o'chirish
+      if (finalPhotoPath) {
+        this.deleteFileIfExists(finalPhotoPath); // SENIOR: Orphan faylni majburiy tozalash
+      }
+
       if (
         error instanceof ConflictException ||
         error instanceof NotFoundException ||
@@ -292,11 +323,14 @@ export class StudentsService {
         throw new ConflictException(
           "Ma'lumotlar bazasida takrorlanish yuz berdi.",
         );
+
       this.logger.error(
         `Talaba yaratishda xatolik [tel: ${dto.phone}]`,
         error.stack,
       );
       throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
 
@@ -399,8 +433,15 @@ export class StudentsService {
       faceDescriptor = await this.verifyFace(file);
     }
 
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    let oldPhotoToDeleteOnSuccess: string | null = null;
+    let newPhotoToDeleteOnRollback: string | null = null;
+
     try {
-      const student = await this.studentRepo.findOne({
+      const student = await queryRunner.manager.findOne(Student, {
         where: { id },
         relations: ['enrolledGroups', 'branch'],
       });
@@ -431,11 +472,10 @@ export class StudentsService {
         this.logger.warn(
           `Filialni o'zgartirishga urinish rad etildi: Foydalanuvchi [${user.id}]`,
         );
-        // branchId'ni e'tiborsiz qoldiramiz
       }
 
       if (phone?.trim() || pinfl?.trim() || documentNumber?.trim()) {
-        const conflictCheck = await this.studentRepo.findOne({
+        const conflictCheck = await queryRunner.manager.findOne(Student, {
           where: [
             ...(phone?.trim() ? [{ phone }] : []),
             ...(pinfl?.trim() ? [{ pinfl }] : []),
@@ -462,7 +502,9 @@ export class StudentsService {
       let newGroupsToCharge: Group[] = [];
       let needsBalanceRecalc = false;
       if (groupIds && groupIds.length > 0) {
-        const groups = await this.groupRepo.findBy({ id: In(groupIds) });
+        const groups = await queryRunner.manager.findBy(Group, {
+          id: In(groupIds),
+        });
         if (groups.length !== groupIds.length)
           throw new NotFoundException(
             'Bir yoki bir nechta tanlangan guruhlar topilmadi',
@@ -508,6 +550,14 @@ export class StudentsService {
         student.birthDate = new Date(updateData.birthDate);
 
       if (discounts && discounts.length > 0) {
+        const existingDiscounts = await queryRunner.manager.find(
+          StudentDiscount,
+          {
+            where: { student: { id } },
+            relations: ['group'],
+          },
+        );
+
         for (const discountDto of discounts) {
           const { groupId, customPrice } = discountDto;
           const isInGroup = student.enrolledGroups.some(
@@ -516,18 +566,18 @@ export class StudentsService {
           if (!isInGroup)
             throw new BadRequestException('Talaba bu guruhda emas!');
 
-          const group = await this.groupRepo.findOne({
+          const group = await queryRunner.manager.findOne(Group, {
             where: { id: groupId },
           });
           if (!group) throw new NotFoundException('Guruh topilmadi');
 
-          const existing = await this.discountRepo.findOne({
-            where: { student: { id }, group: { id: groupId } },
-          });
+          const existing = existingDiscounts.find(
+            (d) => d.group?.id === groupId,
+          );
 
           if (customPrice === null || customPrice === undefined) {
             if (existing) {
-              await this.discountRepo.remove(existing);
+              await queryRunner.manager.remove(StudentDiscount, existing);
               this.logger.log(
                 `Imtiyoz bekor qilindi [student: ${id}] [group: ${groupId}]`,
               );
@@ -544,18 +594,15 @@ export class StudentsService {
 
             if (existing) {
               existing.customPrice = customPrice;
-              await this.discountRepo.save(existing);
+              await queryRunner.manager.save(StudentDiscount, existing);
             } else {
-              const newDiscount = this.discountRepo.create({
+              const newDiscount = queryRunner.manager.create(StudentDiscount, {
                 student: { id },
                 group: { id: groupId },
                 customPrice,
               });
-              await this.discountRepo.save(newDiscount);
+              await queryRunner.manager.save(StudentDiscount, newDiscount);
             }
-            this.logger.log(
-              `Imtiyoz yangilandi [student: ${id}] [group: ${groupId}] [narx: ${customPrice}]`,
-            );
           }
         }
       }
@@ -563,6 +610,17 @@ export class StudentsService {
       // Yangi qo'shilgan guruhlar uchun initial invoice
       if (newGroupsToCharge.length > 0) {
         const { start, end } = this.getCurrentMonthBounds();
+        const existingInvoices = await queryRunner.manager.find(Invoice, {
+          where: {
+            student: { id },
+            type: 'monthly_fee',
+            createdAt: Between(start, end),
+          },
+          relations: ['group'],
+        });
+
+        const invoicesToSave: Invoice[] = [];
+
         for (const group of newGroupsToCharge) {
           const discount = discounts?.find((d) => d.groupId === group.id);
           const effectivePrice =
@@ -571,61 +629,72 @@ export class StudentsService {
               : Number(group.price || 0);
 
           if (effectivePrice > 0) {
-            const existingThisMonth = await this.dataSource.manager.findOne(
-              Invoice,
-              {
-                where: {
+            const hasExisting = existingInvoices.some(
+              (i) => i.group?.id === group.id,
+            );
+            if (!hasExisting) {
+              invoicesToSave.push(
+                queryRunner.manager.create(Invoice, {
+                  amount: effectivePrice,
+                  type: 'monthly_fee',
                   student: { id },
                   group: { id: group.id },
-                  type: 'monthly_fee',
-                  createdAt: Between(start, end),
-                },
-              },
-            );
-
-            if (!existingThisMonth) {
-              const invoice = this.dataSource.manager.create(Invoice, {
-                amount: effectivePrice,
-                type: 'monthly_fee',
-                student: { id },
-                group: { id: group.id },
-              });
-              await this.dataSource.manager.save(invoice);
+                }),
+              );
               needsBalanceRecalc = true;
             }
           }
         }
-      }
 
-      // SENIOR APPROACH: Photo & Biometric Integrity
-      // 1. Agar rasm butunlay o'chirilsa
-      if (dto.removePhoto === true) {
-        if (student.photoUrl) {
-          this.deleteFileIfExists(student.photoUrl);
-          student.photoUrl = null;
-          student.faceDescriptor = null;
-          this.logger.log(
-            `Rasm va biometrik ma'lumotlar o'chirildi [student: ${id}]`,
-          );
+        if (invoicesToSave.length > 0) {
+          await queryRunner.manager.save(Invoice, invoicesToSave);
         }
       }
-      // 2. Agar yangi rasm yuklansa (bundan avvalgi logika bilan birga)
-      else if (file && faceDescriptor) {
-        student.photoUrl = this.movePhoto(file, id, student.photoUrl);
+
+      // SENIOR APPROACH: Photo & Biometric Integrity Safe replacement
+      if (dto.removePhoto === true && student.photoUrl) {
+        oldPhotoToDeleteOnSuccess = student.photoUrl;
+        student.photoUrl = null;
+        student.faceDescriptor = null;
+        this.logger.log(
+          `Rasm va biometrikani o'chirish tayyorlandi [student: ${id}]`,
+        );
+      } else if (file && faceDescriptor) {
+        oldPhotoToDeleteOnSuccess = student.photoUrl || null;
+        // eski rasmni hozirgidan o'chirmaymiz (null beramiz), success bo'lsa keyin o'chiramiz
+        student.photoUrl = this.movePhoto(file, id, null);
+        newPhotoToDeleteOnRollback = student.photoUrl; // xato bo'lsa shuni o'chiramiz
         student.faceDescriptor = faceDescriptor;
         this.logger.log(
           `Rasm va biometrik ma'lumotlar yangilandi [student: ${id}]`,
         );
       }
 
-      const saved = await this.studentRepo.save(student);
+      const saved = await queryRunner.manager.save(Student, student);
       if (needsBalanceRecalc) {
-        await this.recalculateStudentBalance(saved.id);
+        await this.recalculateStudentBalance(queryRunner, saved.id);
       }
+
+      // Xavfsiz Tranzaksiyani Yakunlash
+      await queryRunner.commitTransaction();
+
+      // Endi SQL bazada saqlanish muvaffaqiyatli o'tgandan keyin eski rasmni jismonan o'chiramiz
+      if (oldPhotoToDeleteOnSuccess) {
+        this.deleteFileIfExists(oldPhotoToDeleteOnSuccess);
+      }
+
       this.logger.log(`Talaba muvaffaqiyatli yangilandi [id: ${id}]`);
-      return await this.findOne(saved.id);
+      return await this.findOne(saved.id, user);
     } catch (error) {
       this.deleteFileIfExists(file?.path);
+
+      await queryRunner.rollbackTransaction();
+
+      // Rollback bo'lganida yangi yuklangan rasmni darhol tozalash (Orphan Collector)
+      if (newPhotoToDeleteOnRollback) {
+        this.deleteFileIfExists(newPhotoToDeleteOnRollback);
+      }
+
       if (
         error instanceof ConflictException ||
         error instanceof NotFoundException ||
@@ -637,8 +706,11 @@ export class StudentsService {
         throw new ConflictException(
           "Ma'lumotlar bazasida takrorlanish yuz berdi",
         );
+
       this.logger.error(`Talaba yangilashda xatolik [id: ${id}]`, error.stack);
       throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
 
