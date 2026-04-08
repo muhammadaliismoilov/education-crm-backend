@@ -6,12 +6,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, In } from 'typeorm';
+import { DataSource, Repository, In, Between } from 'typeorm';
 import { DocumentType, Student } from '../entities/students.entity';
 import { Group } from '../entities/group.entity';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { Invoice } from '../entities/invoice.entity';
+import { Payment } from '../entities/payment.entity';
 import { FaceService } from '../common/faceId/faceId.service';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -71,6 +72,47 @@ export class StudentsService {
     };
   }
 
+  private getCurrentMonthBounds(): { start: Date; end: Date } {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+    return { start, end };
+  }
+
+  private async recalculateStudentBalance(
+    queryRunner: any,
+    studentId: string,
+  ): Promise<void> {
+    const paidRow = await queryRunner.manager
+      .createQueryBuilder(Payment, 'p')
+      .select('SUM(CAST(p.amount AS DECIMAL))', 'totalPaid')
+      .where('p.studentId = :studentId', { studentId })
+      .getRawOne();
+
+    const invoicedRow = await queryRunner.manager
+      .createQueryBuilder(Invoice, 'i')
+      .select('SUM(CAST(i.amount AS DECIMAL))', 'totalInvoiced')
+      .where('i.studentId = :studentId', { studentId })
+      .getRawOne();
+
+    const totalPaid = Number(paidRow?.totalPaid || 0);
+    const totalInvoiced = Number(invoicedRow?.totalInvoiced || 0);
+
+    await queryRunner.manager.update(
+      Student,
+      { id: studentId },
+      { balance: totalPaid - totalInvoiced },
+    );
+  }
+
   // ─────────────────────────────────────────────
   // HELPER — rasm saqlash (create va update uchun umumiy)
   // ─────────────────────────────────────────────
@@ -116,10 +158,16 @@ export class StudentsService {
       faceDescriptor = await this.verifyFace(file);
     }
 
-    try {
-      const { groupIds, pinfl, documentNumber, discounts, ...studentData } = dto;
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    let finalPhotoPath: string | null = null; // SENIOR: Garbage Collector (Orphan fayllar uchun)
 
-      const existing = await this.studentRepo.findOne({
+    try {
+      const { groupIds, pinfl, documentNumber, discounts, ...studentData } =
+        dto;
+
+      const existing = await queryRunner.manager.findOne(Student, {
         where: [
           { phone: dto.phone },
           ...(pinfl ? [{ pinfl }] : []),
@@ -142,14 +190,16 @@ export class StudentsService {
           );
       }
 
-      const groups = await this.groupRepo.findBy({ id: In(groupIds) });
+      const groups = await queryRunner.manager.findBy(Group, {
+        id: In(groupIds),
+      });
       if (groups.length !== groupIds.length) {
         throw new NotFoundException(
           'Bir yoki bir nechta tanlangan guruhlar topilmadi',
         );
       }
 
-      const student = this.studentRepo.create({
+      const student = queryRunner.manager.create(Student, {
         fullName: studentData.fullName,
         phone: studentData.phone,
         parentName: studentData.parentName,
@@ -163,15 +213,19 @@ export class StudentsService {
         direction:
           dto.direction || (groups.length > 0 ? groups[0].name : undefined),
         enrolledGroups: groups,
-        branch: user.role === 'superadmin' && dto.branchId ? { id: dto.branchId } : { id: user.branchId },
+        branch:
+          user.role === 'superadmin' && dto.branchId
+            ? { id: dto.branchId }
+            : { id: user.branchId },
       });
 
-      let saved = await this.studentRepo.save(student);
+      let saved = await queryRunner.manager.save(Student, student);
       this.logger.log(
         `Yangi talaba yaratildi [id: ${saved.id}] [tel: ${saved.phone}]`,
       );
 
-      // Discountlarni saqlash
+      // SENIOR: Batch Insert for Discounts (N+1 muammosi hal qilindi)
+      const discountsToSave: StudentDiscount[] = [];
       if (discounts && discounts.length > 0) {
         for (const discountDto of discounts) {
           const { groupId, customPrice } = discountDto;
@@ -189,53 +243,75 @@ export class StudentsService {
               "Narx 0 dan kichik bo'lishi mumkin emas",
             );
 
-          const newDiscount = this.discountRepo.create({
-            student: { id: saved.id },
-            group: { id: groupId },
-            customPrice,
-          });
-          await this.discountRepo.save(newDiscount);
+          discountsToSave.push(
+            queryRunner.manager.create(StudentDiscount, {
+              student: { id: saved.id },
+              group: { id: groupId },
+              customPrice,
+            }),
+          );
+        }
+        if (discountsToSave.length > 0) {
+          await queryRunner.manager.save(StudentDiscount, discountsToSave);
           this.logger.log(
-            `Imtiyoz saqlandi [student: ${saved.id}] [group: ${groupId}] [narx: ${customPrice}]`,
+            `Imtiyozlar Batch saqlandi: jami ${discountsToSave.length} ta`,
           );
         }
       }
 
-      // Invoice (Birinchi oylik to'lovni yozish)
+      // SENIOR: Batch Insert for Invoices
       let initialBalanceDebt = 0;
+      const invoicesToSave: Invoice[] = [];
       for (const group of groups) {
         const discount = discounts?.find((d) => d.groupId === group.id);
-        const effectivePrice = discount && Number(discount.customPrice) > 0
-          ? Number(discount.customPrice)
-          : Number(group.price || 0);
+        const effectivePrice =
+          discount && Number(discount.customPrice) > 0
+            ? Number(discount.customPrice)
+            : Number(group.price || 0);
 
         if (effectivePrice > 0) {
-          const invoice = this.dataSource.manager.create(Invoice, {
-            amount: effectivePrice,
-            type: 'monthly_fee',
-            student: { id: saved.id },
-            group: { id: group.id },
-          });
-          await this.dataSource.manager.save(invoice);
+          invoicesToSave.push(
+            queryRunner.manager.create(Invoice, {
+              amount: effectivePrice,
+              type: 'monthly_fee',
+              student: { id: saved.id },
+              group: { id: group.id },
+            }),
+          );
           initialBalanceDebt += effectivePrice;
         }
       }
 
+      if (invoicesToSave.length > 0) {
+        await queryRunner.manager.save(Invoice, invoicesToSave);
+      }
+
       if (initialBalanceDebt > 0) {
         saved.balance = -initialBalanceDebt;
-        saved = await this.studentRepo.save(saved);
-        this.logger.log(`Birinchi oylik qarzlar belgilandi: -${initialBalanceDebt} [student: ${saved.id}]`);
+        saved = await queryRunner.manager.save(Student, saved);
+        this.logger.log(
+          `Birinchi oylik qarzlar belgilandi: -${initialBalanceDebt} [student: ${saved.id}]`,
+        );
       }
 
       if (file && faceDescriptor) {
         saved.photoUrl = this.movePhoto(file, saved.id);
+        finalPhotoPath = saved.photoUrl; // Agar pastda commit qulab tushsa o'chirish uchun belgilash
         saved.faceDescriptor = faceDescriptor;
-        saved = await this.studentRepo.save(saved);
+        saved = await queryRunner.manager.save(Student, saved);
       }
 
+      await queryRunner.commitTransaction();
+
+      // Transaction tashqarisida findOne chaqiramiz (o'qish xavfsiz)
       return await this.findOne(saved.id);
     } catch (error) {
-      this.deleteFileIfExists(file?.path);
+      await queryRunner.rollbackTransaction();
+      this.deleteFileIfExists(file?.path); // Temp faylni o'chirish
+      if (finalPhotoPath) {
+        this.deleteFileIfExists(finalPhotoPath); // SENIOR: Orphan faylni majburiy tozalash
+      }
+
       if (
         error instanceof ConflictException ||
         error instanceof NotFoundException ||
@@ -247,18 +323,28 @@ export class StudentsService {
         throw new ConflictException(
           "Ma'lumotlar bazasida takrorlanish yuz berdi.",
         );
+
       this.logger.error(
         `Talaba yaratishda xatolik [tel: ${dto.phone}]`,
         error.stack,
       );
       throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
 
   // ─────────────────────────────────────────────
   // 2. FIND ALL
   // ─────────────────────────────────────────────
-  async findAll(search?: string, groupName?: string, page = 1, limit = 10, user?: any, branchId?: string) {
+  async findAll(
+    search?: string,
+    groupName?: string,
+    page = 1,
+    limit = 10,
+    user?: any,
+    branchId?: string,
+  ) {
     const query = this.studentRepo
       .createQueryBuilder('student')
       .leftJoinAndSelect('student.enrolledGroups', 'group')
@@ -267,7 +353,9 @@ export class StudentsService {
       .leftJoinAndSelect('discount.group', 'discountGroup');
 
     if (user && user.role !== 'superadmin') {
-      query.andWhere('student.branchId = :branchId', { branchId: user.branchId });
+      query.andWhere('student.branchId = :branchId', {
+        branchId: user.branchId,
+      });
     } else if (branchId) {
       query.andWhere('student.branchId = :branchId', { branchId });
     }
@@ -315,7 +403,11 @@ export class StudentsService {
       ],
     });
     if (!student) throw new NotFoundException('Student topilmadi');
-    if (user && user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
+    if (
+      user &&
+      user.role !== 'superadmin' &&
+      student.branch?.id !== user.branchId
+    ) {
       throw new NotFoundException('Student topilmadi');
     }
     return this.formatStudent(student);
@@ -330,14 +422,26 @@ export class StudentsService {
     return newVal;
   }
 
-  async update(id: string, dto: UpdateStudentDto, user: any, file?: Express.Multer.File) {
+  async update(
+    id: string,
+    dto: UpdateStudentDto,
+    user: any,
+    file?: Express.Multer.File,
+  ) {
     let faceDescriptor: number[] | undefined;
     if (file) {
       faceDescriptor = await this.verifyFace(file);
     }
 
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    let oldPhotoToDeleteOnSuccess: string | null = null;
+    let newPhotoToDeleteOnRollback: string | null = null;
+
     try {
-      const student = await this.studentRepo.findOne({
+      const student = await queryRunner.manager.findOne(Student, {
         where: { id },
         relations: ['enrolledGroups', 'branch'],
       });
@@ -348,7 +452,9 @@ export class StudentsService {
 
       // Senior Level: Multi-tenant xavfsizlik tekshiruvi
       if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
-        throw new NotFoundException('Student topilmadi yoki unga ruxsatingiz yo\'q');
+        throw new NotFoundException(
+          "Student topilmadi yoki unga ruxsatingiz yo'q",
+        );
       }
 
       const {
@@ -363,12 +469,13 @@ export class StudentsService {
 
       // Faqat superadmin filialni o'zgartira oladi
       if (user.role !== 'superadmin' && branchId) {
-        this.logger.warn(`Filialni o'zgartirishga urinish rad etildi: Foydalanuvchi [${user.id}]`);
-        // branchId'ni e'tiborsiz qoldiramiz
+        this.logger.warn(
+          `Filialni o'zgartirishga urinish rad etildi: Foydalanuvchi [${user.id}]`,
+        );
       }
 
       if (phone?.trim() || pinfl?.trim() || documentNumber?.trim()) {
-        const conflictCheck = await this.studentRepo.findOne({
+        const conflictCheck = await queryRunner.manager.findOne(Student, {
           where: [
             ...(phone?.trim() ? [{ phone }] : []),
             ...(pinfl?.trim() ? [{ pinfl }] : []),
@@ -393,15 +500,18 @@ export class StudentsService {
       }
 
       let newGroupsToCharge: Group[] = [];
+      let needsBalanceRecalc = false;
       if (groupIds && groupIds.length > 0) {
-        const groups = await this.groupRepo.findBy({ id: In(groupIds) });
+        const groups = await queryRunner.manager.findBy(Group, {
+          id: In(groupIds),
+        });
         if (groups.length !== groupIds.length)
           throw new NotFoundException(
             'Bir yoki bir nechta tanlangan guruhlar topilmadi',
           );
-        
-        const oldGroupIds = new Set(student.enrolledGroups.map(g => g.id));
-        newGroupsToCharge = groups.filter(g => !oldGroupIds.has(g.id));
+
+        const oldGroupIds = new Set(student.enrolledGroups.map((g) => g.id));
+        newGroupsToCharge = groups.filter((g) => !oldGroupIds.has(g.id));
 
         student.enrolledGroups = groups;
         if (!dto.direction?.trim()) student.direction = groups[0].name;
@@ -440,6 +550,14 @@ export class StudentsService {
         student.birthDate = new Date(updateData.birthDate);
 
       if (discounts && discounts.length > 0) {
+        const existingDiscounts = await queryRunner.manager.find(
+          StudentDiscount,
+          {
+            where: { student: { id } },
+            relations: ['group'],
+          },
+        );
+
         for (const discountDto of discounts) {
           const { groupId, customPrice } = discountDto;
           const isInGroup = student.enrolledGroups.some(
@@ -448,18 +566,18 @@ export class StudentsService {
           if (!isInGroup)
             throw new BadRequestException('Talaba bu guruhda emas!');
 
-          const group = await this.groupRepo.findOne({
+          const group = await queryRunner.manager.findOne(Group, {
             where: { id: groupId },
           });
           if (!group) throw new NotFoundException('Guruh topilmadi');
 
-          const existing = await this.discountRepo.findOne({
-            where: { student: { id }, group: { id: groupId } },
-          });
+          const existing = existingDiscounts.find(
+            (d) => d.group?.id === groupId,
+          );
 
           if (customPrice === null || customPrice === undefined) {
             if (existing) {
-              await this.discountRepo.remove(existing);
+              await queryRunner.manager.remove(StudentDiscount, existing);
               this.logger.log(
                 `Imtiyoz bekor qilindi [student: ${id}] [group: ${groupId}]`,
               );
@@ -476,70 +594,107 @@ export class StudentsService {
 
             if (existing) {
               existing.customPrice = customPrice;
-              await this.discountRepo.save(existing);
+              await queryRunner.manager.save(StudentDiscount, existing);
             } else {
-              const newDiscount = this.discountRepo.create({
+              const newDiscount = queryRunner.manager.create(StudentDiscount, {
                 student: { id },
                 group: { id: groupId },
                 customPrice,
               });
-              await this.discountRepo.save(newDiscount);
+              await queryRunner.manager.save(StudentDiscount, newDiscount);
             }
-            this.logger.log(
-              `Imtiyoz yangilandi [student: ${id}] [group: ${groupId}] [narx: ${customPrice}]`,
-            );
           }
         }
       }
 
       // Yangi qo'shilgan guruhlar uchun initial invoice
       if (newGroupsToCharge.length > 0) {
-        let addedDebt = 0;
+        const { start, end } = this.getCurrentMonthBounds();
+        const existingInvoices = await queryRunner.manager.find(Invoice, {
+          where: {
+            student: { id },
+            type: 'monthly_fee',
+            createdAt: Between(start, end),
+          },
+          relations: ['group'],
+        });
+
+        const invoicesToSave: Invoice[] = [];
+
         for (const group of newGroupsToCharge) {
           const discount = discounts?.find((d) => d.groupId === group.id);
-          const effectivePrice = discount && Number(discount.customPrice) > 0
-            ? Number(discount.customPrice)
-            : Number(group.price || 0);
+          const effectivePrice =
+            discount && Number(discount.customPrice) > 0
+              ? Number(discount.customPrice)
+              : Number(group.price || 0);
 
           if (effectivePrice > 0) {
-              const invoice = this.dataSource.manager.create(Invoice, {
-                amount: effectivePrice,
-                type: 'monthly_fee',
-                student: { id },
-                group: { id: group.id },
-              });
-              await this.dataSource.manager.save(invoice);
-              addedDebt += effectivePrice;
+            const hasExisting = existingInvoices.some(
+              (i) => i.group?.id === group.id,
+            );
+            if (!hasExisting) {
+              invoicesToSave.push(
+                queryRunner.manager.create(Invoice, {
+                  amount: effectivePrice,
+                  type: 'monthly_fee',
+                  student: { id },
+                  group: { id: group.id },
+                }),
+              );
+              needsBalanceRecalc = true;
+            }
           }
         }
-        if (addedDebt > 0) {
-          student.balance = Number(student.balance) - addedDebt;
-          this.logger.log(`Yangi qo'shilgan guruhlar uchun ${addedDebt} so'm qarz yozildi [student: ${id}]`);
+
+        if (invoicesToSave.length > 0) {
+          await queryRunner.manager.save(Invoice, invoicesToSave);
         }
       }
 
-      // SENIOR APPROACH: Photo & Biometric Integrity
-      // 1. Agar rasm butunlay o'chirilsa
-      if (dto.removePhoto === true) {
-        if (student.photoUrl) {
-          this.deleteFileIfExists(student.photoUrl);
-          student.photoUrl = null;
-          student.faceDescriptor = null;
-          this.logger.log(`Rasm va biometrik ma'lumotlar o'chirildi [student: ${id}]`);
-        }
-      } 
-      // 2. Agar yangi rasm yuklansa (bundan avvalgi logika bilan birga)
-      else if (file && faceDescriptor) {
-        student.photoUrl = this.movePhoto(file, id, student.photoUrl);
+      // SENIOR APPROACH: Photo & Biometric Integrity Safe replacement
+      if (dto.removePhoto === true && student.photoUrl) {
+        oldPhotoToDeleteOnSuccess = student.photoUrl;
+        student.photoUrl = null;
+        student.faceDescriptor = null;
+        this.logger.log(
+          `Rasm va biometrikani o'chirish tayyorlandi [student: ${id}]`,
+        );
+      } else if (file && faceDescriptor) {
+        oldPhotoToDeleteOnSuccess = student.photoUrl || null;
+        // eski rasmni hozirgidan o'chirmaymiz (null beramiz), success bo'lsa keyin o'chiramiz
+        student.photoUrl = this.movePhoto(file, id, null);
+        newPhotoToDeleteOnRollback = student.photoUrl; // xato bo'lsa shuni o'chiramiz
         student.faceDescriptor = faceDescriptor;
-        this.logger.log(`Rasm va biometrik ma'lumotlar yangilandi [student: ${id}]`);
+        this.logger.log(
+          `Rasm va biometrik ma'lumotlar yangilandi [student: ${id}]`,
+        );
       }
 
-      const saved = await this.studentRepo.save(student);
+      const saved = await queryRunner.manager.save(Student, student);
+      if (needsBalanceRecalc) {
+        await this.recalculateStudentBalance(queryRunner, saved.id);
+      }
+
+      // Xavfsiz Tranzaksiyani Yakunlash
+      await queryRunner.commitTransaction();
+
+      // Endi SQL bazada saqlanish muvaffaqiyatli o'tgandan keyin eski rasmni jismonan o'chiramiz
+      if (oldPhotoToDeleteOnSuccess) {
+        this.deleteFileIfExists(oldPhotoToDeleteOnSuccess);
+      }
+
       this.logger.log(`Talaba muvaffaqiyatli yangilandi [id: ${id}]`);
-      return await this.findOne(saved.id);
+      return await this.findOne(saved.id, user);
     } catch (error) {
       this.deleteFileIfExists(file?.path);
+
+      await queryRunner.rollbackTransaction();
+
+      // Rollback bo'lganida yangi yuklangan rasmni darhol tozalash (Orphan Collector)
+      if (newPhotoToDeleteOnRollback) {
+        this.deleteFileIfExists(newPhotoToDeleteOnRollback);
+      }
+
       if (
         error instanceof ConflictException ||
         error instanceof NotFoundException ||
@@ -551,8 +706,11 @@ export class StudentsService {
         throw new ConflictException(
           "Ma'lumotlar bazasida takrorlanish yuz berdi",
         );
+
       this.logger.error(`Talaba yangilashda xatolik [id: ${id}]`, error.stack);
       throw error;
+    } finally {
+      await queryRunner.release();
     }
   }
 
@@ -560,14 +718,14 @@ export class StudentsService {
   // 5. REMOVE
   // ─────────────────────────────────────────────
   async remove(id: string, user: any) {
-    const student = await this.studentRepo.findOne({ 
+    const student = await this.studentRepo.findOne({
       where: { id },
-      relations: ['branch']
+      relations: ['branch'],
     });
     if (!student) throw new NotFoundException('Student topilmadi');
 
     if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
-      throw new NotFoundException('Student topilmadi (ruxsat yo\'q)');
+      throw new NotFoundException("Student topilmadi (ruxsat yo'q)");
     }
 
     await this.studentRepo.softRemove(student);
@@ -587,7 +745,9 @@ export class StudentsService {
       .where('student.deletedAt IS NOT NULL');
 
     if (user && user.role !== 'superadmin') {
-      query.andWhere('student.branchId = :branchId', { branchId: user.branchId });
+      query.andWhere('student.branchId = :branchId', {
+        branchId: user.branchId,
+      });
     }
 
     if (search) {
@@ -618,20 +778,52 @@ export class StudentsService {
   // 7. RESTORE
   // ─────────────────────────────────────────────
   async restore(id: string, user: any) {
-    const student = await this.studentRepo.findOne({ 
-      where: { id }, 
+    const student = await this.studentRepo.findOne({
+      where: { id },
       withDeleted: true,
-      relations: ['branch']
+      relations: ['branch'],
     });
     if (!student) throw new NotFoundException('Student topilmadi');
 
     if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
-      throw new NotFoundException('Student topilmadi (ruxsat yo\'q)');
+      throw new NotFoundException("Student topilmadi (ruxsat yo'q)");
     }
 
     await this.studentRepo.restore(id);
     // SABABI: Qayta tiklash ham audit uchun muhim harakat
     this.logger.log(`Talaba qayta tiklandi [id: ${id}]`);
     return await this.findOne(id, user); // Userni findOne'ga ham berdik
+  }
+
+  // ─────────────────────────────────────────────
+  // 8. HARD DELETE (permanent)
+  // ─────────────────────────────────────────────
+  async hardDelete(id: string, user: any) {
+    const student = await this.studentRepo.findOne({
+      where: { id },
+      withDeleted: true,
+      relations: ['branch'],
+    });
+    if (!student) throw new NotFoundException('Student topilmadi');
+
+    if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
+      throw new NotFoundException("Student topilmadi (ruxsat yo'q)");
+    }
+
+    if (!student.deletedAt) {
+      throw new BadRequestException(
+        "Faqat arxivlangan talabani butunlay o'chirish mumkin",
+      );
+    }
+
+    if (student.photoUrl) {
+      this.deleteFileIfExists(student.photoUrl);
+    }
+
+    await this.studentRepo.remove(student);
+    this.logger.log(
+      `Talaba butunlay o'chirildi [id: ${id}] [tel: ${student.phone}]`,
+    );
+    return { success: true, message: "Talaba butunlay o'chirildi" };
   }
 }

@@ -4,6 +4,7 @@ import {
   ConflictException,
   ForbiddenException,
   Logger,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -18,6 +19,34 @@ export class UsersService {
   constructor(
     @InjectRepository(User) private readonly userRepo: Repository<User>,
   ) {}
+
+  private assertManagePermission(actor: any, target: User): void {
+    if (!actor) return;
+
+    if (target.id === actor.id) {
+      throw new ForbiddenException(
+        "O'zingizni arxivlash/o'chirish mumkin emas",
+      );
+    }
+
+    if (target.role === UserRole.SUPERADMIN) {
+      throw new ForbiddenException(
+        "Superadmin foydalanuvchini bu yerdan boshqarib bo'lmaydi",
+      );
+    }
+
+    if (actor.role !== UserRole.SUPERADMIN) {
+      if (target.branch?.id !== actor.branchId) {
+        throw new NotFoundException('Foydalanuvchi topilmadi');
+      }
+
+      if (target.role !== UserRole.TEACHER) {
+        throw new ForbiddenException(
+          'Admin faqat teacher foydalanuvchilarni boshqara oladi',
+        );
+      }
+    }
+  }
 
   // async create(dto: CreateUserDto, creator: any): Promise<User> {
   //   if (creator.role === UserRole.ADMIN && dto.role === UserRole.ADMIN) {
@@ -191,8 +220,9 @@ export class UsersService {
     return this.findOne(id);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(id: string, actor?: any): Promise<void> {
     const user = await this.findOne(id);
+    this.assertManagePermission(actor, user);
     await this.userRepo.softRemove(user);
 
     // SABABI: O'chirish qaytarib bo'lmaydigan harakat — kim o'chirildi audit uchun
@@ -242,12 +272,43 @@ export class UsersService {
     };
   }
 
-  async restore(id: string): Promise<User> {
+  async restore(id: string, actor?: any): Promise<User> {
+    const user = await this.userRepo.findOne({
+      where: { id },
+      withDeleted: true,
+      relations: ['branch'],
+    });
+    if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
+
+    this.assertManagePermission(actor, user);
+
     await this.userRepo.restore(id);
 
     // SABABI: Qayta tiklash ham audit uchun muhim
     this.logger.log(`Foydalanuvchi qayta tiklandi [id: ${id}]`);
 
     return this.findOne(id);
+  }
+
+  async hardDelete(id: string, actor?: any): Promise<void> {
+    const user = await this.userRepo.findOne({
+      where: { id },
+      withDeleted: true,
+      relations: ['branch'],
+    });
+    if (!user) throw new NotFoundException('Foydalanuvchi topilmadi');
+
+    this.assertManagePermission(actor, user);
+
+    if (!user.deletedAt) {
+      throw new BadRequestException(
+        "Faqat arxivlangan foydalanuvchini butunlay o'chirish mumkin",
+      );
+    }
+
+    await this.userRepo.remove(user);
+    this.logger.log(
+      `Foydalanuvchi butunlay o'chirildi [id: ${user.id}] [login: ${user.login}]`,
+    );
   }
 }

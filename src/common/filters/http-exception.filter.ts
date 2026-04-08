@@ -24,20 +24,22 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     // 2. Xatolik xabarini qat'iy aniqlash
     let message = 'Internal server error';
-    
+
     if (exception instanceof HttpException) {
       const res = exception.getResponse();
       message = typeof res === 'object' ? res['message'] : res;
-    } else if (exception.message) {
-      // Bu yerda bazadan yoki boshqa joydan kelgan kutilmagan xatolik ushlanadi
-      message = exception.message;
+    } else {
+      // SENIOR: Ma'lumotlarni yashirish (Sanitize) - DB xatolarini "Internal server error" bilan almashtiraman
+      // Ammo asil xato loglarni o'qish uchun terminalda ko'rinib turishi kerak
+      message =
+        "Internal server error yuz berdi. Iltimos keyinroq urinib ko'ring.";
     }
 
     // 3. Terminalda (Log) xatoni to'liq ko'rish (Stack trace bilan)
     // Bu qism 500 xatosini qaysi qatorda ekanini ko'rsatadi
     this.logger.error(
       `Method: ${request.method} | URL: ${request.url}`,
-      exception instanceof Error ? exception.stack : JSON.stringify(exception)
+      exception instanceof Error ? exception.stack : JSON.stringify(exception),
     );
 
     // 4. Foydalanuvchiga qaytarish

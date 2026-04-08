@@ -3,6 +3,7 @@ import {
   CreateDateColumn,
   DeleteDateColumn,
   Entity,
+  Index,
   ManyToMany,
   ManyToOne,
   OneToMany,
@@ -26,9 +27,11 @@ export class Student {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  @Index()
   @Column()
   fullName: string;
 
+  @Index({ unique: true })
   @Column({ unique: true })
   phone: string;
 
@@ -49,6 +52,7 @@ export class Student {
   @Column({ unique: true, nullable: true })
   documentNumber: string; // Seriya va raqam birga: 'AB1234567'
 
+  @Index({ unique: true, where: 'pinfl IS NOT NULL' })
   @Column({ unique: true, length: 14, nullable: true })
   pinfl: string; // 14 xonali JSHSHIR - bu eng aniq identifikator
 

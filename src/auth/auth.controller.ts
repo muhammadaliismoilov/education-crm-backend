@@ -103,7 +103,7 @@ export class AuthController {
     const { accessToken, refreshToken, user } =
       await this.authService.login(loginDto);
     this.setCookies(res, accessToken, refreshToken);
-    return { message: 'Xush kelibsiz!', user, accessToken, refreshToken };
+    return { message: 'Xush kelibsiz!', user };
   }
 
   // ─────────────────────────────────────────────
@@ -170,7 +170,7 @@ export class AuthController {
     } = await this.authService.refreshTokens(refreshToken);
 
     this.setCookies(res, accessToken, newRefreshToken);
-    return { accessToken, refreshToken: newRefreshToken, user };
+    return { user };
   }
 
   // ─────────────────────────────────────────────

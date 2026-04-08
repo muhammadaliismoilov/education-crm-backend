@@ -7,11 +7,12 @@ import { Payment } from '../entities/payment.entity';
 import { SalaryPayout } from '../entities/salaryPayout.entity';
 import { Attendance } from '../entities/attendance.entity';
 
-
 @Module({
-  imports: [TypeOrmModule.forFeature([User, Payment,SalaryPayout,Attendance])],
+  imports: [
+    TypeOrmModule.forFeature([User, Payment, SalaryPayout, Attendance]),
+  ],
   controllers: [SalaryController],
   providers: [SalaryService],
-  exports:[SalaryService]
+  exports: [SalaryService],
 })
 export class SalaryModule {}

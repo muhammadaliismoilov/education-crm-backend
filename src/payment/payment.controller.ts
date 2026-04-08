@@ -144,7 +144,11 @@ export class PaymentController {
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
-  @ApiQuery({ name: 'branchId', required: false, description: "Filial bo'yicha filter (faqat Superadmin uchun)" })
+  @ApiQuery({
+    name: 'branchId',
+    required: false,
+    description: "Filial bo'yicha filter (faqat Superadmin uchun)",
+  })
   @ApiResponse({
     status: 200,
     description: "To'lovlar ro'yxati",
@@ -162,7 +166,13 @@ export class PaymentController {
     @Req() req?: any,
     @Query('branchId') branchId?: string,
   ) {
-    return this.paymentService.findAll(search, Number(page) || 1, Number(limit) || 10, req.user, branchId);
+    return this.paymentService.findAll(
+      search,
+      Number(page) || 1,
+      Number(limit) || 10,
+      req.user,
+      branchId,
+    );
   }
 
   // ─────────────────────────────────────────────

@@ -29,9 +29,7 @@ export class RedisCacheService {
         for (const pattern of patterns) {
           const foundKeys: string[] = await store.keys(pattern);
           if (foundKeys.length > 0) {
-            await Promise.all(
-              foundKeys.map((k) => this.cacheManager.del(k)),
-            );
+            await Promise.all(foundKeys.map((k) => this.cacheManager.del(k)));
             this.logger.log(
               `Cache invalidated [pattern: ${pattern}] [${foundKeys.length} ta key]`,
             );

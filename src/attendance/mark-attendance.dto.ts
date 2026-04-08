@@ -30,7 +30,9 @@ export class StudentAttendanceDto {
   })
   @IsOptional()
   @IsBoolean()
-  @Transform(({ value }) => (value === null || value === undefined ? null : Boolean(value)))
+  @Transform(({ value }) =>
+    value === null || value === undefined ? null : Boolean(value),
+  )
   isPresent: boolean | null;
 }
 
@@ -63,7 +65,7 @@ export class MarkAttendanceDto {
   })
   @IsArray()
   // TUZATISH: @ArrayMinSize(1) yo'q edi — bo'sh array yuborilsa o'tib ketardi
-  @ArrayMinSize(1, { message: "Kamida 1 ta talaba davomati kiritilishi kerak" })
+  @ArrayMinSize(1, { message: 'Kamida 1 ta talaba davomati kiritilishi kerak' })
   @ValidateNested({ each: true })
   @Type(() => StudentAttendanceDto)
   students: StudentAttendanceDto[];

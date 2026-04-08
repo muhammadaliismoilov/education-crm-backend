@@ -128,11 +128,7 @@ export class AttendanceController {
     @Query('date') date: string,
     @Request() req,
   ) {
-    return this.attendanceService.getAttendanceSheet(
-      groupId,
-      date,
-      req.user,
-    );
+    return this.attendanceService.getAttendanceSheet(groupId, date, req.user);
   }
 
   // ─────────────────────────────────────────────
@@ -306,7 +302,11 @@ export class AttendanceController {
     @Query('month') month?: string,
     @Request() req?: any,
   ) {
-    return this.attendanceService.getGroupMonthlyAttendance(groupId, month, req?.user);
+    return this.attendanceService.getGroupMonthlyAttendance(
+      groupId,
+      month,
+      req?.user,
+    );
   }
 
   // ─────────────────────────────────────────────
@@ -416,7 +416,14 @@ export class AttendanceController {
     schema: { example: NOT_FOUND() },
   })
   async faceVerify(
-    @Body() body: { groupId: string; date: string; base64: string; latitude?: number; longitude?: number },
+    @Body()
+    body: {
+      groupId: string;
+      date: string;
+      base64: string;
+      latitude?: number;
+      longitude?: number;
+    },
     @Request() req,
   ) {
     return this.attendanceService.faceVerifyAttendance(
@@ -425,7 +432,7 @@ export class AttendanceController {
       body.base64,
       req.user,
       body.latitude,
-      body.longitude
+      body.longitude,
     );
   }
 }

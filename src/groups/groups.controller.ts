@@ -125,7 +125,11 @@ export class GroupsController {
     description: "Guruh nomi bo'yicha qidiruv",
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
-  @ApiQuery({ name: 'branchId', required: false, description: 'Filial bo\'yicha filter (faqat Superadmin uchun)' })
+  @ApiQuery({
+    name: 'branchId',
+    required: false,
+    description: "Filial bo'yicha filter (faqat Superadmin uchun)",
+  })
   @ApiResponse({
     status: 200,
     description: "Guruhlar ro'yxati",
@@ -142,8 +146,19 @@ export class GroupsController {
       }),
     },
   })
-  findAll(@Query('search') search?: string, @Query('page') page?: number, @Req() req?: any, @Query('branchId') branchId?: string) {
-    return this.groupsService.findAll(search, Number(page) || 1, 10, req.user, branchId);
+  findAll(
+    @Query('search') search?: string,
+    @Query('page') page?: number,
+    @Req() req?: any,
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.groupsService.findAll(
+      search,
+      Number(page) || 1,
+      10,
+      req.user,
+      branchId,
+    );
   }
 
   // ─────────────────────────────────────────────

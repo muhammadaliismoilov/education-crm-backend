@@ -1,6 +1,13 @@
 // update-single-attendance.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsString, IsUUID, Matches, IsOptional } from 'class-validator';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsString,
+  IsUUID,
+  Matches,
+  IsOptional,
+} from 'class-validator';
 
 export class UpdateSingleAttendanceDto {
   @ApiProperty({

@@ -44,9 +44,7 @@ export class BranchesService {
       withDeleted: true,
     });
     if (existingLogin) {
-      throw new ConflictException(
-        `"${dto.adminLogin}" login allaqachon band`,
-      );
+      throw new ConflictException(`"${dto.adminLogin}" login allaqachon band`);
     }
 
     if (dto.subdomain) {

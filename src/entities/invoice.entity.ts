@@ -24,7 +24,9 @@ export class Invoice {
   @CreateDateColumn()
   createdAt: Date;
 
-  @ManyToOne(() => Student, (student) => student.invoices, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Student, (student) => student.invoices, {
+    onDelete: 'CASCADE',
+  })
   @JoinColumn({ name: 'studentId' })
   student: Student;
 

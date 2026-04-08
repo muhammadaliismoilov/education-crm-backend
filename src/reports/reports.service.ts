@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  Inject,
-  Logger,
-} from '@nestjs/common';
+import { Injectable, Inject, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -236,10 +232,14 @@ export class ReportsService {
       .where('p."createdAt" BETWEEN :start AND :end', { start, end });
     if (branchId) incomeQuery.andWhere('p.branchId = :branchId', { branchId });
     const dailyIncomeRaw = await incomeQuery
-      .groupBy("TO_CHAR(p.createdAt AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM-DD')")
+      .groupBy(
+        "TO_CHAR(p.createdAt AT TIME ZONE 'UTC' AT TIME ZONE 'Asia/Tashkent', 'YYYY-MM-DD')",
+      )
       .getRawMany();
 
-    const incomeMap = new Map(dailyIncomeRaw.map(r => [r.date, Number(r.income || 0)]));
+    const incomeMap = new Map(
+      dailyIncomeRaw.map((r) => [r.date, Number(r.income || 0)]),
+    );
 
     // 2. Qarzdorlik (Pending amount)
     const debtQuery = this.paymentRepo
@@ -283,18 +283,28 @@ export class ReportsService {
 
     const salaryResults = await Promise.all(
       teachers.map((t) =>
-        this.salaryService.calculateTeacherSalary(t.id, startStr, endStr).catch(() => ({ totalSalary: 0 }))
-      )
+        this.salaryService
+          .calculateTeacherSalary(t.id, startStr, endStr)
+          .catch(() => ({ totalSalary: 0 })),
+      ),
     );
 
-    const totalTeacherSalaries = salaryResults.reduce((sum, res) => sum + (res?.totalSalary || 0), 0);
+    const totalTeacherSalaries = salaryResults.reduce(
+      (sum, res) => sum + (res?.totalSalary || 0),
+      0,
+    );
 
     // 4. O'qituvchilar joriy oyi uchun jami oyliklarni summaryda ko'rsatamiz
     const result = {
-      totalIncome: Math.round(Array.from(incomeMap.values()).reduce((a, b) => a + b, 0)),
+      totalIncome: Math.round(
+        Array.from(incomeMap.values()).reduce((a, b) => a + b, 0),
+      ),
       totalPending,
       totalTeacherSalaries: Math.round(totalTeacherSalaries),
-      netProfit: Math.round(Array.from(incomeMap.values()).reduce((a, b) => a + b, 0) - totalTeacherSalaries),
+      netProfit: Math.round(
+        Array.from(incomeMap.values()).reduce((a, b) => a + b, 0) -
+          totalTeacherSalaries,
+      ),
       currency: "so'm",
       generatedAt: new Date(),
       period: { from: start, to: end },
@@ -401,7 +411,7 @@ export class ReportsService {
       debt: `${totalDebt.toLocaleString()} so'm`,
     }).font = { bold: true };
 
-    const totalRow = worksheet.lastRow!;
+    const totalRow = worksheet.lastRow;
     totalRow.fill = {
       type: 'pattern',
       pattern: 'solid',

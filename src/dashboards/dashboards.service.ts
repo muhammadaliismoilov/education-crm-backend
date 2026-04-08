@@ -21,7 +21,12 @@ export class DashboardService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  async getSummary(startDate: Date, endDate: Date, user?: any, branchIdFilter?: string) {
+  async getSummary(
+    startDate: Date,
+    endDate: Date,
+    user?: any,
+    branchIdFilter?: string,
+  ) {
     let branchId = null;
     if (user && user.role !== 'superadmin') {
       branchId = user.branchId;
@@ -52,18 +57,24 @@ export class DashboardService {
       .select('SUM(s.balance)', 'totalDebt')
       .where('s.balance < 0')
       .andWhere('s.deletedAt IS NULL');
-    if (branchId) studentDebtQuery.andWhere('s.branchId = :branchId', { branchId });
+    if (branchId)
+      studentDebtQuery.andWhere('s.branchId = :branchId', { branchId });
 
     const activeStudentsQuery = this.studentRepo
       .createQueryBuilder('s')
       .where('s.deletedAt IS NULL');
-    if (branchId) activeStudentsQuery.andWhere('s.branchId = :branchId', { branchId });
+    if (branchId)
+      activeStudentsQuery.andWhere('s.branchId = :branchId', { branchId });
 
     const newStudentsQuery = this.studentRepo
       .createQueryBuilder('s')
       .where('s.deletedAt IS NULL')
-      .andWhere('s.createdAt BETWEEN :start AND :end', { start: startDate, end: endDate });
-    if (branchId) newStudentsQuery.andWhere('s.branchId = :branchId', { branchId });
+      .andWhere('s.createdAt BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    if (branchId)
+      newStudentsQuery.andWhere('s.branchId = :branchId', { branchId });
 
     const attendanceQuery = this.attendanceRepo
       .createQueryBuilder('a')
@@ -75,22 +86,29 @@ export class DashboardService {
         start: startDate,
         end: endDate,
       });
-    if (branchId) attendanceQuery.andWhere('a.branchId = :branchId', { branchId });
+    if (branchId)
+      attendanceQuery.andWhere('a.branchId = :branchId', { branchId });
 
     const groupsQuery = this.groupRepo
       .createQueryBuilder('g')
       .where('g.isActive = true');
     if (branchId) groupsQuery.andWhere('g.branchId = :branchId', { branchId });
 
-    const [incomeRes, debtRes, activeStudents, newStudents, attendance, activeGroups] =
-      await Promise.all([
-        paymentQuery.getRawOne(),
-        studentDebtQuery.getRawOne(),
-        activeStudentsQuery.getCount(),
-        newStudentsQuery.getCount(),
-        attendanceQuery.getRawOne(),
-        groupsQuery.getCount(),
-      ]);
+    const [
+      incomeRes,
+      debtRes,
+      activeStudents,
+      newStudents,
+      attendance,
+      activeGroups,
+    ] = await Promise.all([
+      paymentQuery.getRawOne(),
+      studentDebtQuery.getRawOne(),
+      activeStudentsQuery.getCount(),
+      newStudentsQuery.getCount(),
+      attendanceQuery.getRawOne(),
+      groupsQuery.getCount(),
+    ]);
 
     const result = {
       totalIncome: Number(incomeRes?.total) || 0,

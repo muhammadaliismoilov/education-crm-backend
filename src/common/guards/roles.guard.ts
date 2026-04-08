@@ -24,7 +24,9 @@ export class RolesGuard implements CanActivate {
     const { user } = context.switchToHttp().getRequest();
     // 4. Foydalanuvchining roli kerakli rollar orasida bor-yo'qligini tekshirish
     // Superadmin hamma narsaga ruxsat oladi
-    const hasPermission = user && (requiredRoles.includes(user.role) || user.role === UserRole.SUPERADMIN);
+    const hasPermission =
+      user &&
+      (requiredRoles.includes(user.role) || user.role === UserRole.SUPERADMIN);
 
     if (!hasPermission) {
       throw new ForbiddenException(

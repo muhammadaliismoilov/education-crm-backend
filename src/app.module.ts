@@ -31,20 +31,25 @@ import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
       useFactory: async (configService: ConfigService) => ({
         store: await redisStore({
           url: `redis://${configService.get('REDIS_HOST') || 'localhost'}:6379`,
+          password: configService.get<string>('REDIS_PASSWORD') || undefined,
           ttl: 600,
         }),
       }),
       inject: [ConfigService],
     }),
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST,
-      port: Number(process.env.DB_PORT),
-      username: process.env.DB_USER,
-      password: process.env.DB_PASS,
-      database: process.env.DB_NAME,
-      autoLoadEntities: true,
-      synchronize: true,
+    TypeOrmModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService) => ({
+        type: 'postgres',
+        host: configService.get<string>('DB_HOST'),
+        port: configService.get<number>('DB_PORT'),
+        username: configService.get<string>('DB_USER'),
+        password: configService.get<string>('DB_PASS'),
+        database: configService.get<string>('DB_NAME'),
+        autoLoadEntities: true,
+        synchronize: true,
+      }),
     }),
     TypeOrmModule.forFeature([Branch]),
     AuthModule,
@@ -71,4 +76,3 @@ export class AppModule implements NestModule {
     consumer.apply(LoggerMiddleware, SubdomainMiddleware).forRoutes('*');
   }
 }
-

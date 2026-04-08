@@ -6,12 +6,18 @@ export class CreateBranchDto {
   @IsString()
   name: string;
 
-  @ApiPropertyOptional({ example: 'Chilonzor tumani, ...', description: 'Filial manzili' })
+  @ApiPropertyOptional({
+    example: 'Chilonzor tumani, ...',
+    description: 'Filial manzili',
+  })
   @IsString()
   @IsOptional()
   address?: string;
 
-  @ApiPropertyOptional({ example: '+998901234567', description: 'Filial telefon raqami' })
+  @ApiPropertyOptional({
+    example: '+998901234567',
+    description: 'Filial telefon raqami',
+  })
   @IsString()
   @IsOptional()
   phone?: string;
@@ -21,32 +27,50 @@ export class CreateBranchDto {
   @IsOptional()
   subdomain?: string;
 
-  @ApiPropertyOptional({ example: 'tashkent.crm.uz', description: 'Filial maxsus domeni' })
+  @ApiPropertyOptional({
+    example: 'tashkent.crm.uz',
+    description: 'Filial maxsus domeni',
+  })
   @IsString()
   @IsOptional()
   customDomain?: string;
 
-  @ApiPropertyOptional({ example: 41.2995, description: 'Filial kengligi (latitude)' })
+  @ApiPropertyOptional({
+    example: 41.2995,
+    description: 'Filial kengligi (latitude)',
+  })
   @IsOptional()
   latitude?: number;
 
-  @ApiPropertyOptional({ example: 69.2401, description: 'Filial uzunligi (longitude)' })
+  @ApiPropertyOptional({
+    example: 69.2401,
+    description: 'Filial uzunligi (longitude)',
+  })
   @IsOptional()
   longitude?: number;
 }
 
 export class UpdateBranchDto {
-  @ApiPropertyOptional({ example: 'Tashkent Branch', description: 'Filial nomi' })
+  @ApiPropertyOptional({
+    example: 'Tashkent Branch',
+    description: 'Filial nomi',
+  })
   @IsString()
   @IsOptional()
   name?: string;
 
-  @ApiPropertyOptional({ example: 'Chilonzor tumani, ...', description: 'Filial manzili' })
+  @ApiPropertyOptional({
+    example: 'Chilonzor tumani, ...',
+    description: 'Filial manzili',
+  })
   @IsString()
   @IsOptional()
   address?: string;
 
-  @ApiPropertyOptional({ example: '+998901234567', description: 'Filial telefon raqami' })
+  @ApiPropertyOptional({
+    example: '+998901234567',
+    description: 'Filial telefon raqami',
+  })
   @IsString()
   @IsOptional()
   phone?: string;
@@ -56,7 +80,10 @@ export class UpdateBranchDto {
   @IsOptional()
   subdomain?: string;
 
-  @ApiPropertyOptional({ example: 'tashkent.crm.uz', description: 'Filial maxsus domeni' })
+  @ApiPropertyOptional({
+    example: 'tashkent.crm.uz',
+    description: 'Filial maxsus domeni',
+  })
   @IsString()
   @IsOptional()
   customDomain?: string;
@@ -66,18 +93,24 @@ export class UpdateBranchDto {
   @IsOptional()
   isActive?: boolean;
 
-  @ApiPropertyOptional({ example: 41.2995, description: 'Filial kengligi (latitude)' })
+  @ApiPropertyOptional({
+    example: 41.2995,
+    description: 'Filial kengligi (latitude)',
+  })
   @IsOptional()
   latitude?: number;
 
-  @ApiPropertyOptional({ example: 69.2401, description: 'Filial uzunligi (longitude)' })
+  @ApiPropertyOptional({
+    example: 69.2401,
+    description: 'Filial uzunligi (longitude)',
+  })
   @IsOptional()
   longitude?: number;
 }
 
 export class CreateBranchWithAdminDto {
   // ── Branch ma'lumotlari ──────────────────────
-  @ApiProperty({ example: 'TestPro O\'quv Markazi', description: 'Filial nomi' })
+  @ApiProperty({ example: "TestPro O'quv Markazi", description: 'Filial nomi' })
   @IsString()
   name: string;
 
@@ -91,40 +124,60 @@ export class CreateBranchWithAdminDto {
   @IsOptional()
   phone?: string;
 
-  @ApiPropertyOptional({ example: 'testpro', description: 'Subdomen (testpro.crm.uz)' })
+  @ApiPropertyOptional({
+    example: 'testpro',
+    description: 'Subdomen (testpro.crm.uz)',
+  })
   @IsString()
   @IsOptional()
   subdomain?: string;
 
-  @ApiPropertyOptional({ example: 'testpro.crm.uz', description: 'Maxsus domen' })
+  @ApiPropertyOptional({
+    example: 'testpro.crm.uz',
+    description: 'Maxsus domen',
+  })
   @IsString()
   @IsOptional()
   customDomain?: string;
 
-  @ApiPropertyOptional({ example: 41.2995, description: 'Filial kengligi (latitude)' })
+  @ApiPropertyOptional({
+    example: 41.2995,
+    description: 'Filial kengligi (latitude)',
+  })
   @IsOptional()
   latitude?: number;
 
-  @ApiPropertyOptional({ example: 69.2401, description: 'Filial uzunligi (longitude)' })
+  @ApiPropertyOptional({
+    example: 69.2401,
+    description: 'Filial uzunligi (longitude)',
+  })
   @IsOptional()
   longitude?: number;
 
   // ── Admin ma'lumotlari ───────────────────────
-  @ApiProperty({ example: 'Alisher Karimov', description: 'Admin to\'liq ismi' })
+  @ApiProperty({ example: 'Alisher Karimov', description: "Admin to'liq ismi" })
   @IsString()
   adminFullName: string;
 
-  @ApiProperty({ example: 'testpro_admin', description: 'Admin login (unikal)' })
+  @ApiProperty({
+    example: 'testpro_admin',
+    description: 'Admin login (unikal)',
+  })
   @IsString()
   adminLogin: string;
 
-  @ApiProperty({ example: '+998901234567', description: 'Admin telefon raqami' })
+  @ApiProperty({
+    example: '+998901234567',
+    description: 'Admin telefon raqami',
+  })
   @IsString()
   adminPhone: string;
 
-  @ApiProperty({ example: 'secret123', description: 'Admin paroli (kamida 6 belgi)' })
+  @ApiProperty({
+    example: 'secret123',
+    description: 'Admin paroli (kamida 6 belgi)',
+  })
   @IsString()
-  @MinLength(6, { message: 'Parol kamida 6 ta belgidan iborat bo\'lishi kerak' })
+  @MinLength(6, { message: "Parol kamida 6 ta belgidan iborat bo'lishi kerak" })
   adminPassword: string;
 }
-
