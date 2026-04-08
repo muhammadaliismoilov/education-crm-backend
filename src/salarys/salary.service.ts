@@ -152,7 +152,7 @@ export class SalaryService {
       if (!studentsByGroup.has(row.groupId)) {
         studentsByGroup.set(row.groupId, []);
       }
-      studentsByGroup.get(row.groupId)!.push(row);
+      studentsByGroup.get(row.groupId).push(row);
     }
 
     const months = this.getMonthsInRange(startDate, endDate);
@@ -197,9 +197,7 @@ export class SalaryService {
         const monthStart = new Date(year, month - 1, 1);
         const monthEnd = new Date(year, month, 0);
         const rangeStart =
-          new Date(startDate) > monthStart
-            ? new Date(startDate)
-            : monthStart;
+          new Date(startDate) > monthStart ? new Date(startDate) : monthStart;
         const rangeEnd =
           new Date(endDate) < monthEnd ? new Date(endDate) : monthEnd;
 
@@ -224,8 +222,10 @@ export class SalaryService {
         );
 
         for (const student of students) {
-          const rawCustom = student.customPrice !== null ? Number(student.customPrice) : 0;
-          const effectivePrice = rawCustom > 0 ? rawCustom : Number(student.groupPrice);
+          const rawCustom =
+            student.customPrice !== null ? Number(student.customPrice) : 0;
+          const effectivePrice =
+            rawCustom > 0 ? rawCustom : Number(student.groupPrice);
 
           const perLessonRate = effectivePrice / monthLessons;
           const attendanceCount = monthAttMap.get(student.studentId) || 0;
@@ -328,10 +328,10 @@ export class SalaryService {
 
     try {
       const existing = await queryRunner.manager.findOne(SalaryPayout, {
-        where: { 
-          teacher: { id: teacherId }, 
+        where: {
+          teacher: { id: teacherId },
           startDate: new Date(startDate),
-          endDate: new Date(endDate)
+          endDate: new Date(endDate),
         },
       });
 
@@ -357,7 +357,7 @@ export class SalaryService {
         `Oylik to'landi [teacher: ${teacherId}] [oy: ${month}] [summa: ${amount}]`,
       );
 
-      return { message: "Oylik muvaffaqiyatli saqlandi", payout: saved };
+      return { message: 'Oylik muvaffaqiyatli saqlandi', payout: saved };
     } catch (err) {
       await queryRunner.rollbackTransaction();
       // SABABI: Moliyaviy xatolik — rollback bo'lganini logga yozish
@@ -380,7 +380,9 @@ export class SalaryService {
       .orderBy('payout.createdAt', 'DESC');
 
     if (user && user.role !== UserRole.SUPERADMIN) {
-      query.andWhere('payout.branchId = :branchId', { branchId: user.branchId });
+      query.andWhere('payout.branchId = :branchId', {
+        branchId: user.branchId,
+      });
     }
 
     if (searchMonth) {

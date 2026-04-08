@@ -7,7 +7,7 @@ import { User } from '../entities/user.entity';
 import { Student } from '../entities/students.entity';
 
 @Module({
-  imports:[TypeOrmModule.forFeature([Group,User,Student])],
+  imports: [TypeOrmModule.forFeature([Group, User, Student])],
   controllers: [GroupsController],
   providers: [GroupsService],
 })

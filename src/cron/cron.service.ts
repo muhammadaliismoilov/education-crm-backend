@@ -59,7 +59,10 @@ export class CronService {
           const invoicesToInsert: any[] = [];
 
           for (const student of students) {
-            if (!student.enrolledGroups || student.enrolledGroups.length === 0) {
+            if (
+              !student.enrolledGroups ||
+              student.enrolledGroups.length === 0
+            ) {
               totalSkipped++;
               continue;
             }
@@ -98,19 +101,23 @@ export class CronService {
           if (invoicesToInsert.length > 0) {
             // Chunks for bulk insert to avoid query limits
             for (let i = 0; i < invoicesToInsert.length; i += 100) {
-                const chunk = invoicesToInsert.slice(i, i + 100);
-                await queryRunner.manager
-                    .createQueryBuilder()
-                    .insert()
-                    .into(Invoice)
-                    .values(chunk)
-                    .execute();
+              const chunk = invoicesToInsert.slice(i, i + 100);
+              await queryRunner.manager
+                .createQueryBuilder()
+                .insert()
+                .into(Invoice)
+                .values(chunk)
+                .execute();
             }
           }
 
           if (bulkUpdates.length > 0) {
             for (const { id, newBalance } of bulkUpdates) {
-              await queryRunner.manager.update(Student, { id }, { balance: newBalance });
+              await queryRunner.manager.update(
+                Student,
+                { id },
+                { balance: newBalance },
+              );
             }
           }
 

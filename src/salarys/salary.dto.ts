@@ -40,7 +40,7 @@ export class PaySalaryDto {
 
   @ApiProperty({
     example: '2026-03-01',
-    description: "Hisoblash boshlangan sana (YYYY-MM-DD)",
+    description: 'Hisoblash boshlangan sana (YYYY-MM-DD)',
   })
   @IsString()
   @IsNotEmpty()
@@ -48,7 +48,7 @@ export class PaySalaryDto {
 
   @ApiProperty({
     example: '2026-03-31',
-    description: "Hisoblash tugagan sana (YYYY-MM-DD)",
+    description: 'Hisoblash tugagan sana (YYYY-MM-DD)',
   })
   @IsString()
   @IsNotEmpty()

@@ -10,7 +10,10 @@ import { FaceModule } from '../common/faceId/faceId.module';
 import { StudentSubscriber } from './student.subscriber';
 
 @Module({
-  imports:[TypeOrmModule.forFeature([Student,Group,StudentDiscount]),FaceModule],
+  imports: [
+    TypeOrmModule.forFeature([Student, Group, StudentDiscount]),
+    FaceModule,
+  ],
   controllers: [StudentsController],
   providers: [StudentsService, StudentSubscriber],
 })

@@ -29,7 +29,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   async validate(payload: any) {
     // Payload ichidagi 'sub' (User ID) orqali foydalanuvchini topamiz
     const user = await this.userRepo.findOne({ where: { id: payload.sub } });
-    if (!user) throw new UnauthorizedException('Foydalanuvchi topilmadi yoki token xato');
+    if (!user)
+      throw new UnauthorizedException(
+        'Foydalanuvchi topilmadi yoki token xato',
+      );
 
     // MUHIM: JWT payload dan branchId va role ni req.user ga biriktirish
     // Bu barcha servislar uchun branch filtrlash asosi

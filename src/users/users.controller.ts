@@ -307,8 +307,8 @@ export class UsersController {
     description: 'Foydalanuvchi topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async remove(@Param('id', ParseUUIDPipe) id: string) {
-    await this.usersService.remove(id);
+  async remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    await this.usersService.remove(id, req.user);
     return {
       success: true,
       message: 'Foydalanuvchi arxivlandi (soft-deleted)',
@@ -339,7 +339,34 @@ export class UsersController {
     description: 'Foydalanuvchi topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async restore(@Param('id', ParseUUIDPipe) id: string) {
-    return await this.usersService.restore(id);
+  async restore(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return await this.usersService.restore(id, req.user);
+  }
+
+  @Delete(':id/permanent')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: "Arxivlangan foydalanuvchini butunlay o'chirish",
+    description:
+      "Faqat arxivlangan user butunlay o'chiriladi. Bu amal qaytarilmaydi.",
+  })
+  @ApiParam({
+    name: 'id',
+    description: 'Foydalanuvchi UUID si',
+    format: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Foydalanuvchi butunlay o'chirildi",
+    schema: {
+      example: WRAP({
+        success: true,
+        message: "Foydalanuvchi butunlay o'chirildi",
+      }),
+    },
+  })
+  async hardDelete(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    await this.usersService.hardDelete(id, req.user);
+    return { success: true, message: "Foydalanuvchi butunlay o'chirildi" };
   }
 }

@@ -281,7 +281,11 @@ export class StudentsController {
     example: 10,
     description: 'Sahifadagi yozuvlar soni',
   })
-  @ApiQuery({ name: 'branchId', required: false, description: 'Filial bo\'yicha filter (faqat Superadmin uchun)' })
+  @ApiQuery({
+    name: 'branchId',
+    required: false,
+    description: "Filial bo'yicha filter (faqat Superadmin uchun)",
+  })
   @ApiResponse({
     status: 200,
     description: "Talabalar ro'yxati",
@@ -306,7 +310,14 @@ export class StudentsController {
     @Req() req?: any,
     @Query('branchId') branchId?: string,
   ) {
-    return this.studentsService.findAll(search, groupName, page, limit, req.user, branchId);
+    return this.studentsService.findAll(
+      search,
+      groupName,
+      page,
+      limit,
+      req.user,
+      branchId,
+    );
   }
 
   // ─────────────────────────────────────────────
@@ -391,137 +402,137 @@ export class StudentsController {
   // ─────────────────────────────────────────────
   // PATCH /students/:id
   // ─────────────────────────────────────────────
-    @Patch(':id')
-    @Roles(UserRole.ADMIN)
-    @ApiOperation({
-      summary: "Talaba ma'lumotlarini yangilash",
-      description:
-        'Istalgan fieldni yangilash mumkin. Rasm ixtiyoriy — yangi rasm yuborilsa ' +
-        "eski o'chiriladi va yuz descriptor yangilanadi. " +
-        'discounts da null yuborilsa imtiyoz bekor qilinadi.',
-    })
-    @ApiParam({ name: 'id', description: 'Talaba UUID si', format: 'uuid' })
-    @ApiConsumes('multipart/form-data')
-    @ApiBody({
-      schema: {
-        type: 'object',
-        properties: {
-          fullName: { type: 'string', example: 'Ali Valiyev' },
-          phone: {
-            type: 'string',
-            example: '+998901234567',
-            pattern: '^\\+998\\d{9}$',
-          },
-          parentName: { type: 'string', example: 'Valiyev Hamid' },
-          parentPhone: { type: 'string', example: '+998901234568' },
-          birthDate: {
-            type: 'string',
-            example: '2000-01-15',
-            description: 'YYYY-MM-DD',
-          },
-          direction: { type: 'string', example: 'Frontend' },
-          documentType: {
-            type: 'string',
-            enum: ['passport', 'birth_certificate'],
-            example: 'passport',
-          },
-          documentNumber: { type: 'string', example: 'AB1234567' },
-          pinfl: {
-            type: 'string',
-            example: '12345678901234',
-            minLength: 14,
-            maxLength: 14,
-          },
-          groupIds: {
-            type: 'array',
-            items: { type: 'string', format: 'uuid' },
-            example: ['bb096922-6249-4911-9a8c-9a503bb3e7d9'],
-            minItems: 1,
-          },
-          discounts: {
-            type: 'array',
-            description:
-              "Imtiyozli narxlar. customPrice=null bo'lsa imtiyoz bekor qilinadi.",
-            items: {
-              type: 'object',
-              properties: {
-                groupId: {
-                  type: 'string',
-                  format: 'uuid',
-                  example: 'bb096922-6249-4911-9a8c-9a503bb3e7d9',
-                },
-                customPrice: {
-                  type: 'number',
-                  example: 600000,
-                  nullable: true,
-                  description: 'null = imtiyozni bekor qilish',
-                },
+  @Patch(':id')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: "Talaba ma'lumotlarini yangilash",
+    description:
+      'Istalgan fieldni yangilash mumkin. Rasm ixtiyoriy — yangi rasm yuborilsa ' +
+      "eski o'chiriladi va yuz descriptor yangilanadi. " +
+      'discounts da null yuborilsa imtiyoz bekor qilinadi.',
+  })
+  @ApiParam({ name: 'id', description: 'Talaba UUID si', format: 'uuid' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        fullName: { type: 'string', example: 'Ali Valiyev' },
+        phone: {
+          type: 'string',
+          example: '+998901234567',
+          pattern: '^\\+998\\d{9}$',
+        },
+        parentName: { type: 'string', example: 'Valiyev Hamid' },
+        parentPhone: { type: 'string', example: '+998901234568' },
+        birthDate: {
+          type: 'string',
+          example: '2000-01-15',
+          description: 'YYYY-MM-DD',
+        },
+        direction: { type: 'string', example: 'Frontend' },
+        documentType: {
+          type: 'string',
+          enum: ['passport', 'birth_certificate'],
+          example: 'passport',
+        },
+        documentNumber: { type: 'string', example: 'AB1234567' },
+        pinfl: {
+          type: 'string',
+          example: '12345678901234',
+          minLength: 14,
+          maxLength: 14,
+        },
+        groupIds: {
+          type: 'array',
+          items: { type: 'string', format: 'uuid' },
+          example: ['bb096922-6249-4911-9a8c-9a503bb3e7d9'],
+          minItems: 1,
+        },
+        discounts: {
+          type: 'array',
+          description:
+            "Imtiyozli narxlar. customPrice=null bo'lsa imtiyoz bekor qilinadi.",
+          items: {
+            type: 'object',
+            properties: {
+              groupId: {
+                type: 'string',
+                format: 'uuid',
+                example: 'bb096922-6249-4911-9a8c-9a503bb3e7d9',
+              },
+              customPrice: {
+                type: 'number',
+                example: 600000,
+                nullable: true,
+                description: 'null = imtiyozni bekor qilish',
               },
             },
           },
-          photo: {
-            type: 'string',
-            format: 'binary',
-            description: 'Ixtiyoriy. JPG, PNG, WEBP, max 5MB.',
-          },
+        },
+        photo: {
+          type: 'string',
+          format: 'binary',
+          description: 'Ixtiyoriy. JPG, PNG, WEBP, max 5MB.',
         },
       },
-    })
-    @UseInterceptors(
-      FileInterceptor('photo', {
-        storage: diskStorage({
-          destination: './uploads/students/',
-          filename: (req, file, cb) => {
-            const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
-            cb(null, `temp_${unique}${extname(file.originalname)}`);
-          },
-        }),
-        limits: { fileSize: 5 * 1024 * 1024 },
-        fileFilter: (req, file, cb) => {
-          if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
-            return cb(
-              new BadRequestException('Faqat JPG, PNG, WEBP formatidagi rasmlar'),
-              false,
-            );
-          }
-          cb(null, true);
+    },
+  })
+  @UseInterceptors(
+    FileInterceptor('photo', {
+      storage: diskStorage({
+        destination: './uploads/students/',
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, `temp_${unique}${extname(file.originalname)}`);
         },
       }),
-    )
-    @ApiResponse({
-      status: 200,
-      description: 'Talaba muvaffaqiyatli yangilandi',
-      schema: { example: WRAP(STUDENT_EXAMPLE) },
-    })
-    @ApiResponse({
-      status: 400,
-      description: 'Validatsiya xatosi, rasmda yuz topilmadi yoki imtiyoz xatosi',
-      schema: {
-        example: {
-          statusCode: 400,
-          message: "Imtiyozli narx 800000 so'mdan kichik bo'lishi kerak",
-          error: 'Bad Request',
-        },
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (req, file, cb) => {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
+          return cb(
+            new BadRequestException('Faqat JPG, PNG, WEBP formatidagi rasmlar'),
+            false,
+          );
+        }
+        cb(null, true);
       },
-    })
-    @ApiResponse({
-      status: 404,
-      description: 'Talaba yoki guruh topilmadi',
-      schema: { example: NOT_FOUND },
-    })
-    @ApiResponse({
-      status: 409,
-      description: 'Telefon, PINFL yoki hujjat raqami band',
-      schema: { example: CONFLICT },
-    })
-    async update(
-      @Param('id', ParseUUIDPipe) id: string,
-      @Body() dto: UpdateStudentDto,
-      @Req() req: any,
-      @UploadedFile() file?: Express.Multer.File,
-    ) {
-      return this.studentsService.update(id, dto, req.user, file);
-    }
+    }),
+  )
+  @ApiResponse({
+    status: 200,
+    description: 'Talaba muvaffaqiyatli yangilandi',
+    schema: { example: WRAP(STUDENT_EXAMPLE) },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Validatsiya xatosi, rasmda yuz topilmadi yoki imtiyoz xatosi',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: "Imtiyozli narx 800000 so'mdan kichik bo'lishi kerak",
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Talaba yoki guruh topilmadi',
+    schema: { example: NOT_FOUND },
+  })
+  @ApiResponse({
+    status: 409,
+    description: 'Telefon, PINFL yoki hujjat raqami band',
+    schema: { example: CONFLICT },
+  })
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateStudentDto,
+    @Req() req: any,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.studentsService.update(id, dto, req.user, file);
+  }
 
   // ─────────────────────────────────────────────
   // DELETE /students/:id
@@ -580,5 +591,46 @@ export class StudentsController {
   })
   async restore(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
     return this.studentsService.restore(id, req.user);
+  }
+
+  // ─────────────────────────────────────────────
+  // DELETE /students/:id/permanent
+  // ─────────────────────────────────────────────
+  @Delete(':id/permanent')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: "Arxivlangan talabani butunlay o'chirish",
+    description:
+      "Faqat arxivlangan talabani doimiy o'chiradi. Bu amal qaytarib bo'lmaydi.",
+  })
+  @ApiParam({ name: 'id', description: 'Talaba UUID si', format: 'uuid' })
+  @ApiResponse({
+    status: 200,
+    description: "Talaba butunlay o'chirildi",
+    schema: {
+      example: WRAP({
+        success: true,
+        message: "Talaba butunlay o'chirildi",
+      }),
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Talaba arxivda bo'lmasa",
+    schema: {
+      example: {
+        statusCode: 400,
+        message: "Faqat arxivlangan talabani butunlay o'chirish mumkin",
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Talaba topilmadi',
+    schema: { example: NOT_FOUND },
+  })
+  async hardDelete(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    return this.studentsService.hardDelete(id, req.user);
   }
 }

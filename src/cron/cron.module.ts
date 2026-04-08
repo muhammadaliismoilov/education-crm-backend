@@ -6,11 +6,8 @@ import { Student } from '../entities/students.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { Invoice } from '../entities/invoice.entity';
 
-
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Student, StudentDiscount, Invoice]),
-  ],
+  imports: [TypeOrmModule.forFeature([Student, StudentDiscount, Invoice])],
   providers: [CronService],
   exports: [CronService], // Agar boshqa modullarda kerak bo'lsa
 })

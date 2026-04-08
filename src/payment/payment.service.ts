@@ -104,8 +104,14 @@ export class PaymentService {
       });
 
       if (!student) throw new BadRequestException('Talaba topilmadi');
-      if (user && user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
-        throw new BadRequestException('Boshqa filial talabasiga to\'lov qila olmaysiz');
+      if (
+        user &&
+        user.role !== 'superadmin' &&
+        student.branch?.id !== user.branchId
+      ) {
+        throw new BadRequestException(
+          "Boshqa filial talabasiga to'lov qila olmaysiz",
+        );
       }
       if (!student.enrolledGroups || student.enrolledGroups.length === 0)
         throw new BadRequestException('Talaba hech qanday guruhga yozilmagan');
@@ -193,21 +199,29 @@ export class PaymentService {
     }
   }
 
-  async findAll(search?: string, page = 1, limit = 10, user?: any, branchId?: string) {
+  async findAll(
+    search?: string,
+    page = 1,
+    limit = 10,
+    user?: any,
+    branchId?: string,
+  ) {
     const query = this.paymentRepo
       .createQueryBuilder('payment')
       .withDeleted()
       .leftJoinAndSelect('payment.student', 'student')
       .leftJoinAndSelect('payment.group', 'group')
       .leftJoinAndSelect('payment.branch', 'branch');
-    
+
     // TypeORM QueryBuilder-da join orqali o'chirilganlarni olish uchun 'withDeleted' parametr sifatida joinValue-da beriladi.
-    
+
     // Muhim: O'chirilgan o'quvchilarni ham ko'rish uchun QueryBuilder-da withDeleted student uchun ham kerak
     // TypeORM QueryBuilder-da leftJoinAndSelect + withDeleted birga ishlaydi.
 
     if (user && user.role !== 'superadmin') {
-      query.andWhere('payment.branchId = :branchId', { branchId: user.branchId });
+      query.andWhere('payment.branchId = :branchId', {
+        branchId: user.branchId,
+      });
     } else if (branchId) {
       query.andWhere('payment.branchId = :branchId', { branchId });
     }
@@ -316,7 +330,11 @@ export class PaymentService {
       withDeleted: true, // student o'chirilgan bo'lsa ham topishi uchun (TypeORM global withDeleted)
     });
     if (!payment) throw new NotFoundException("To'lov topilmadi");
-    if (user && user.role !== 'superadmin' && payment.branch?.id !== user.branchId) {
+    if (
+      user &&
+      user.role !== 'superadmin' &&
+      payment.branch?.id !== user.branchId
+    ) {
       throw new NotFoundException("To'lov topilmadi");
     }
 
@@ -358,8 +376,15 @@ export class PaymentService {
       withDeleted: true,
     });
     if (!payment) throw new NotFoundException("To'lov topilmadi");
-    if (!payment.student) throw new BadRequestException("Talaba ma'lumoti topilmadi (butkul o'chirilgan)");
-    if (user && user.role !== 'superadmin' && payment.branch?.id !== user.branchId) {
+    if (!payment.student)
+      throw new BadRequestException(
+        "Talaba ma'lumoti topilmadi (butkul o'chirilgan)",
+      );
+    if (
+      user &&
+      user.role !== 'superadmin' &&
+      payment.branch?.id !== user.branchId
+    ) {
       throw new NotFoundException("To'lov topilmadi");
     }
 
@@ -389,8 +414,8 @@ export class PaymentService {
       receiptNumber: payment.id.split('-')[0].toUpperCase(),
       date: payment.createdAt.toLocaleString('sv-SE'),
       student: {
-        fullName: payment.student?.fullName || "Arxivlangan talaba",
-        phone: payment.student?.phone || "",
+        fullName: payment.student?.fullName || 'Arxivlangan talaba',
+        phone: payment.student?.phone || '',
         currentBalance: payment.student?.balance || 0,
       },
       group: {
@@ -416,7 +441,11 @@ export class PaymentService {
       relations: ['student', 'group', 'branch'],
     });
     if (!payment) throw new NotFoundException("To'lov topilmadi");
-    if (user && user.role !== 'superadmin' && payment.branch?.id !== user.branchId) {
+    if (
+      user &&
+      user.role !== 'superadmin' &&
+      payment.branch?.id !== user.branchId
+    ) {
       throw new NotFoundException("To'lov topilmadi");
     }
 
@@ -438,7 +467,9 @@ export class PaymentService {
         // ✅ Imtiyoz 0 dan katta bo'lsagina ishlatiladi, aks holda group.price
         const rawCustomPrice = discount ? Number(discount.customPrice) : 0;
         const coursePrice =
-          rawCustomPrice > 0 ? rawCustomPrice : Number(payment.group?.price || 0);
+          rawCustomPrice > 0
+            ? rawCustomPrice
+            : Number(payment.group?.price || 0);
 
         const otherPaymentsResult = await queryRunner.manager
           .createQueryBuilder(Payment, 'p')
@@ -465,7 +496,7 @@ export class PaymentService {
           },
         );
 
-        await this.recalculateStudentBalance(queryRunner, studentId, id);
+        await this.recalculateStudentBalance(queryRunner, studentId);
       } else if (dto.paymentDate) {
         await queryRunner.manager.update(
           Payment,
@@ -505,7 +536,11 @@ export class PaymentService {
       relations: ['student', 'group', 'branch'],
     });
     if (!payment) throw new NotFoundException("To'lov topilmadi");
-    if (user && user.role !== 'superadmin' && payment.branch?.id !== user.branchId) {
+    if (
+      user &&
+      user.role !== 'superadmin' &&
+      payment.branch?.id !== user.branchId
+    ) {
       throw new NotFoundException("To'lov topilmadi");
     }
 

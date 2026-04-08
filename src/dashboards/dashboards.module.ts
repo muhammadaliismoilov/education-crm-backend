@@ -8,12 +8,9 @@ import { DashboardService } from './dashboards.service';
 import { DashboardController } from './dashboards.controller';
 
 @Module({
-  imports: [
-    TypeOrmModule.forFeature([Student, Payment, Group, Attendance]),
-  ],
-  controllers:[DashboardController],
-  providers:[DashboardService],
-  exports:[DashboardService]
-
+  imports: [TypeOrmModule.forFeature([Student, Payment, Group, Attendance])],
+  controllers: [DashboardController],
+  providers: [DashboardService],
+  exports: [DashboardService],
 })
 export class DashboardModule {}

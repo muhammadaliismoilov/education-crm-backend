@@ -53,7 +53,8 @@ async function bootstrap() {
     }),
   );
 
-  const clientOrigin = process.env.CLIENT_ORIGIN || 'https://crm-oquv-markaz.vercel.app';
+  const clientOrigin =
+    process.env.CLIENT_ORIGIN || 'https://crm-oquv-markaz.vercel.app';
 
   app.enableCors({
     origin: (origin, callback) => {
@@ -61,8 +62,11 @@ async function bootstrap() {
       // 1. Production frontend
       // 2. Localhost (development uchun)
       const allowedOrigins = [clientOrigin];
-      const isLocalhost = origin && (origin.startsWith('http://localhost') || origin.startsWith('http://127.0.0.1'));
-      
+      const isLocalhost =
+        origin &&
+        (origin.startsWith('http://localhost') ||
+          origin.startsWith('http://127.0.0.1'));
+
       if (!origin || allowedOrigins.includes(origin) || isLocalhost) {
         callback(null, true);
       } else {

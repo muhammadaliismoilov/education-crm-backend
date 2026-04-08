@@ -103,7 +103,10 @@ export class FaceService implements OnModuleInit {
     // Biz 0.6 ni 0% oxshashlik nuqtasi qilib belgilaymiz (yani qat'iyroq).
     // Masofa qancha kichik bo'lsa, similarity shuncha yuqori bo'ladi.
     const threshold = 0.6;
-    const similarity = Math.max(0, Math.round((1 - distance / threshold) * 100));
+    const similarity = Math.max(
+      0,
+      Math.round((1 - distance / threshold) * 100),
+    );
 
     return similarity;
   }

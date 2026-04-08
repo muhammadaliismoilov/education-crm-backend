@@ -1,7 +1,7 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
@@ -17,9 +17,13 @@ export class AuthService {
     private configService: ConfigService,
   ) {}
 
+  private async hashToken(token: string): Promise<string> {
+    return bcrypt.hash(token, 10);
+  }
+
   async login(loginDto: LoginDto) {
     const user = await this.userRepo.findOne({
-      where: { login: loginDto.login },
+      where: { login: loginDto.login, deletedAt: IsNull() },
       select: ['id', 'password', 'role', 'fullName'],
       relations: ['branch'],
     });
@@ -40,7 +44,8 @@ export class AuthService {
 
     const branchId = user.branch ? user.branch.id : null;
     const tokens = await this.getTokens(user.id, user.role, branchId);
-    await this.userRepo.update(user.id, { refreshToken: tokens.refreshToken });
+    const hashedRefreshToken = await this.hashToken(tokens.refreshToken);
+    await this.userRepo.update(user.id, { refreshToken: hashedRefreshToken });
 
     // SABABI: Kim, qachon tizimga kirdi — audit uchun
     this.logger.log(
@@ -73,12 +78,12 @@ export class AuthService {
     }
 
     const user = await this.userRepo.findOne({
-      where: { id: userId },
+      where: { id: userId, deletedAt: IsNull() },
       select: ['id', 'role', 'refreshToken', 'fullName'],
       relations: ['branch'],
     });
 
-    if (!user || !user.refreshToken || user.refreshToken !== refreshToken) {
+    if (!user || !user.refreshToken) {
       // SABABI: Token qayta ishlatilishi mumkin — xavfsizlik hodisasi
       this.logger.warn(
         `Refresh token bazada topilmadi — token reuse urinishi [userId: ${userId}]`,
@@ -88,9 +93,23 @@ export class AuthService {
       );
     }
 
+    const isRefreshTokenValid = await bcrypt.compare(
+      refreshToken,
+      user.refreshToken,
+    );
+    if (!isRefreshTokenValid) {
+      this.logger.warn(
+        `Refresh token mos kelmadi — ehtimol token reuse [userId: ${userId}]`,
+      );
+      throw new UnauthorizedException(
+        "Refresh token bazada topilmadi (allaqachon ishlatilgan bo'lishi mumkin)!",
+      );
+    }
+
     const branchId = user.branch ? user.branch.id : null;
     const tokens = await this.getTokens(user.id, user.role, branchId);
-    await this.userRepo.update(user.id, { refreshToken: tokens.refreshToken });
+    const hashedRefreshToken = await this.hashToken(tokens.refreshToken);
+    await this.userRepo.update(user.id, { refreshToken: hashedRefreshToken });
 
     return {
       ...tokens,

@@ -7,7 +7,7 @@ import { Group } from '../entities/group.entity';
 import { FaceModule } from '../common/faceId/faceId.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Attendance,Group]),FaceModule],
+  imports: [TypeOrmModule.forFeature([Attendance, Group]), FaceModule],
   providers: [AttendanceService],
   controllers: [AttendanceController],
 })

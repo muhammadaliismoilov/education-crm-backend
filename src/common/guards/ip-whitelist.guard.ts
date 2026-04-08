@@ -45,7 +45,9 @@ export class IpWhitelistGuard implements CanActivate {
 
     if (!isAllowed) {
       this.logger.warn(`Bloklangan ulanish urinishi: IP [${normalizedIp}]`);
-      throw new ForbiddenException(`Xavfsizlik choralari tufayli [${normalizedIp}] IP manziliga ruxsat yo'q.`);
+      throw new ForbiddenException(
+        `Xavfsizlik choralari tufayli [${normalizedIp}] IP manziliga ruxsat yo'q.`,
+      );
     }
 
     this.logger.debug(`Ruxsat berilgan ulanish: IP [${normalizedIp}]`);

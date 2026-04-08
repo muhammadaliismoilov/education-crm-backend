@@ -125,7 +125,11 @@ export class SalaryController {
     @Query('endDate') endDate?: string,
     @Req() req?: any,
   ) {
-    return this.salaryService.getEstimatedSalaries(startDate, endDate, req?.user);
+    return this.salaryService.getEstimatedSalaries(
+      startDate,
+      endDate,
+      req?.user,
+    );
   }
 
   // ─────────────────────────────────────────────
@@ -214,7 +218,7 @@ export class SalaryController {
       teacherId,
       startDate,
       endDate,
-      req?.user
+      req?.user,
     );
   }
 

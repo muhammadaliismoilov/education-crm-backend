@@ -24,7 +24,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     // 2. Xatolik xabarini qat'iy aniqlash
     let message = 'Internal server error';
-    
+
     if (exception instanceof HttpException) {
       const res = exception.getResponse();
       message = typeof res === 'object' ? res['message'] : res;
@@ -37,7 +37,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     // Bu qism 500 xatosini qaysi qatorda ekanini ko'rsatadi
     this.logger.error(
       `Method: ${request.method} | URL: ${request.url}`,
-      exception instanceof Error ? exception.stack : JSON.stringify(exception)
+      exception instanceof Error ? exception.stack : JSON.stringify(exception),
     );
 
     // 4. Foydalanuvchiga qaytarish

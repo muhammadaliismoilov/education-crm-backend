@@ -24,7 +24,9 @@ export class Attendance {
   @ManyToOne(() => Group, (group) => group.attendances, { onDelete: 'CASCADE' })
   group: Group;
 
-  @ManyToOne(() => Student, (student) => student.attendances, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Student, (student) => student.attendances, {
+    onDelete: 'CASCADE',
+  })
   student: Student;
 
   @CreateDateColumn()

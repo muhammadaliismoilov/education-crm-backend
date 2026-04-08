@@ -149,7 +149,9 @@ export class CreateStudentDto {
   @Transform(({ value }) => {
     let parsed = value;
     if (typeof value === 'string') {
-      try { parsed = JSON.parse(value); } catch {}
+      try {
+        parsed = JSON.parse(value);
+      } catch {}
     }
     if (!Array.isArray(parsed)) return [parsed];
     return parsed;
@@ -174,7 +176,9 @@ export class CreateStudentDto {
   @Transform(({ value }) => {
     let parsed = value;
     if (typeof value === 'string') {
-      try { parsed = JSON.parse(value); } catch {}
+      try {
+        parsed = JSON.parse(value);
+      } catch {}
     }
     if (!Array.isArray(parsed)) parsed = [parsed];
     return plainToInstance(DiscountItemDto, parsed);
@@ -183,7 +187,8 @@ export class CreateStudentDto {
 
   @ApiProperty({
     example: '123e4567-e89b-12d3-a456-426614174000',
-    description: "Talaba biriktiriladigan filial ID si (Faqat Superadmin uchun)",
+    description:
+      'Talaba biriktiriladigan filial ID si (Faqat Superadmin uchun)',
     required: false,
   })
   @IsUUID()
@@ -192,7 +197,6 @@ export class CreateStudentDto {
 }
 
 export class UpdateStudentDto extends PartialType(CreateStudentDto) {
-
   @ApiProperty({ required: false, type: 'string', format: 'binary' })
   @IsOptional()
   photo?: any;
@@ -220,7 +224,9 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
   @Transform(({ value }) => {
     let parsed = value;
     if (typeof value === 'string') {
-      try { parsed = JSON.parse(value); } catch {}
+      try {
+        parsed = JSON.parse(value);
+      } catch {}
     }
     if (!Array.isArray(parsed)) return [parsed];
     return parsed;
@@ -241,7 +247,9 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
   @Transform(({ value }) => {
     let parsed = value;
     if (typeof value === 'string') {
-      try { parsed = JSON.parse(value); } catch {}
+      try {
+        parsed = JSON.parse(value);
+      } catch {}
     }
     if (!Array.isArray(parsed)) parsed = [parsed];
     return plainToInstance(DiscountItemDto, parsed);
@@ -250,7 +258,8 @@ export class UpdateStudentDto extends PartialType(CreateStudentDto) {
 
   @ApiProperty({
     example: '123e4567-e89b-12d3-a456-426614174000',
-    description: "Talaba biriktiriladigan filial ID si (Faqat Superadmin uchun)",
+    description:
+      'Talaba biriktiriladigan filial ID si (Faqat Superadmin uchun)',
     required: false,
   })
   @IsUUID()

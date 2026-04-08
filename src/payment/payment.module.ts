@@ -9,12 +9,11 @@ import { Student } from '../entities/students.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { RedisCacheService } from '../common/redis/redis.cache';
 
-
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Payment, User, Group, Student,StudentDiscount]),
+    TypeOrmModule.forFeature([Payment, User, Group, Student, StudentDiscount]),
   ],
   controllers: [PaymentController],
-  providers: [PaymentService,RedisCacheService],
+  providers: [PaymentService, RedisCacheService],
 })
 export class PaymentModule {}

@@ -6,12 +6,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, In } from 'typeorm';
+import { DataSource, Repository, In, Between } from 'typeorm';
 import { DocumentType, Student } from '../entities/students.entity';
 import { Group } from '../entities/group.entity';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { Invoice } from '../entities/invoice.entity';
+import { Payment } from '../entities/payment.entity';
 import { FaceService } from '../common/faceId/faceId.service';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -71,6 +72,43 @@ export class StudentsService {
     };
   }
 
+  private getCurrentMonthBounds(): { start: Date; end: Date } {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const end = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+    return { start, end };
+  }
+
+  private async recalculateStudentBalance(studentId: string): Promise<void> {
+    const paidRow = await this.dataSource.manager
+      .createQueryBuilder(Payment, 'p')
+      .select('SUM(CAST(p.amount AS DECIMAL))', 'totalPaid')
+      .where('p.studentId = :studentId', { studentId })
+      .getRawOne();
+
+    const invoicedRow = await this.dataSource.manager
+      .createQueryBuilder(Invoice, 'i')
+      .select('SUM(CAST(i.amount AS DECIMAL))', 'totalInvoiced')
+      .where('i.studentId = :studentId', { studentId })
+      .getRawOne();
+
+    const totalPaid = Number(paidRow?.totalPaid || 0);
+    const totalInvoiced = Number(invoicedRow?.totalInvoiced || 0);
+
+    await this.studentRepo.update(
+      { id: studentId },
+      { balance: totalPaid - totalInvoiced },
+    );
+  }
+
   // ─────────────────────────────────────────────
   // HELPER — rasm saqlash (create va update uchun umumiy)
   // ─────────────────────────────────────────────
@@ -117,7 +155,8 @@ export class StudentsService {
     }
 
     try {
-      const { groupIds, pinfl, documentNumber, discounts, ...studentData } = dto;
+      const { groupIds, pinfl, documentNumber, discounts, ...studentData } =
+        dto;
 
       const existing = await this.studentRepo.findOne({
         where: [
@@ -163,7 +202,10 @@ export class StudentsService {
         direction:
           dto.direction || (groups.length > 0 ? groups[0].name : undefined),
         enrolledGroups: groups,
-        branch: user.role === 'superadmin' && dto.branchId ? { id: dto.branchId } : { id: user.branchId },
+        branch:
+          user.role === 'superadmin' && dto.branchId
+            ? { id: dto.branchId }
+            : { id: user.branchId },
       });
 
       let saved = await this.studentRepo.save(student);
@@ -205,9 +247,10 @@ export class StudentsService {
       let initialBalanceDebt = 0;
       for (const group of groups) {
         const discount = discounts?.find((d) => d.groupId === group.id);
-        const effectivePrice = discount && Number(discount.customPrice) > 0
-          ? Number(discount.customPrice)
-          : Number(group.price || 0);
+        const effectivePrice =
+          discount && Number(discount.customPrice) > 0
+            ? Number(discount.customPrice)
+            : Number(group.price || 0);
 
         if (effectivePrice > 0) {
           const invoice = this.dataSource.manager.create(Invoice, {
@@ -224,7 +267,9 @@ export class StudentsService {
       if (initialBalanceDebt > 0) {
         saved.balance = -initialBalanceDebt;
         saved = await this.studentRepo.save(saved);
-        this.logger.log(`Birinchi oylik qarzlar belgilandi: -${initialBalanceDebt} [student: ${saved.id}]`);
+        this.logger.log(
+          `Birinchi oylik qarzlar belgilandi: -${initialBalanceDebt} [student: ${saved.id}]`,
+        );
       }
 
       if (file && faceDescriptor) {
@@ -258,7 +303,14 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 2. FIND ALL
   // ─────────────────────────────────────────────
-  async findAll(search?: string, groupName?: string, page = 1, limit = 10, user?: any, branchId?: string) {
+  async findAll(
+    search?: string,
+    groupName?: string,
+    page = 1,
+    limit = 10,
+    user?: any,
+    branchId?: string,
+  ) {
     const query = this.studentRepo
       .createQueryBuilder('student')
       .leftJoinAndSelect('student.enrolledGroups', 'group')
@@ -267,7 +319,9 @@ export class StudentsService {
       .leftJoinAndSelect('discount.group', 'discountGroup');
 
     if (user && user.role !== 'superadmin') {
-      query.andWhere('student.branchId = :branchId', { branchId: user.branchId });
+      query.andWhere('student.branchId = :branchId', {
+        branchId: user.branchId,
+      });
     } else if (branchId) {
       query.andWhere('student.branchId = :branchId', { branchId });
     }
@@ -315,7 +369,11 @@ export class StudentsService {
       ],
     });
     if (!student) throw new NotFoundException('Student topilmadi');
-    if (user && user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
+    if (
+      user &&
+      user.role !== 'superadmin' &&
+      student.branch?.id !== user.branchId
+    ) {
       throw new NotFoundException('Student topilmadi');
     }
     return this.formatStudent(student);
@@ -330,7 +388,12 @@ export class StudentsService {
     return newVal;
   }
 
-  async update(id: string, dto: UpdateStudentDto, user: any, file?: Express.Multer.File) {
+  async update(
+    id: string,
+    dto: UpdateStudentDto,
+    user: any,
+    file?: Express.Multer.File,
+  ) {
     let faceDescriptor: number[] | undefined;
     if (file) {
       faceDescriptor = await this.verifyFace(file);
@@ -348,7 +411,9 @@ export class StudentsService {
 
       // Senior Level: Multi-tenant xavfsizlik tekshiruvi
       if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
-        throw new NotFoundException('Student topilmadi yoki unga ruxsatingiz yo\'q');
+        throw new NotFoundException(
+          "Student topilmadi yoki unga ruxsatingiz yo'q",
+        );
       }
 
       const {
@@ -363,7 +428,9 @@ export class StudentsService {
 
       // Faqat superadmin filialni o'zgartira oladi
       if (user.role !== 'superadmin' && branchId) {
-        this.logger.warn(`Filialni o'zgartirishga urinish rad etildi: Foydalanuvchi [${user.id}]`);
+        this.logger.warn(
+          `Filialni o'zgartirishga urinish rad etildi: Foydalanuvchi [${user.id}]`,
+        );
         // branchId'ni e'tiborsiz qoldiramiz
       }
 
@@ -393,15 +460,16 @@ export class StudentsService {
       }
 
       let newGroupsToCharge: Group[] = [];
+      let needsBalanceRecalc = false;
       if (groupIds && groupIds.length > 0) {
         const groups = await this.groupRepo.findBy({ id: In(groupIds) });
         if (groups.length !== groupIds.length)
           throw new NotFoundException(
             'Bir yoki bir nechta tanlangan guruhlar topilmadi',
           );
-        
-        const oldGroupIds = new Set(student.enrolledGroups.map(g => g.id));
-        newGroupsToCharge = groups.filter(g => !oldGroupIds.has(g.id));
+
+        const oldGroupIds = new Set(student.enrolledGroups.map((g) => g.id));
+        newGroupsToCharge = groups.filter((g) => !oldGroupIds.has(g.id));
 
         student.enrolledGroups = groups;
         if (!dto.direction?.trim()) student.direction = groups[0].name;
@@ -494,14 +562,28 @@ export class StudentsService {
 
       // Yangi qo'shilgan guruhlar uchun initial invoice
       if (newGroupsToCharge.length > 0) {
-        let addedDebt = 0;
+        const { start, end } = this.getCurrentMonthBounds();
         for (const group of newGroupsToCharge) {
           const discount = discounts?.find((d) => d.groupId === group.id);
-          const effectivePrice = discount && Number(discount.customPrice) > 0
-            ? Number(discount.customPrice)
-            : Number(group.price || 0);
+          const effectivePrice =
+            discount && Number(discount.customPrice) > 0
+              ? Number(discount.customPrice)
+              : Number(group.price || 0);
 
           if (effectivePrice > 0) {
+            const existingThisMonth = await this.dataSource.manager.findOne(
+              Invoice,
+              {
+                where: {
+                  student: { id },
+                  group: { id: group.id },
+                  type: 'monthly_fee',
+                  createdAt: Between(start, end),
+                },
+              },
+            );
+
+            if (!existingThisMonth) {
               const invoice = this.dataSource.manager.create(Invoice, {
                 amount: effectivePrice,
                 type: 'monthly_fee',
@@ -509,12 +591,9 @@ export class StudentsService {
                 group: { id: group.id },
               });
               await this.dataSource.manager.save(invoice);
-              addedDebt += effectivePrice;
+              needsBalanceRecalc = true;
+            }
           }
-        }
-        if (addedDebt > 0) {
-          student.balance = Number(student.balance) - addedDebt;
-          this.logger.log(`Yangi qo'shilgan guruhlar uchun ${addedDebt} so'm qarz yozildi [student: ${id}]`);
         }
       }
 
@@ -525,17 +604,24 @@ export class StudentsService {
           this.deleteFileIfExists(student.photoUrl);
           student.photoUrl = null;
           student.faceDescriptor = null;
-          this.logger.log(`Rasm va biometrik ma'lumotlar o'chirildi [student: ${id}]`);
+          this.logger.log(
+            `Rasm va biometrik ma'lumotlar o'chirildi [student: ${id}]`,
+          );
         }
-      } 
+      }
       // 2. Agar yangi rasm yuklansa (bundan avvalgi logika bilan birga)
       else if (file && faceDescriptor) {
         student.photoUrl = this.movePhoto(file, id, student.photoUrl);
         student.faceDescriptor = faceDescriptor;
-        this.logger.log(`Rasm va biometrik ma'lumotlar yangilandi [student: ${id}]`);
+        this.logger.log(
+          `Rasm va biometrik ma'lumotlar yangilandi [student: ${id}]`,
+        );
       }
 
       const saved = await this.studentRepo.save(student);
+      if (needsBalanceRecalc) {
+        await this.recalculateStudentBalance(saved.id);
+      }
       this.logger.log(`Talaba muvaffaqiyatli yangilandi [id: ${id}]`);
       return await this.findOne(saved.id);
     } catch (error) {
@@ -560,14 +646,14 @@ export class StudentsService {
   // 5. REMOVE
   // ─────────────────────────────────────────────
   async remove(id: string, user: any) {
-    const student = await this.studentRepo.findOne({ 
+    const student = await this.studentRepo.findOne({
       where: { id },
-      relations: ['branch']
+      relations: ['branch'],
     });
     if (!student) throw new NotFoundException('Student topilmadi');
 
     if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
-      throw new NotFoundException('Student topilmadi (ruxsat yo\'q)');
+      throw new NotFoundException("Student topilmadi (ruxsat yo'q)");
     }
 
     await this.studentRepo.softRemove(student);
@@ -587,7 +673,9 @@ export class StudentsService {
       .where('student.deletedAt IS NOT NULL');
 
     if (user && user.role !== 'superadmin') {
-      query.andWhere('student.branchId = :branchId', { branchId: user.branchId });
+      query.andWhere('student.branchId = :branchId', {
+        branchId: user.branchId,
+      });
     }
 
     if (search) {
@@ -618,20 +706,52 @@ export class StudentsService {
   // 7. RESTORE
   // ─────────────────────────────────────────────
   async restore(id: string, user: any) {
-    const student = await this.studentRepo.findOne({ 
-      where: { id }, 
+    const student = await this.studentRepo.findOne({
+      where: { id },
       withDeleted: true,
-      relations: ['branch']
+      relations: ['branch'],
     });
     if (!student) throw new NotFoundException('Student topilmadi');
 
     if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
-      throw new NotFoundException('Student topilmadi (ruxsat yo\'q)');
+      throw new NotFoundException("Student topilmadi (ruxsat yo'q)");
     }
 
     await this.studentRepo.restore(id);
     // SABABI: Qayta tiklash ham audit uchun muhim harakat
     this.logger.log(`Talaba qayta tiklandi [id: ${id}]`);
     return await this.findOne(id, user); // Userni findOne'ga ham berdik
+  }
+
+  // ─────────────────────────────────────────────
+  // 8. HARD DELETE (permanent)
+  // ─────────────────────────────────────────────
+  async hardDelete(id: string, user: any) {
+    const student = await this.studentRepo.findOne({
+      where: { id },
+      withDeleted: true,
+      relations: ['branch'],
+    });
+    if (!student) throw new NotFoundException('Student topilmadi');
+
+    if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
+      throw new NotFoundException("Student topilmadi (ruxsat yo'q)");
+    }
+
+    if (!student.deletedAt) {
+      throw new BadRequestException(
+        "Faqat arxivlangan talabani butunlay o'chirish mumkin",
+      );
+    }
+
+    if (student.photoUrl) {
+      this.deleteFileIfExists(student.photoUrl);
+    }
+
+    await this.studentRepo.remove(student);
+    this.logger.log(
+      `Talaba butunlay o'chirildi [id: ${id}] [tel: ${student.phone}]`,
+    );
+    return { success: true, message: "Talaba butunlay o'chirildi" };
   }
 }

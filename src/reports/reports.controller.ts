@@ -44,161 +44,161 @@ const DATE_ERROR = {
 export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
-@Get('finance/yearly')
-@Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
-@ApiOperation({
-  summary: 'Yillik moliyaviy tahlil hisoboti',
-  description:
-    'Berilgan yil uchun yillik summary va har oylik ' +
-    'daromad, qarzdorlik, oqituvchilar oyligi va sof foyda hisoblanadi. ' +
-    'Natija 3 daqiqa keshlanadi.',
-})
-@ApiQuery({
-  name: 'year',
-  required: false,
-  example: '2026',
-  description: 'Yil (YYYY). Default: joriy yil',
-})
-@ApiResponse({
-  status: 200,
-  description: 'Yillik moliyaviy hisobot muvaffaqiyatli qaytarildi',
-  schema: {
-    example: WRAP({
-      summary: {
-        totalIncome: 3300000,
-        totalPending: 300000,
-        totalTeacherSalaries: 185808,
-        netProfit: 3114192,
-        currency: "so'm",
-        generatedAt: '2026-03-16T10:00:00.000Z',
-        period: {
-          from: '2026-01-01T00:00:00.000Z',
-          to: '2026-12-31T23:59:59.999Z',
-        },
-      },
-      monthlyData: [
-        {
-          month: 1,
-          monthName: 'Yanvar',
-          totalIncome: 0,
-          totalPending: 0,
-          totalTeacherSalaries: 0,
-          netProfit: 0,
-        },
-        {
-          month: 2,
-          monthName: 'Fevral',
-          totalIncome: 800000,
-          totalPending: 0,
-          totalTeacherSalaries: 92904,
-          netProfit: 707096,
-        },
-        {
-          month: 3,
-          monthName: 'Mart',
-          totalIncome: 2500000,
+  @Get('finance/yearly')
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @ApiOperation({
+    summary: 'Yillik moliyaviy tahlil hisoboti',
+    description:
+      'Berilgan yil uchun yillik summary va har oylik ' +
+      'daromad, qarzdorlik, oqituvchilar oyligi va sof foyda hisoblanadi. ' +
+      'Natija 3 daqiqa keshlanadi.',
+  })
+  @ApiQuery({
+    name: 'year',
+    required: false,
+    example: '2026',
+    description: 'Yil (YYYY). Default: joriy yil',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Yillik moliyaviy hisobot muvaffaqiyatli qaytarildi',
+    schema: {
+      example: WRAP({
+        summary: {
+          totalIncome: 3300000,
           totalPending: 300000,
-          totalTeacherSalaries: 92904,
-          netProfit: 2407096,
+          totalTeacherSalaries: 185808,
+          netProfit: 3114192,
+          currency: "so'm",
+          generatedAt: '2026-03-16T10:00:00.000Z',
+          period: {
+            from: '2026-01-01T00:00:00.000Z',
+            to: '2026-12-31T23:59:59.999Z',
+          },
         },
-        {
-          month: 4,
-          monthName: 'Aprel',
-          totalIncome: 0,
-          totalPending: 0,
-          totalTeacherSalaries: 0,
-          netProfit: 0,
-        },
-        {
-          month: 5,
-          monthName: 'May',
-          totalIncome: 0,
-          totalPending: 0,
-          totalTeacherSalaries: 0,
-          netProfit: 0,
-        },
-        {
-          month: 6,
-          monthName: 'Iyun',
-          totalIncome: 0,
-          totalPending: 0,
-          totalTeacherSalaries: 0,
-          netProfit: 0,
-        },
-        {
-          month: 7,
-          monthName: 'Iyul',
-          totalIncome: 0,
-          totalPending: 0,
-          totalTeacherSalaries: 0,
-          netProfit: 0,
-        },
-        {
-          month: 8,
-          monthName: 'Avgust',
-          totalIncome: 0,
-          totalPending: 0,
-          totalTeacherSalaries: 0,
-          netProfit: 0,
-        },
-        {
-          month: 9,
-          monthName: 'Sentyabr',
-          totalIncome: 0,
-          totalPending: 0,
-          totalTeacherSalaries: 0,
-          netProfit: 0,
-        },
-        {
-          month: 10,
-          monthName: 'Oktyabr',
-          totalIncome: 0,
-          totalPending: 0,
-          totalTeacherSalaries: 0,
-          netProfit: 0,
-        },
-        {
-          month: 11,
-          monthName: 'Noyabr',
-          totalIncome: 0,
-          totalPending: 0,
-          totalTeacherSalaries: 0,
-          netProfit: 0,
-        },
-        {
-          month: 12,
-          monthName: 'Dekabr',
-          totalIncome: 0,
-          totalPending: 0,
-          totalTeacherSalaries: 0,
-          netProfit: 0,
-        },
-      ],
-    }),
-  },
-})
-@ApiResponse({
-  status: 400,
-  description: "Yil formati noto'g'ri",
-  schema: {
-    example: {
-      success: false,
-      message: "Yil formati noto'g'ri. To'g'ri format: YYYY (masalan: 2026)",
+        monthlyData: [
+          {
+            month: 1,
+            monthName: 'Yanvar',
+            totalIncome: 0,
+            totalPending: 0,
+            totalTeacherSalaries: 0,
+            netProfit: 0,
+          },
+          {
+            month: 2,
+            monthName: 'Fevral',
+            totalIncome: 800000,
+            totalPending: 0,
+            totalTeacherSalaries: 92904,
+            netProfit: 707096,
+          },
+          {
+            month: 3,
+            monthName: 'Mart',
+            totalIncome: 2500000,
+            totalPending: 300000,
+            totalTeacherSalaries: 92904,
+            netProfit: 2407096,
+          },
+          {
+            month: 4,
+            monthName: 'Aprel',
+            totalIncome: 0,
+            totalPending: 0,
+            totalTeacherSalaries: 0,
+            netProfit: 0,
+          },
+          {
+            month: 5,
+            monthName: 'May',
+            totalIncome: 0,
+            totalPending: 0,
+            totalTeacherSalaries: 0,
+            netProfit: 0,
+          },
+          {
+            month: 6,
+            monthName: 'Iyun',
+            totalIncome: 0,
+            totalPending: 0,
+            totalTeacherSalaries: 0,
+            netProfit: 0,
+          },
+          {
+            month: 7,
+            monthName: 'Iyul',
+            totalIncome: 0,
+            totalPending: 0,
+            totalTeacherSalaries: 0,
+            netProfit: 0,
+          },
+          {
+            month: 8,
+            monthName: 'Avgust',
+            totalIncome: 0,
+            totalPending: 0,
+            totalTeacherSalaries: 0,
+            netProfit: 0,
+          },
+          {
+            month: 9,
+            monthName: 'Sentyabr',
+            totalIncome: 0,
+            totalPending: 0,
+            totalTeacherSalaries: 0,
+            netProfit: 0,
+          },
+          {
+            month: 10,
+            monthName: 'Oktyabr',
+            totalIncome: 0,
+            totalPending: 0,
+            totalTeacherSalaries: 0,
+            netProfit: 0,
+          },
+          {
+            month: 11,
+            monthName: 'Noyabr',
+            totalIncome: 0,
+            totalPending: 0,
+            totalTeacherSalaries: 0,
+            netProfit: 0,
+          },
+          {
+            month: 12,
+            monthName: 'Dekabr',
+            totalIncome: 0,
+            totalPending: 0,
+            totalTeacherSalaries: 0,
+            netProfit: 0,
+          },
+        ],
+      }),
     },
-  },
-})
-async getYearlyFinance(@Query('year') yearStr?: string, @Req() req?: any) {
-  const currentYear = new Date().getFullYear();
-  const year = yearStr ? parseInt(yearStr, 10) : currentYear;
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Yil formati noto'g'ri",
+    schema: {
+      example: {
+        success: false,
+        message: "Yil formati noto'g'ri. To'g'ri format: YYYY (masalan: 2026)",
+      },
+    },
+  })
+  async getYearlyFinance(@Query('year') yearStr?: string, @Req() req?: any) {
+    const currentYear = new Date().getFullYear();
+    const year = yearStr ? parseInt(yearStr, 10) : currentYear;
 
-  if (isNaN(year) || year < 2000 || year > currentYear + 1) {
-    throw new BadRequestException(
-      "Yil formati noto'g'ri. To'g'ri format: YYYY (masalan: 2026)",
-    );
+    if (isNaN(year) || year < 2000 || year > currentYear + 1) {
+      throw new BadRequestException(
+        "Yil formati noto'g'ri. To'g'ri format: YYYY (masalan: 2026)",
+      );
+    }
+
+    return this.reportsService.getYearlyFinancialOverview(year, req?.user);
   }
-
-  return this.reportsService.getYearlyFinancialOverview(year, req?.user);
-}
   // ─────────────────────────────────────────────
   // GET /reports/finance
   // ─────────────────────────────────────────────

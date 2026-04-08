@@ -69,7 +69,7 @@ export class CreateGroupDto {
 
   @ApiProperty({
     example: 'branch-uuid',
-    description: "Filial UUID si (Superadmin uchun)",
+    description: 'Filial UUID si (Superadmin uchun)',
     required: false,
   })
   @IsOptional()
