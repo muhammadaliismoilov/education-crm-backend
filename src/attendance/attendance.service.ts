@@ -405,7 +405,10 @@ export class AttendanceService {
       `Face verify: guruh=${group.name}, eng yuqori oxshashlik=${highestSimilarity}%`,
     );
 
-    if (!matchedStudent || highestSimilarity < 55) {
+    // SENIOR: 2-QADAM - Similarity filtri xatosi to'g'irlandi. 
+    // Yuzingiz turli kundagi yorug'likda 0.45 distance gacha farq qiladi, bu bizning formula bilan 25% ga to'g'ri keladi. 
+    // (Bungacha u 0.27 ideal sharoit talab qilgan)
+    if (!matchedStudent || highestSimilarity < 25) {
       return {
         success: false,
         message: 'Talaba tanilmadi',
