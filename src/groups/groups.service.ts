@@ -117,11 +117,12 @@ export class GroupsService {
       .getManyAndCount();
 
     return {
-      items,
+      data: items,
       meta: {
         totalItems: total,
         totalPages: Math.ceil(total / limit),
-        currentPage: page,
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
       },
     };
   }

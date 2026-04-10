@@ -47,12 +47,23 @@ export class FaceService implements OnModuleInit {
     await this.loadModels();
 
     const img = await loadImage(imagePath);
-    const canvas = createCanvas(img.width, img.height);
-    const ctx = canvas.getContext('2d');
-    ctx.drawImage(img as any, 0, 0);
+    
+    // SENIOR: 1-QADAM - CPU Qotib qolmasligi uchun rasmni siqish
+    let width = img.width;
+    let height = img.height;
+    const MAX_WIDTH = 600;
+    if (width > MAX_WIDTH) {
+      height = Math.round(height * (MAX_WIDTH / width));
+      width = MAX_WIDTH;
+    }
 
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img as any, 0, 0, width, height);
+
+    // Kichik yorug'likda ham ishlashi uchun minConfidence 0.3 (default: 0.5)
     const detection = await faceapi
-      .detectSingleFace(canvas as any)
+      .detectSingleFace(canvas as any, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
       .withFaceLandmarks()
       .withFaceDescriptor();
 
@@ -74,12 +85,22 @@ export class FaceService implements OnModuleInit {
     const buffer = Buffer.from(base64Data, 'base64');
 
     const img = await loadImage(buffer);
-    const canvas = createCanvas(img.width, img.height);
+
+    // SENIOR: 1-QADAM - CPU Qotib qolmasligi uchun rasmni siqish
+    let width = img.width;
+    let height = img.height;
+    const MAX_WIDTH = 600;
+    if (width > MAX_WIDTH) {
+      height = Math.round(height * (MAX_WIDTH / width));
+      width = MAX_WIDTH;
+    }
+
+    const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
-    ctx.drawImage(img as any, 0, 0);
+    ctx.drawImage(img as any, 0, 0, width, height);
 
     const detection = await faceapi
-      .detectSingleFace(canvas as any)
+      .detectSingleFace(canvas as any, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
       .withFaceLandmarks()
       .withFaceDescriptor();
 

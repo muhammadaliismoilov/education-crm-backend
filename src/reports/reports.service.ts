@@ -433,7 +433,13 @@ export class ReportsService {
   // ─────────────────────────────────────────────
   // 3. O'QITUVCHILAR SAMARADORLIGI
   // ─────────────────────────────────────────────
-  async getTeacherPerformance(startDate: Date, endDate: Date, user?: any) {
+  async getTeacherPerformance(
+    startDate: Date,
+    endDate: Date,
+    user?: any,
+    page = 1,
+    limit = 10,
+  ) {
     const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
     const start = new Date(startDate);
     start.setHours(0, 0, 0, 0);
@@ -512,12 +518,25 @@ export class ReportsService {
       };
     });
 
+    const totalItems = result.length;
+    const paginatedData = result.slice((page - 1) * limit, page * limit);
+
+    const finalResult = {
+      data: paginatedData,
+      meta: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
+      },
+    };
+
     try {
-      await this.cacheManager.set(cacheKey, result, CACHE_TTL.teacher);
+      await this.cacheManager.set(cacheKey, finalResult, CACHE_TTL.teacher);
     } catch (e) {
       this.logger.warn(`Cache set xatolik [${cacheKey}]: ${e.message}`);
     }
 
-    return result;
+    return finalResult;
   }
 }
