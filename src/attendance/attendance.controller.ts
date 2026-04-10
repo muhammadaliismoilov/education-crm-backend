@@ -243,19 +243,14 @@ export class AttendanceController {
     description: 'Oy (YYYY-MM). Berilmasa joriy oy olinadi',
     example: '2026-03',
   })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiResponse({
     status: 200,
     description: 'Oylik davomat hisoboti',
     schema: {
       example: WRAP({
-        groupInfo: {
-          id: 'bb096922-6249-4911-9a8c-9a503bb3e7d9',
-          name: 'Node.js Backend',
-          totalStudents: 10,
-        },
-        month: '2026-03',
-        columns: ['2026-03-03 14:00', '2026-03-05 14:00', '2026-03-10 14:00'],
-        students: [
+        data: [
           {
             studentId: 'f6ed8de6-1f66-4f20-b1da-aecd5bc2b5a8',
             fullName: 'Alisher Karimov',
@@ -266,17 +261,15 @@ export class AttendanceController {
               '2026-03-10 14:00': 1,
             },
           },
-          {
-            studentId: 'a1b2c3d4-1234-5678-abcd-ef1234567890',
-            fullName: 'Zulfiya Rahimova',
-            totalPresent: 1,
-            attendance: {
-              '2026-03-03 14:00': null,
-              '2026-03-05 14:00': 1,
-              '2026-03-10 14:00': 0,
-            },
-          },
         ],
+        meta: { totalItems: 10, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+        groupInfo: {
+          id: 'bb096922-6249-4911-9a8c-9a503bb3e7d9',
+          name: 'Node.js Backend',
+          totalStudents: 10,
+        },
+        month: '2026-03',
+        columns: ['2026-03-03 14:00', '2026-03-05 14:00', '2026-03-10 14:00'],
       }),
     },
   })
@@ -300,12 +293,16 @@ export class AttendanceController {
   async getMonthlyReport(
     @Query('groupId', ParseUUIDPipe) groupId: string,
     @Query('month') month?: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
     @Request() req?: any,
   ) {
     return this.attendanceService.getGroupMonthlyAttendance(
       groupId,
       month,
       req?.user,
+      page,
+      limit,
     );
   }
 

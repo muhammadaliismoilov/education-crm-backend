@@ -378,11 +378,12 @@ export class StudentsService {
       .getManyAndCount();
 
     return {
-      items: items.map((s) => this.formatStudent(s)),
+      data: items.map((s) => this.formatStudent(s)),
       meta: {
         totalItems: total,
         totalPages: Math.ceil(total / limit),
-        currentPage: page,
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
       },
     };
   }
@@ -764,12 +765,12 @@ export class StudentsService {
       .getManyAndCount();
 
     return {
-      items,
+      data: items,
       meta: {
         totalItems: total,
         totalPages: Math.ceil(total / limit),
-        currentPage: page,
-        itemsPerPage: limit,
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
       },
     };
   }

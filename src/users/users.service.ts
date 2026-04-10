@@ -159,8 +159,9 @@ export class UsersService {
       data: items,
       meta: {
         totalItems: total,
-        currentPage: page,
         totalPages: Math.ceil(total / limit),
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
       },
     };
   }
@@ -266,8 +267,9 @@ export class UsersService {
       data: items,
       meta: {
         totalItems: total,
-        currentPage: page,
         totalPages: Math.ceil(total / limit),
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
       },
     };
   }

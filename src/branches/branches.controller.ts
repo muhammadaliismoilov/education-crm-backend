@@ -8,13 +8,15 @@ import {
   Delete,
   UseGuards,
   ParseUUIDPipe,
+  Req,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
-  ApiBearerAuth,
   ApiResponse,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { BranchesService } from './branches.service';
 import {
@@ -140,8 +142,13 @@ export class BranchesController {
     description: "Filiallar ro'yxati",
     schema: { example: WRAP([BRANCH_EXAMPLE]) },
   })
-  findAll() {
-    return this.branchesService.findAll();
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  findAll(
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+  ) {
+    return this.branchesService.findAll(page, limit);
   }
 
   @Get(':id')
@@ -179,11 +186,13 @@ export class BranchesController {
     description: 'Filial topilmadi',
     schema: { example: NOT_FOUND() },
   })
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
   update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() updateBranchDto: UpdateBranchDto,
+    @Req() req: any,
   ) {
-    return this.branchesService.update(id, updateBranchDto);
+    return this.branchesService.update(id, updateBranchDto, req?.user);
   }
 
   @Delete(':id')

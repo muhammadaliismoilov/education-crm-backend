@@ -291,14 +291,14 @@ export class StudentsController {
     description: "Talabalar ro'yxati",
     schema: {
       example: WRAP({
-        items: [
+        data: [
           {
             ...STUDENT_EXAMPLE,
             payments: undefined,
             attendances: undefined,
           },
         ],
-        meta: { totalItems: 87, totalPages: 9, currentPage: 1 },
+        meta: { totalItems: 87, totalPages: 9, currentPage: 1, itemsPerPage: 10 },
       }),
     },
   })
@@ -342,7 +342,7 @@ export class StudentsController {
     description: "Arxivlangan talabalar ro'yxati",
     schema: {
       example: WRAP({
-        items: [
+        data: [
           {
             id: 'uuid',
             fullName: 'Zulfiya Rahimova',

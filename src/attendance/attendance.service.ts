@@ -115,9 +115,9 @@ export class AttendanceService {
       incomingLon,
     );
 
-    if (distance > 50) {
+    if (distance > 400) {
       throw new ForbiddenException(
-        `Siz O'quv markazdan juda uzoqdasiz. Markazgacha masofa: ${Math.round(distance)} metr. Ruxsat etilgan masofa: 50 metr.`,
+        `Siz O'quv markazdan juda uzoqdasiz. Markazgacha masofa: ${Math.round(distance)} metr. Ruxsat etilgan masofa: 400 metr.`,
       );
     }
   }
@@ -462,7 +462,13 @@ export class AttendanceService {
     };
   }
 
-  async getGroupMonthlyAttendance(groupId: string, month?: string, user?: any) {
+  async getGroupMonthlyAttendance(
+    groupId: string,
+    month?: string,
+    user?: any,
+    page = 1,
+    limit = 10,
+  ) {
     if (month && !/^\d{4}-\d{2}$/.test(month)) {
       throw new BadRequestException(
         "Month formati noto'g'ri. To'g'ri format: YYYY-MM (masalan: 2026-02)",
@@ -528,7 +534,13 @@ export class AttendanceService {
       (s) => s && !s.deletedAt,
     );
 
-    const reportData = activeStudents.map((student) => {
+    const totalItems = activeStudents.length;
+    const paginatedStudents = activeStudents.slice(
+      (page - 1) * limit,
+      page * limit,
+    );
+
+    const reportData = paginatedStudents.map((student) => {
       let totalPresent = 0;
       const dailyStatus: Record<string, number | null> = {};
 
@@ -554,6 +566,13 @@ export class AttendanceService {
     });
 
     return {
+      data: reportData,
+      meta: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
+      },
       groupInfo: {
         id: group.id,
         name: group.name,
@@ -561,7 +580,6 @@ export class AttendanceService {
       },
       month: targetMonth,
       columns: distinctColumns,
-      students: reportData,
     };
   }
 }
