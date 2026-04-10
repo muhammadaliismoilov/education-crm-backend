@@ -154,8 +154,8 @@ export class PaymentController {
     description: "To'lovlar ro'yxati",
     schema: {
       example: WRAP({
-        items: [PAYMENT_EXAMPLE],
-        meta: { totalItems: 50, totalPages: 5, currentPage: 1 },
+        data: [PAYMENT_EXAMPLE],
+        meta: { totalItems: 50, totalPages: 5, currentPage: 1, itemsPerPage: 10 },
       }),
     },
   })

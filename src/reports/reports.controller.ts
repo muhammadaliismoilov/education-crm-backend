@@ -307,15 +307,14 @@ export class ReportsController {
     example: '2026-03-13',
     description: 'Tugash sanasi (YYYY-MM-DD). Default: bugun',
   })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiResponse({
     status: 200,
     description: "O'qituvchilar samaradorligi muvaffaqiyatli qaytarildi",
     schema: {
-      example: WRAP(
-        // TUZATISH: service array qaytaradi — har bir yozuv bitta guruh uchun:
-        // { teacherId, teacherName, groupName, totalLessons,
-        //   totalStudents, shouldAttend, attendedCount, attendanceRate }
-        [
+      example: WRAP({
+        data: [
           {
             teacherId: 'f6ed8de6-1f66-4f20-b1da-aecd5bc2b5a8',
             teacherName: 'Jasur Toshmatov',
@@ -326,28 +325,9 @@ export class ReportsController {
             attendedCount: 148,
             attendanceRate: 82,
           },
-          {
-            teacherId: 'f6ed8de6-1f66-4f20-b1da-aecd5bc2b5a8',
-            teacherName: 'Jasur Toshmatov',
-            groupName: 'Python',
-            totalLessons: 8,
-            totalStudents: 12,
-            shouldAttend: 96,
-            attendedCount: 84,
-            attendanceRate: 88,
-          },
-          {
-            teacherId: 'a1b2c3d4-1234-5678-abcd-ef1234567890',
-            teacherName: 'Nilufar Hasanova',
-            groupName: 'English A1',
-            totalLessons: 20,
-            totalStudents: 10,
-            shouldAttend: 200,
-            attendedCount: 170,
-            attendanceRate: 85,
-          },
         ],
-      ),
+        meta: { totalItems: 3, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+      }),
     },
   })
   @ApiResponse({
@@ -358,10 +338,18 @@ export class ReportsController {
   async getTeacherPerformance(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
     @Req() req?: any,
   ) {
     const { start, end } = this.validateDates(startDate, endDate);
-    return this.reportsService.getTeacherPerformance(start, end, req?.user);
+    return this.reportsService.getTeacherPerformance(
+      start,
+      end,
+      req?.user,
+      page,
+      limit,
+    );
   }
 
   // ─────────────────────────────────────────────

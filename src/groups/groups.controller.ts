@@ -135,14 +135,14 @@ export class GroupsController {
     description: "Guruhlar ro'yxati",
     schema: {
       example: WRAP({
-        items: [
+        data: [
           {
             ...GROUP_EXAMPLE,
             studentsCount: 12,
             teacher: TEACHER_EXAMPLE,
           },
         ],
-        meta: { totalItems: 5, totalPages: 1, currentPage: 1 },
+        meta: { totalItems: 5, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
       }),
     },
   })

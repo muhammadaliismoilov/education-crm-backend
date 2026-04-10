@@ -75,29 +75,13 @@ export class SalaryController {
       "Bazaga yozmaydi. Davomat asosida har bir o'qituvchi uchun oylik " +
       "hisoblanadi. Faqat hisoblangan oylik > 0 bo'lgan o'qituvchilar ko'rsatiladi.",
   })
-  @ApiQuery({
-    name: 'startDate',
-    required: false,
-    example: '2026-03-01',
-    description: 'Boshlanish sanasi (YYYY-MM-DD). Default: joriy oyning 1-kuni',
-  })
-  @ApiQuery({
-    name: 'endDate',
-    required: false,
-    example: '2026-03-31',
-    description:
-      'Tugash sanasi (YYYY-MM-DD). Default: joriy oyning oxirgi kuni',
-  })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiResponse({
     status: 200,
     description: "Barcha o'qituvchilar hisoblanayotgan oyliklari",
     schema: {
       example: WRAP({
-        // TUZATISH: service { timestamp, startDate, endDate, teachersCount, data } qaytaradi
-        timestamp: '2026-03-13T10:00:00.000Z',
-        startDate: '2026-03-01',
-        endDate: '2026-03-31',
-        teachersCount: 2,
         data: [
           {
             teacherId: 'f6ed8de6-1f66-4f20-b1da-aecd5bc2b5a8',
@@ -117,18 +101,26 @@ export class SalaryController {
             ],
           },
         ],
+        meta: { totalItems: 2, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+        timestamp: '2026-03-13T10:00:00.000Z',
+        startDate: '2026-03-01',
+        endDate: '2026-03-31',
       }),
     },
   })
   async getAllEstimated(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
     @Req() req?: any,
   ) {
     return this.salaryService.getEstimatedSalaries(
       startDate,
       endDate,
       req?.user,
+      page,
+      limit,
     );
   }
 
@@ -277,24 +269,25 @@ export class SalaryController {
     description:
       "Oy bo'yicha filter qilish mumkin. Eng yangi to'lovlar birinchi.",
   })
-  @ApiQuery({
-    name: 'month',
-    required: false,
-    example: '2026-03',
-    description: "Oy bo'yicha filter (YYYY-MM)",
-  })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiResponse({
     status: 200,
     description: "To'langan oyliklar ro'yxati",
     schema: {
-      example: WRAP(
-        // TUZATISH: service SalaryPayout[] array qaytaradi — { data, meta } emas!
-        [PAYOUT_EXAMPLE],
-      ),
+      example: WRAP({
+        data: [PAYOUT_EXAMPLE],
+        meta: { totalItems: 1, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+      }),
     },
   })
-  async findAll(@Query('month') month?: string, @Req() req?: any) {
-    return this.salaryService.findAll(month, req?.user);
+  async findAll(
+    @Query('month') month?: string,
+    @Query('page') page: number = 1,
+    @Query('limit') limit: number = 10,
+    @Req() req?: any,
+  ) {
+    return this.salaryService.findAll(month, req?.user, page, limit);
   }
 
   // ─────────────────────────────────────────────

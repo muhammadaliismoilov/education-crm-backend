@@ -25,7 +25,13 @@ export class SalaryService {
   ) {}
 
   // 1. BARCHA O'QITUVCHILAR OYLIGI
-  async getEstimatedSalaries(startDate?: string, endDate?: string, user?: any) {
+  async getEstimatedSalaries(
+    startDate?: string,
+    endDate?: string,
+    user?: any,
+    page = 1,
+    limit = 10,
+  ) {
     const now = new Date();
     const start =
       startDate ??
@@ -73,12 +79,20 @@ export class SalaryService {
       }
     }
 
+    const totalItems = report.length;
+    const paginatedData = report.slice((page - 1) * limit, page * limit);
+
     return {
+      data: paginatedData,
+      meta: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
+      },
       timestamp: new Date().toISOString(),
       startDate: start,
       endDate: end,
-      teachersCount: report.length,
-      data: report,
     };
   }
 
@@ -372,7 +386,12 @@ export class SalaryService {
   }
 
   // 4. BARCHA TO'LANGAN OYLIKLAR
-  async findAll(searchMonth?: string, user?: any) {
+  async findAll(
+    searchMonth?: string,
+    user?: any,
+    page = 1,
+    limit = 10,
+  ) {
     const query = this.payoutRepo
       .createQueryBuilder('payout')
       .withDeleted()
@@ -389,7 +408,20 @@ export class SalaryService {
       query.andWhere('payout.forMonth = :month', { month: searchMonth });
     }
 
-    return await query.getMany();
+    const [items, totalItems] = await query
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data: items,
+      meta: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
+      },
+    };
   }
 
   // 5. BITTA TO'LOV

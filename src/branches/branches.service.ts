@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -102,8 +103,22 @@ export class BranchesService {
   // ────────────────────────────────────────────────────────────
   // 3. Barcha filiallar
   // ────────────────────────────────────────────────────────────
-  async findAll() {
-    return this.branchRepo.find({ order: { createdAt: 'DESC' } });
+  async findAll(page: number = 1, limit: number = 10) {
+    const skip = (page - 1) * limit;
+    const [data, totalItems] = await this.branchRepo.findAndCount({
+      order: { createdAt: 'DESC' },
+      skip,
+      take: limit,
+    });
+    return {
+      data,
+      meta: {
+        totalItems,
+        totalPages: Math.ceil(totalItems / limit),
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
+      },
+    };
   }
 
   // ────────────────────────────────────────────────────────────
@@ -121,8 +136,11 @@ export class BranchesService {
   // ────────────────────────────────────────────────────────────
   // 5. Yangilash
   // ────────────────────────────────────────────────────────────
-  async update(id: string, dto: UpdateBranchDto) {
+  async update(id: string, dto: UpdateBranchDto, user?: any) {
     await this.findOne(id);
+    if (user && user.role === UserRole.ADMIN && user.branchId !== id) {
+      throw new ForbiddenException("Siz faqat o'z filialingizni tahrirlay olasiz");
+    }
     await this.branchRepo.update(id, dto);
     return this.findOne(id);
   }

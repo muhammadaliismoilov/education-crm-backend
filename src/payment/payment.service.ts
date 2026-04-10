@@ -314,11 +314,12 @@ export class PaymentService {
     });
 
     return {
-      items: formattedItems,
+      data: formattedItems,
       meta: {
         totalItems: total,
         totalPages: Math.ceil(total / limit),
-        currentPage: page,
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
       },
     };
   }
