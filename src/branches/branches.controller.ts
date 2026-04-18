@@ -144,13 +144,11 @@ export class BranchesController {
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
-  findAll(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-  ) {
+  findAll(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
     return this.branchesService.findAll(page, limit);
   }
 
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
   @Get(':id')
   @ApiOperation({
     summary: "Filial ma'lumotlarini olish",

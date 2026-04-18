@@ -27,9 +27,14 @@ export class IpWhitelistGuard implements CanActivate {
       .map((ip) => ip.trim())
       .filter((ip) => ip.length > 0);
 
-    // Agar hech qanday IP belgilanmagan bo'lsa (fayl bo'sh bo'lsa), xavfsizlik uchun hammani bloklaymiz yoki ruxsat beramiz.
-    // Senior level yondashuv: Agarda whitelist bo'sh bo'lsa, demak cheklov o'rnatilmagan (yoki development).
+    // ALLOWED_IPS bo'sh bo'lsa — cheklov yo'q (development rejimi)
+    // Lekin production'da bu XAVFLI, shuning uchun ogohlantirish chiqaramiz
     if (allowedIps.length === 0) {
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.warn(
+          '⚠️  ALLOWED_IPS .env da ko\'rsatilmagan — IP cheklovi O\'CHIRILGAN! Production uchun xavfli!',
+        );
+      }
       return true;
     }
 
