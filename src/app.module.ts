@@ -48,7 +48,7 @@ import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
         password: configService.get<string>('DB_PASS'),
         database: configService.get<string>('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: true,
+        synchronize: process.env.NODE_ENV !== 'production', // Production'da XAVFLI — migratsiya ishlating!
       }),
     }),
     TypeOrmModule.forFeature([Branch]),

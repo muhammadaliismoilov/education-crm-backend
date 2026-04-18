@@ -67,15 +67,16 @@ async function bootstrap() {
         (origin.startsWith('http://localhost') ||
           origin.startsWith('http://127.0.0.1'));
 
-      const isVpsOrDomain =
+      // VPS IP to'g'ridan CORS ga kirmaydi — faqat domen orqali
+      const isAllowedDomain =
         origin &&
-        (origin.includes('bar-bers.uz') || origin.includes('31.128.45.119'));
+        (origin.includes('bar-bers.uz') || origin.includes('crm.uz'));
 
       if (
         !origin ||
         allowedOrigins.includes(origin) ||
         isLocalhost ||
-        isVpsOrDomain
+        isAllowedDomain
       ) {
         callback(null, true);
       } else {
@@ -98,9 +99,15 @@ async function bootstrap() {
     .build();
 
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document, {
-    swaggerOptions: { persistAuthorization: true },
-  });
+  // Swagger faqat development'da ochiq bo'lsin
+  if (process.env.NODE_ENV !== 'production') {
+    SwaggerModule.setup('api/docs', app, document, {
+      swaggerOptions: { persistAuthorization: true },
+    });
+    logger.warn('⚠️  Swagger /api/docs — faqat development uchun ochiq!');
+  } else {
+    logger.log('🔒 Swagger production da yopiq.');
+  }
 
   const PORT = process.env.PORT || 3001;
 
