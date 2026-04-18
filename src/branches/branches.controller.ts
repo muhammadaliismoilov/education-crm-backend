@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Put,
@@ -23,6 +24,7 @@ import {
   CreateBranchDto,
   UpdateBranchDto,
   CreateBranchWithAdminDto,
+  UpdateBranchLocationDto,
 } from './branches.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -130,6 +132,46 @@ export class BranchesController {
   })
   createWithAdmin(@Body() dto: CreateBranchWithAdminDto) {
     return this.branchesService.createWithAdmin(dto);
+  }
+
+  // ─── ADMIN — O'z filialining lokatsiyasini tahrirlash ─────────────────────
+  @Patch('my-location')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'O\'z filiali lokatsiyasini tahrirlash (faqat Admin)',
+    description:
+      'Admin FAQAT o\'z filialining latitude va longitude koordinatalarini ' +
+      'yangilashi mumkin. Boshqa ma\'lumotlar (nom, telefon, subdomen va h.k.) ' +
+      'o\'zgartirilmaydi. Branch ID JWT tokendan avtomatik olinadi.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lokatsiya muvaffaqiyatli yangilandi',
+    schema: {
+      example: WRAP({
+        ...BRANCH_EXAMPLE,
+        latitude: 41.2995,
+        longitude: 69.2401,
+      }),
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Ruxsat yo\'q — admin boshqa filialga biriktirilmagan',
+    schema: {
+      example: {
+        statusCode: 403,
+        message:
+          'Sizga hech qaysi filial biriktirilmagan. Superadminga murojaat qiling.',
+        error: 'Forbidden',
+      },
+    },
+  })
+  updateMyLocation(
+    @Body() dto: UpdateBranchLocationDto,
+    @Req() req: any,
+  ) {
+    return this.branchesService.updateLocation(dto, req.user);
   }
 
   @Get()
