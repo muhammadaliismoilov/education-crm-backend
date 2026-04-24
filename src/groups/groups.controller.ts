@@ -11,6 +11,8 @@ import {
   UseGuards,
   ParseUUIDPipe,
   Req,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -125,6 +127,7 @@ export class GroupsController {
     description: "Guruh nomi bo'yicha qidiruv",
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiQuery({
     name: 'branchId',
     required: false,
@@ -148,14 +151,15 @@ export class GroupsController {
   })
   findAll(
     @Query('search') search?: string,
-    @Query('page') page?: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
     @Req() req?: any,
     @Query('branchId') branchId?: string,
   ) {
     return this.groupsService.findAll(
       search,
-      Number(page) || 1,
-      10,
+      page,
+      limit,
       req.user,
       branchId,
     );
