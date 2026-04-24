@@ -100,7 +100,13 @@ export class GroupsService {
       .leftJoinAndSelect('group.branch', 'branch')
       .loadRelationCountAndMap('group.studentsCount', 'group.students');
 
-    if (user && user.role !== 'superadmin') {
+    if (user && user.role === 'teacher') {
+      // Teacher faqat o'z guruhlarini ko'rishi kerak
+      // branchId bilan birga teacherId bo'yicha ham filter qilinadi
+      // shunda paginatsiya faqat o'qituvchining guruhlari soniga asoslanadi
+      query.andWhere('teacher.id = :teacherId', { teacherId: user.id });
+      query.andWhere('group.branchId = :branchId', { branchId: user.branchId });
+    } else if (user && user.role !== 'superadmin') {
       query.andWhere('group.branchId = :branchId', { branchId: user.branchId });
     } else if (branchId) {
       query.andWhere('group.branchId = :branchId', { branchId });
