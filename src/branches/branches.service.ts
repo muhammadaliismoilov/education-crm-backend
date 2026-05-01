@@ -14,6 +14,7 @@ import {
   UpdateBranchDto,
   CreateBranchWithAdminDto,
   UpdateBranchLocationDto,
+  ToggleTeacherManualAttendanceDto,
 } from './branches.dto';
 
 @Injectable()
@@ -183,6 +184,38 @@ export class BranchesService {
 
     this.logger.log(
       `Admin[${user.id}] filial[${user.branchId}] lokatsiyasini yangiladi: lat=${dto.latitude}, lng=${dto.longitude}`,
+    );
+
+    return this.findOne(user.branchId);
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // 8. O'qituvchi uchun qo'lda davomat sozlamasini o'zgartirish
+  //    Admin faqat o'z filialining sozlamasini o'zgartira oladi
+  // ────────────────────────────────────────────────────────────
+  async toggleTeacherManualAttendance(
+    dto: ToggleTeacherManualAttendanceDto,
+    user: any,
+  ) {
+    if (!user.branchId) {
+      throw new ForbiddenException(
+        'Sizga hech qaysi filial biriktirilmagan. Superadminga murojaat qiling.',
+      );
+    }
+
+    const branch = await this.branchRepo.findOne({
+      where: { id: user.branchId },
+    });
+    if (!branch) {
+      throw new NotFoundException('Sizga biriktirilgan filial topilmadi');
+    }
+
+    await this.branchRepo.update(user.branchId, {
+      allowTeacherManualAttendance: dto.allowTeacherManualAttendance,
+    });
+
+    this.logger.log(
+      `Admin[${user.id}] filial[${user.branchId}] o'qituvchi qo'lda davomat sozlamasini o'zgartirdi: ${dto.allowTeacherManualAttendance}`,
     );
 
     return this.findOne(user.branchId);

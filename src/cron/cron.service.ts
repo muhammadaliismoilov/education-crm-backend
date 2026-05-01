@@ -70,6 +70,8 @@ export class CronService {
             let studentMonthlyCharge = 0;
 
             for (const g of student.enrolledGroups) {
+              if (g.isActive === false) continue; // Arxivlangan guruhlar uchun to'lov yozilmaydi
+
               const discount = student.discounts?.find(
                 (d) => d.group?.id === g.id,
               );

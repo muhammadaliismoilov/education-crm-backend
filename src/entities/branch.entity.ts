@@ -32,6 +32,9 @@ export class Branch {
   @Column({ default: true })
   isActive: boolean;
 
+  @Column({ default: false })
+  allowTeacherManualAttendance: boolean;
+
   @Column({ type: 'decimal', precision: 10, scale: 6, nullable: true })
   latitude: number;
 

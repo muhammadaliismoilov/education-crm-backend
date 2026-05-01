@@ -25,6 +25,7 @@ import {
   UpdateBranchDto,
   CreateBranchWithAdminDto,
   UpdateBranchLocationDto,
+  ToggleTeacherManualAttendanceDto,
 } from './branches.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -172,6 +173,46 @@ export class BranchesController {
     @Req() req: any,
   ) {
     return this.branchesService.updateLocation(dto, req.user);
+  }
+
+  // ─── ADMIN — O'qituvchining qo'lda davomat sozlamasini o'zgartirish ─────────
+  @Patch('teacher-manual-attendance')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: "O'qituvchi qo'lda davomat sozlamasini o'zgartirish (faqat Admin)",
+    description:
+      "Admin o'z filiali uchun o'qituvchiga qo'lda davomat qilish huquqini " +
+      'yoqadi yoki o\'chiradi. ' +
+      'true → O\'qituvchi qo\'lda ham davomat qila oladi. ' +
+      'false → O\'qituvchi faqat FaceID orqali davomat qila oladi.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sozlama muvaffaqiyatli yangilandi',
+    schema: {
+      example: WRAP({
+        ...BRANCH_EXAMPLE,
+        allowTeacherManualAttendance: true,
+      }),
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: "Ruxsat yo'q — admin filialga biriktirilmagan",
+    schema: {
+      example: {
+        statusCode: 403,
+        message:
+          'Sizga hech qaysi filial biriktirilmagan. Superadminga murojaat qiling.',
+        error: 'Forbidden',
+      },
+    },
+  })
+  toggleTeacherManualAttendance(
+    @Body() dto: ToggleTeacherManualAttendanceDto,
+    @Req() req: any,
+  ) {
+    return this.branchesService.toggleTeacherManualAttendance(dto, req.user);
   }
 
   @Get()
