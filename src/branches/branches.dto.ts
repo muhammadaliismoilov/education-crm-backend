@@ -190,6 +190,21 @@ export class CreateBranchWithAdminDto {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Admin uchun — O'qituvchi qo'lda davomat sozlamasini o'zgartirish
+// ──────────────────────────────────────────────────────────────────────────────
+export class ToggleTeacherManualAttendanceDto {
+  @ApiProperty({
+    example: true,
+    description:
+      "true → O'qituvchi qo'lda davomat qila oladi; false → Faqat FaceID orqali",
+  })
+  @IsBoolean({
+    message: "allowTeacherManualAttendance — true yoki false bo'lishi kerak",
+  })
+  allowTeacherManualAttendance: boolean;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Admin uchun — FAQAT lokatsiyani tahrirlash
 // Boshqa fieldlar (name, phone, isActive, subdomain va h.k.) QABUL QILINMAYDI
 // ──────────────────────────────────────────────────────────────────────────────
