@@ -119,6 +119,13 @@ export class GroupsController {
   @ApiOperation({
     summary: 'Arxivlangan guruhlarni qidirish va sahifalab olish',
   })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: "Guruh nomi bo'yicha qidiruv",
+  })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   findAllDeleted(
     @Query('search') search?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
