@@ -143,9 +143,10 @@ export class UsersService {
     }
 
     if (search) {
+      const cleanSearch = search.replace(/[\s\-\(\)]/g, '');
       query.andWhere(
-        '(user.fullName ILike :search OR user.phone ILike :search OR user.login ILike :search)',
-        { search: `%${search}%` },
+        '(user.fullName ILike :search OR user.phone ILike :cleanSearch OR user.login ILike :search)',
+        { search: `%${search}%`, cleanSearch: `%${cleanSearch}%` },
       );
     }
 
@@ -251,9 +252,10 @@ export class UsersService {
     }
 
     if (search) {
+      const cleanSearch = search.replace(/[\s\-\(\)]/g, '');
       query.andWhere(
-        '(user.fullName ILike :search OR user.phone ILike :search OR user.login ILike :search)',
-        { search: `%${search}%` },
+        '(user.fullName ILike :search OR user.phone ILike :cleanSearch OR user.login ILike :search)',
+        { search: `%${search}%`, cleanSearch: `%${cleanSearch}%` },
       );
     }
 

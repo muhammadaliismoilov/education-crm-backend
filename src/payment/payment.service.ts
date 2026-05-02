@@ -227,9 +227,11 @@ export class PaymentService {
     }
 
     if (search) {
-      query.andWhere('student.fullName ILike :search', {
-        search: `%${search}%`,
-      });
+      const cleanSearch = search.replace(/[\s\-\(\)]/g, '');
+      query.andWhere(
+        '(student.fullName ILike :search OR student.phone ILike :cleanSearch)',
+        { search: `%${search}%`, cleanSearch: `%${cleanSearch}%` }
+      );
     }
 
     const [items, total] = await query

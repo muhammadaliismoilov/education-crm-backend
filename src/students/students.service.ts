@@ -361,9 +361,10 @@ export class StudentsService {
     }
 
     if (search) {
+      const cleanSearch = search.replace(/[\s\-\(\)]/g, '');
       query.andWhere(
-        '(student.fullName ILike :search OR student.phone ILike :search)',
-        { search: `%${search}%` },
+        '(student.fullName ILike :search OR student.phone ILike :cleanSearch)',
+        { search: `%${search}%`, cleanSearch: `%${cleanSearch}%` },
       );
     }
 
@@ -752,9 +753,10 @@ export class StudentsService {
     }
 
     if (search) {
+      const cleanSearch = search.replace(/[\s\-\(\)]/g, '');
       query.andWhere(
-        '(student.fullName ILike :search OR student.phone ILike :search OR student.pinfl ILike :search)',
-        { search: `%${search}%` },
+        '(student.fullName ILike :search OR student.phone ILike :cleanSearch OR student.pinfl ILike :search)',
+        { search: `%${search}%`, cleanSearch: `%${cleanSearch}%` },
       );
     }
 
