@@ -14,7 +14,10 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME || 'education_crm',
   synchronize: false, // Migratsiyalar paytida har doim false bo'lishi kerak
   logging: false,
-  entities: [join(__dirname, '/**/*.entity{.ts,.js}')],
+  entities: [
+    join(__dirname, '/**/*.entity{.ts,.js}'),
+    join(__dirname, '/entities/*{.ts,.js}')
+  ],
   migrations: [join(__dirname, '/migrations/*{.ts,.js}')],
   subscribers: [],
 });
