@@ -232,6 +232,7 @@ export class GroupsService {
     const query = this.groupRepo
       .createQueryBuilder('group')
       .withDeleted()
+      .addSelect('group.deletedAt')
       .leftJoinAndSelect('group.teacher', 'teacher')
       .leftJoinAndSelect('group.branch', 'branch')
       .where('group.deletedAt IS NOT NULL');
