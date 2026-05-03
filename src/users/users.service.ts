@@ -40,9 +40,9 @@ export class UsersService {
         throw new NotFoundException('Foydalanuvchi topilmadi');
       }
 
-      if (target.role !== UserRole.TEACHER) {
+      if (target.role !== UserRole.TEACHER && target.role !== UserRole.MANAGER) {
         throw new ForbiddenException(
-          'Admin faqat teacher foydalanuvchilarni boshqara oladi',
+          'Admin faqat teacher yoki manager foydalanuvchilarni boshqara oladi',
         );
       }
     }
@@ -85,16 +85,18 @@ export class UsersService {
 
   async create(dto: CreateUserDto, creator: any): Promise<User> {
     if (creator) {
-      // ← shu qatorni qo'shing
-      if (creator.role === UserRole.ADMIN && dto.role === UserRole.ADMIN) {
+      if (
+        creator.role === UserRole.ADMIN &&
+        (dto.role === UserRole.ADMIN || dto.role === UserRole.SUPERADMIN)
+      ) {
         throw new ForbiddenException(
-          "Adminlar faqat Teacher yoki Student yo'nalishida foydalanuvchi yarata oladi",
+          'Admin faqat Teacher yoki Manager foydalanuvchi yarata oladi',
         );
       }
       if (creator.role !== UserRole.SUPERADMIN) {
         dto.branchId = creator.branchId;
       }
-    } // ← shu qatorni qo'shing
+    }
 
     const isExisting = await this.userRepo.findOne({
       where: [{ login: dto.login }, { phone: dto.phone }],

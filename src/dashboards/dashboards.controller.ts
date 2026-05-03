@@ -27,13 +27,13 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Markaziy dashboard statistikasi',
     description:
-      "Berilgan sana oralig'ida jami daromad, qarzdorlik, faol talabalar, " +
-      'yangi talabalar, davomat foizi va faol guruhlar soni. ' +
-      'Natija 10 daqiqa keshlanadi.',
+      "Berilgan sana oralig'ida jami daromad, xarajatlar, sof foyda, qarzdorlik, faol talabalar, " +
+      "yangi talabalar, davomat foizi va faol guruhlar sonini qaytaradi. \n\n" +
+      "**Diqqat**: Agar foydalanuvchi MANAGER rolida bo'lsa, `totalIncome` va `profit` maydonlari yashiriladi.",
   })
   @ApiQuery({
     name: 'startDate',
@@ -54,16 +54,18 @@ export class DashboardController {
       example: {
         data: {
           totalIncome: 15000000,
+          totalExpenses: 4500000,
+          profit: 10500000,
           totalPending: 3200000,
           activeStudents: 87,
           newStudents: 12,
           attendancePercent: 78,
           activeGroups: 9,
           currency: "so'm",
-          calculatedAt: '2026-03-13T10:00:00.000Z',
+          calculatedAt: '2026-05-03T10:00:00.000Z',
         },
         statusCode: 200,
-        timestamp: '2026-03-13 10:00:00',
+        timestamp: '2026-05-03 10:00:00',
       },
     },
   })

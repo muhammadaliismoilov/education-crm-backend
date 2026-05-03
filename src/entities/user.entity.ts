@@ -14,11 +14,13 @@ import * as bcrypt from 'bcrypt';
 import { Group } from './group.entity';
 import { SalaryPayout } from './salaryPayout.entity';
 import { Branch } from './branch.entity';
+import { Expense } from './expense.entity';
 
-// Faqat xodimlar rollari qoldi
+// Xodimlar rollari
 export enum UserRole {
   SUPERADMIN = 'superadmin',
   ADMIN = 'admin',
+  MANAGER = 'manager',
   TEACHER = 'teacher',
 }
 
@@ -41,6 +43,9 @@ export class User {
 
   @Column({ type: 'enum', enum: UserRole, default: UserRole.TEACHER })
   role: UserRole;
+
+  @OneToMany(() => Expense, (expense) => expense.createdBy)
+  expenses: Expense[]; // Bu foydalanuvchi tomonidan yaratilgan xarajatlar
 
   @ManyToOne(() => Branch, (branch) => branch.users, { nullable: true })
   branch: Branch;
