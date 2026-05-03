@@ -100,7 +100,13 @@ export class GroupsService {
       .leftJoinAndSelect('group.branch', 'branch')
       .loadRelationCountAndMap('group.studentsCount', 'group.students');
 
-    if (user && user.role !== 'superadmin') {
+    if (user && user.role === 'teacher') {
+      // Teacher faqat o'z guruhlarini ko'rishi kerak
+      // branchId bilan birga teacherId bo'yicha ham filter qilinadi
+      // shunda paginatsiya faqat o'qituvchining guruhlari soniga asoslanadi
+      query.andWhere('teacher.id = :teacherId', { teacherId: user.id });
+      query.andWhere('group.branchId = :branchId', { branchId: user.branchId });
+    } else if (user && user.role !== 'superadmin') {
       query.andWhere('group.branchId = :branchId', { branchId: user.branchId });
     } else if (branchId) {
       query.andWhere('group.branchId = :branchId', { branchId });
@@ -161,14 +167,131 @@ export class GroupsService {
   }
 
   async remove(id: string) {
-    const group = await this.getGroupDetails(id);
-    await this.groupRepo.softRemove(group);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // SABABI: Arxivlash qaytarib bo'lmaydigan harakat — audit uchun
-    this.logger.log(`Guruh arxivlandi [id: ${id}] [nomi: ${group.name}]`);
+    try {
+      const group = await queryRunner.manager.findOne(Group, {
+        where: { id },
+        relations: ['students', 'students.enrolledGroups'],
+      });
+      if (!group) throw new NotFoundException('Guruh topilmadi');
 
-    return { message: 'Guruh arxivlandi' };
+      // 1. Guruhdan hamma o'quvchilarni chiqaramiz (join table'dan o'chirish uchun Group'ni saqlaymiz)
+      const studentsToArchive = [];
+      const studentsToCheck = [...group.students]; // nusxa olamiz
+      
+      group.students = []; // Hamma o'quvchilarni guruhdan chiqaramiz
+      await queryRunner.manager.save(Group, group);
+
+      let archivedStudentsCount = 0;
+
+      // 2. O'quvchilarni birma-bir tekshiramiz: boshqa guruhi qolganmi?
+      for (const student of studentsToCheck) {
+        // O'quvchining joriy guruhlarini DB dan aniq tekshiramiz
+        const studentWithGroups = await queryRunner.manager.findOne(Student, {
+          where: { id: student.id },
+          relations: ['enrolledGroups'],
+        });
+
+        if (studentWithGroups && studentWithGroups.enrolledGroups.length === 0) {
+          await queryRunner.manager.softRemove(Student, studentWithGroups);
+          archivedStudentsCount++;
+          this.logger.log(`Talaba arxivlandi (guruhi qolmadi) [id: ${student.id}]`);
+        }
+      }
+
+      group.isActive = false;
+      await queryRunner.manager.save(Group, group);
+      await queryRunner.manager.softRemove(Group, group);
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(
+        `Guruh arxivlandi [id: ${id}]. ${archivedStudentsCount} ta talaba ham arxivlandi.`,
+      );
+
+      return { 
+        message: 'Guruh arxivlandi', 
+        archivedStudents: archivedStudentsCount 
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error(`Guruhni arxivlashda xatolik [id: ${id}]`, error.stack);
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
+
+  // ─────────────────────────────────────────────
+  // ARCHIVED GROUPS HANDLING (SENIOR APPROACH)
+  // ─────────────────────────────────────────────
+  async findAllDeleted(search?: string, page = 1, limit = 10, user?: any) {
+    const query = this.groupRepo
+      .createQueryBuilder('group')
+      .withDeleted()
+      .addSelect('group.deletedAt')
+      .leftJoinAndSelect('group.teacher', 'teacher')
+      .leftJoinAndSelect('group.branch', 'branch')
+      .where('group.deletedAt IS NOT NULL');
+
+    if (user && user.role !== 'superadmin') {
+      query.andWhere('group.branchId = :branchId', { branchId: user.branchId });
+    }
+
+    if (search) {
+      query.andWhere('group.name ILike :search', { search: `%${search}%` });
+    }
+
+    const [items, total] = await query
+      .orderBy('group.deletedAt', 'DESC')
+      .skip((page - 1) * limit)
+      .take(limit)
+      .getManyAndCount();
+
+    return {
+      data: items,
+      meta: {
+        totalItems: total,
+        totalPages: Math.ceil(total / limit),
+        currentPage: Number(page),
+        itemsPerPage: Number(limit),
+      },
+    };
+  }
+
+  async restore(id: string) {
+    const group = await this.groupRepo.findOne({
+      where: { id },
+      withDeleted: true,
+    });
+    if (!group) throw new NotFoundException('Guruh topilmadi');
+
+    group.isActive = true;
+    await this.groupRepo.save(group);
+    await this.groupRepo.restore(id);
+    
+    this.logger.log(`Guruh arxivdan tiklandi [id: ${id}]`);
+    return this.getGroupDetails(id);
+  }
+
+  async hardDelete(id: string) {
+    const group = await this.groupRepo.findOne({
+      where: { id },
+      withDeleted: true,
+    });
+    if (!group) throw new NotFoundException('Guruh topilmadi');
+    if (!group.deletedAt) {
+      throw new BadRequestException("Faqat arxivlangan guruhni butunlay o'chirish mumkin");
+    }
+
+    await this.groupRepo.remove(group);
+    this.logger.log(`Guruh butunlay o'chirildi [id: ${id}]`);
+    return { message: "Guruh butunlay o'chirildi" };
+  }
+
 
   async addStudentToGroup(groupId: string, studentId: string) {
     const queryRunner = this.dataSource.createQueryRunner();

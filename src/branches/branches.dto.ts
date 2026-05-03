@@ -1,4 +1,11 @@
-import { IsString, IsOptional, IsBoolean, MinLength } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsBoolean,
+  MinLength,
+  IsNumber,
+  IsNotEmpty,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateBranchDto {
@@ -180,4 +187,41 @@ export class CreateBranchWithAdminDto {
   @IsString()
   @MinLength(6, { message: "Parol kamida 6 ta belgidan iborat bo'lishi kerak" })
   adminPassword: string;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Admin uchun — O'qituvchi qo'lda davomat sozlamasini o'zgartirish
+// ──────────────────────────────────────────────────────────────────────────────
+export class ToggleTeacherManualAttendanceDto {
+  @ApiProperty({
+    example: true,
+    description:
+      "true → O'qituvchi qo'lda davomat qila oladi; false → Faqat FaceID orqali",
+  })
+  @IsBoolean({
+    message: "allowTeacherManualAttendance — true yoki false bo'lishi kerak",
+  })
+  allowTeacherManualAttendance: boolean;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Admin uchun — FAQAT lokatsiyani tahrirlash
+// Boshqa fieldlar (name, phone, isActive, subdomain va h.k.) QABUL QILINMAYDI
+// ──────────────────────────────────────────────────────────────────────────────
+export class UpdateBranchLocationDto {
+  @ApiProperty({
+    example: 41.2995,
+    description: 'Filial kengligi (latitude)',
+  })
+  @IsNumber({}, { message: 'latitude — son bo\'lishi kerak' })
+  @IsNotEmpty({ message: 'latitude — bo\'sh bo\'lishi mumkin emas' })
+  latitude: number;
+
+  @ApiProperty({
+    example: 69.2401,
+    description: 'Filial uzunligi (longitude)',
+  })
+  @IsNumber({}, { message: 'longitude — son bo\'lishi kerak' })
+  @IsNotEmpty({ message: 'longitude — bo\'sh bo\'lishi mumkin emas' })
+  longitude: number;
 }

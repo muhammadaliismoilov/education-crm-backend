@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   Put,
@@ -23,6 +24,8 @@ import {
   CreateBranchDto,
   UpdateBranchDto,
   CreateBranchWithAdminDto,
+  UpdateBranchLocationDto,
+  ToggleTeacherManualAttendanceDto,
 } from './branches.dto';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -132,6 +135,86 @@ export class BranchesController {
     return this.branchesService.createWithAdmin(dto);
   }
 
+  // ─── ADMIN — O'z filialining lokatsiyasini tahrirlash ─────────────────────
+  @Patch('my-location')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: 'O\'z filiali lokatsiyasini tahrirlash (faqat Admin)',
+    description:
+      'Admin FAQAT o\'z filialining latitude va longitude koordinatalarini ' +
+      'yangilashi mumkin. Boshqa ma\'lumotlar (nom, telefon, subdomen va h.k.) ' +
+      'o\'zgartirilmaydi. Branch ID JWT tokendan avtomatik olinadi.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Lokatsiya muvaffaqiyatli yangilandi',
+    schema: {
+      example: WRAP({
+        ...BRANCH_EXAMPLE,
+        latitude: 41.2995,
+        longitude: 69.2401,
+      }),
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Ruxsat yo\'q — admin boshqa filialga biriktirilmagan',
+    schema: {
+      example: {
+        statusCode: 403,
+        message:
+          'Sizga hech qaysi filial biriktirilmagan. Superadminga murojaat qiling.',
+        error: 'Forbidden',
+      },
+    },
+  })
+  updateMyLocation(
+    @Body() dto: UpdateBranchLocationDto,
+    @Req() req: any,
+  ) {
+    return this.branchesService.updateLocation(dto, req.user);
+  }
+
+  // ─── ADMIN — O'qituvchining qo'lda davomat sozlamasini o'zgartirish ─────────
+  @Patch('teacher-manual-attendance')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: "O'qituvchi qo'lda davomat sozlamasini o'zgartirish (faqat Admin)",
+    description:
+      "Admin o'z filiali uchun o'qituvchiga qo'lda davomat qilish huquqini " +
+      'yoqadi yoki o\'chiradi. ' +
+      'true → O\'qituvchi qo\'lda ham davomat qila oladi. ' +
+      'false → O\'qituvchi faqat FaceID orqali davomat qila oladi.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sozlama muvaffaqiyatli yangilandi',
+    schema: {
+      example: WRAP({
+        ...BRANCH_EXAMPLE,
+        allowTeacherManualAttendance: true,
+      }),
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description: "Ruxsat yo'q — admin filialga biriktirilmagan",
+    schema: {
+      example: {
+        statusCode: 403,
+        message:
+          'Sizga hech qaysi filial biriktirilmagan. Superadminga murojaat qiling.',
+        error: 'Forbidden',
+      },
+    },
+  })
+  toggleTeacherManualAttendance(
+    @Body() dto: ToggleTeacherManualAttendanceDto,
+    @Req() req: any,
+  ) {
+    return this.branchesService.toggleTeacherManualAttendance(dto, req.user);
+  }
+
   @Get()
   @ApiOperation({
     summary: 'Barcha filiallarni olish',
@@ -144,13 +227,11 @@ export class BranchesController {
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
-  findAll(
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
-  ) {
+  findAll(@Query('page') page: number = 1, @Query('limit') limit: number = 10) {
     return this.branchesService.findAll(page, limit);
   }
 
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
   @Get(':id')
   @ApiOperation({
     summary: "Filial ma'lumotlarini olish",

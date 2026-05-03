@@ -11,6 +11,8 @@ import {
   UseGuards,
   ParseUUIDPipe,
   Req,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -110,6 +112,30 @@ export class GroupsController {
   }
 
   // ─────────────────────────────────────────────
+  // GET /groups/deleted
+  // ─────────────────────────────────────────────
+  @Get('deleted')
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @ApiOperation({
+    summary: 'Arxivlangan guruhlarni qidirish va sahifalab olish',
+  })
+  @ApiQuery({
+    name: 'search',
+    required: false,
+    description: "Guruh nomi bo'yicha qidiruv",
+  })
+  @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  findAllDeleted(
+    @Query('search') search?: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
+    @Req() req?: any,
+  ) {
+    return this.groupsService.findAllDeleted(search, page, limit, req.user);
+  }
+
+  // ─────────────────────────────────────────────
   // GET /groups
   // ─────────────────────────────────────────────
   @Get()
@@ -125,6 +151,7 @@ export class GroupsController {
     description: "Guruh nomi bo'yicha qidiruv",
   })
   @ApiQuery({ name: 'page', required: false, example: 1 })
+  @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiQuery({
     name: 'branchId',
     required: false,
@@ -142,23 +169,23 @@ export class GroupsController {
             teacher: TEACHER_EXAMPLE,
           },
         ],
-        meta: { totalItems: 5, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+        meta: {
+          totalItems: 5,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
       }),
     },
   })
   findAll(
     @Query('search') search?: string,
-    @Query('page') page?: number,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
     @Req() req?: any,
     @Query('branchId') branchId?: string,
   ) {
-    return this.groupsService.findAll(
-      search,
-      Number(page) || 1,
-      10,
-      req.user,
-      branchId,
-    );
+    return this.groupsService.findAll(search, page, limit, req.user, branchId);
   }
 
   // ─────────────────────────────────────────────
@@ -269,6 +296,28 @@ export class GroupsController {
   })
   remove(@Param('id', ParseUUIDPipe) id: string) {
     return this.groupsService.remove(id);
+  }
+
+  // ─────────────────────────────────────────────
+  // PATCH /groups/:id/restore
+  // ─────────────────────────────────────────────
+  @Patch(':id/restore')
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @ApiOperation({ summary: 'Arxivlangan guruhni qayta tiklash' })
+  restore(@Param('id', ParseUUIDPipe) id: string) {
+    return this.groupsService.restore(id);
+  }
+
+  // ─────────────────────────────────────────────
+  // DELETE /groups/:id/permanent
+  // ─────────────────────────────────────────────
+  @Delete(':id/permanent')
+  @Roles(UserRole.ADMIN)
+  @ApiOperation({
+    summary: "Arxivlangan guruhni butunlay o'chirish (Faqat Admin)",
+  })
+  hardDelete(@Param('id', ParseUUIDPipe) id: string) {
+    return this.groupsService.hardDelete(id);
   }
 
   // ─────────────────────────────────────────────

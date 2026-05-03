@@ -17,6 +17,7 @@ import { redisStore } from 'cache-manager-redis-yet';
 import { CronModule } from './cron/cron.module';
 import { FaceModule } from './common/faceId/faceId.module';
 import { BranchesModule } from './branches/branches.module';
+import { ExpensesModule } from './expenses/expenses.module';
 import { Branch } from './entities/branch.entity';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
@@ -48,7 +49,7 @@ import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
         password: configService.get<string>('DB_PASS'),
         database: configService.get<string>('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: true,
+        synchronize: true, //process.env.NODE_ENV !== 'production', // Production'da XAVFLI — migratsiya ishlating!
       }),
     }),
     TypeOrmModule.forFeature([Branch]),
@@ -62,6 +63,7 @@ import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
     PaymentModule,
     ReportsModule,
     DashboardModule,
+    ExpensesModule,
     CronModule,
     FaceModule,
   ],

@@ -13,6 +13,8 @@ import {
   CreateBranchDto,
   UpdateBranchDto,
   CreateBranchWithAdminDto,
+  UpdateBranchLocationDto,
+  ToggleTeacherManualAttendanceDto,
 } from './branches.dto';
 
 @Injectable()
@@ -151,5 +153,71 @@ export class BranchesService {
   async remove(id: string) {
     await this.findOne(id);
     return this.branchRepo.softDelete(id);
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // 7. Admin — FAQAT lokatsiyani yangilash
+  //    Admin o'z branch'idan boshqa branch'ni o'zgartira olmaydi
+  //    Faqat latitude va longitude yangilanadi, boshqa hech narsa
+  // ────────────────────────────────────────────────────────────
+  async updateLocation(dto: UpdateBranchLocationDto, user: any) {
+    // 1) Admin o'z branch'iga biriktirilganligini tekshirish
+    if (!user.branchId) {
+      throw new ForbiddenException(
+        'Sizga hech qaysi filial biriktirilmagan. Superadminga murojaat qiling.',
+      );
+    }
+
+    // 2) Branch mavjudligini tekshirish
+    const branch = await this.branchRepo.findOne({
+      where: { id: user.branchId },
+    });
+    if (!branch) {
+      throw new NotFoundException('Sizga biriktirilgan filial topilmadi');
+    }
+
+    // 3) FAQAT latitude va longitude — boshqa fieldlar o'zgarmaydi
+    await this.branchRepo.update(user.branchId, {
+      latitude: dto.latitude,
+      longitude: dto.longitude,
+    });
+
+    this.logger.log(
+      `Admin[${user.id}] filial[${user.branchId}] lokatsiyasini yangiladi: lat=${dto.latitude}, lng=${dto.longitude}`,
+    );
+
+    return this.findOne(user.branchId);
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // 8. O'qituvchi uchun qo'lda davomat sozlamasini o'zgartirish
+  //    Admin faqat o'z filialining sozlamasini o'zgartira oladi
+  // ────────────────────────────────────────────────────────────
+  async toggleTeacherManualAttendance(
+    dto: ToggleTeacherManualAttendanceDto,
+    user: any,
+  ) {
+    if (!user.branchId) {
+      throw new ForbiddenException(
+        'Sizga hech qaysi filial biriktirilmagan. Superadminga murojaat qiling.',
+      );
+    }
+
+    const branch = await this.branchRepo.findOne({
+      where: { id: user.branchId },
+    });
+    if (!branch) {
+      throw new NotFoundException('Sizga biriktirilgan filial topilmadi');
+    }
+
+    await this.branchRepo.update(user.branchId, {
+      allowTeacherManualAttendance: dto.allowTeacherManualAttendance,
+    });
+
+    this.logger.log(
+      `Admin[${user.id}] filial[${user.branchId}] o'qituvchi qo'lda davomat sozlamasini o'zgartirdi: ${dto.allowTeacherManualAttendance}`,
+    );
+
+    return this.findOne(user.branchId);
   }
 }

@@ -214,6 +214,16 @@ export class AttendanceService {
     this.checkLessonTime(group, user.role);
     this.checkLocation(group, user, dto.latitude, dto.longitude);
 
+    // O'qituvchi uchun qo'lda davomat sozlamasini tekshirish
+    if (
+      user.role === UserRole.TEACHER &&
+      group.branch?.allowTeacherManualAttendance === false
+    ) {
+      throw new ForbiddenException(
+        "Sizning fililingizda qo'lda davomat o'chirilgan. Davomat faqat FaceID orqali qilinishi mumkin.",
+      );
+    }
+
     const activeStudentIds = new Set(
       (group.students || []).filter((s) => s && !s.deletedAt).map((s) => s.id),
     );
@@ -293,6 +303,16 @@ export class AttendanceService {
 
     this.checkLessonTime(group, user.role);
     this.checkLocation(group, user, dto.latitude, dto.longitude);
+
+    // O'qituvchi uchun qo'lda davomat sozlamasini tekshirish
+    if (
+      user.role === UserRole.TEACHER &&
+      group.branch?.allowTeacherManualAttendance === false
+    ) {
+      throw new ForbiddenException(
+        "Sizning fililingizda qo'lda davomat o'chirilgan. Davomat faqat FaceID orqali qilinishi mumkin.",
+      );
+    }
 
     const isActiveInGroup = (group.students || []).some(
       (s) => s.id === studentId && !s.deletedAt,

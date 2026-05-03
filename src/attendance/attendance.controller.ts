@@ -9,6 +9,8 @@ import {
   ParseUUIDPipe,
   Patch,
   Request,
+  DefaultValuePipe,
+  ParseIntPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -293,8 +295,8 @@ export class AttendanceController {
   async getMonthlyReport(
     @Query('groupId', ParseUUIDPipe) groupId: string,
     @Query('month') month?: string,
-    @Query('page') page: number = 1,
-    @Query('limit') limit: number = 10,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number = 10,
     @Request() req?: any,
   ) {
     return this.attendanceService.getGroupMonthlyAttendance(

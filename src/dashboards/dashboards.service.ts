@@ -7,6 +7,8 @@ import { Student } from '../entities/students.entity';
 import { Payment } from '../entities/payment.entity';
 import { Group } from '../entities/group.entity';
 import { Attendance } from '../entities/attendance.entity';
+import { ExpensesService } from '../expenses/expenses.service';
+import { UserRole } from '../entities/user.entity';
 
 @Injectable()
 export class DashboardService {
@@ -19,6 +21,7 @@ export class DashboardService {
     @InjectRepository(Attendance)
     private attendanceRepo: Repository<Attendance>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly expensesService: ExpensesService,
   ) {}
 
   async getSummary(
@@ -27,14 +30,17 @@ export class DashboardService {
     user?: any,
     branchIdFilter?: string,
   ) {
-    let branchId = null;
-    if (user && user.role !== 'superadmin') {
+    const isManager = user?.role === UserRole.MANAGER;
+    const isSuperadmin = user?.role === UserRole.SUPERADMIN;
+
+    let branchId: string | null = null;
+    if (!isSuperadmin && user) {
       branchId = user.branchId;
     } else if (branchIdFilter) {
       branchId = branchIdFilter;
     }
 
-    const cacheKey = `dashboard_summary_${startDate.getTime()}_${endDate.getTime()}_${branchId || 'all'}`;
+    const cacheKey = `dashboard_summary_${startDate.getTime()}_${endDate.getTime()}_${branchId || 'all'}_${user?.role || 'anon'}`;
 
     try {
       const cachedData = await this.cacheManager.get(cacheKey);
@@ -43,39 +49,7 @@ export class DashboardService {
       this.logger.warn(`Cache get xatolik [${cacheKey}]: ${e.message}`);
     }
 
-    const paymentQuery = this.paymentRepo
-      .createQueryBuilder('p')
-      .select('SUM(p.amount)', 'total')
-      .where('p.createdAt BETWEEN :start AND :end', {
-        start: startDate,
-        end: endDate,
-      });
-    if (branchId) paymentQuery.andWhere('p.branchId = :branchId', { branchId });
-
-    const studentDebtQuery = this.studentRepo
-      .createQueryBuilder('s')
-      .select('SUM(s.balance)', 'totalDebt')
-      .where('s.balance < 0')
-      .andWhere('s.deletedAt IS NULL');
-    if (branchId)
-      studentDebtQuery.andWhere('s.branchId = :branchId', { branchId });
-
-    const activeStudentsQuery = this.studentRepo
-      .createQueryBuilder('s')
-      .where('s.deletedAt IS NULL');
-    if (branchId)
-      activeStudentsQuery.andWhere('s.branchId = :branchId', { branchId });
-
-    const newStudentsQuery = this.studentRepo
-      .createQueryBuilder('s')
-      .where('s.deletedAt IS NULL')
-      .andWhere('s.createdAt BETWEEN :start AND :end', {
-        start: startDate,
-        end: endDate,
-      });
-    if (branchId)
-      newStudentsQuery.andWhere('s.branchId = :branchId', { branchId });
-
+    // Davomat statistikasi
     const attendanceQuery = this.attendanceRepo
       .createQueryBuilder('a')
       .select([
@@ -89,30 +63,79 @@ export class DashboardService {
     if (branchId)
       attendanceQuery.andWhere('a.branchId = :branchId', { branchId });
 
+    // Faol talabalar soni
+    const activeStudentsQuery = this.studentRepo
+      .createQueryBuilder('s')
+      .where('s.deletedAt IS NULL');
+    if (branchId)
+      activeStudentsQuery.andWhere('s.branchId = :branchId', { branchId });
+
+    // Yangi talabalar soni (sana oralig'ida)
+    const newStudentsQuery = this.studentRepo
+      .createQueryBuilder('s')
+      .where('s.deletedAt IS NULL')
+      .andWhere('s.createdAt BETWEEN :start AND :end', {
+        start: startDate,
+        end: endDate,
+      });
+    if (branchId)
+      newStudentsQuery.andWhere('s.branchId = :branchId', { branchId });
+
+    // Qarzdorlik hisoblash
+    const studentDebtQuery = this.studentRepo
+      .createQueryBuilder('s')
+      .select('SUM(s.balance)', 'totalDebt')
+      .where('s.balance < 0')
+      .andWhere('s.deletedAt IS NULL');
+    if (branchId)
+      studentDebtQuery.andWhere('s.branchId = :branchId', { branchId });
+
+    // Faol guruhlar
     const groupsQuery = this.groupRepo
       .createQueryBuilder('g')
       .where('g.isActive = true');
     if (branchId) groupsQuery.andWhere('g.branchId = :branchId', { branchId });
 
-    const [
-      incomeRes,
-      debtRes,
-      activeStudents,
-      newStudents,
-      attendance,
-      activeGroups,
-    ] = await Promise.all([
-      paymentQuery.getRawOne(),
+    // Parallelda barchani hisoblash
+    const promises: Promise<any>[] = [
       studentDebtQuery.getRawOne(),
       activeStudentsQuery.getCount(),
       newStudentsQuery.getCount(),
       attendanceQuery.getRawOne(),
       groupsQuery.getCount(),
-    ]);
+      this.expensesService.getTotalExpenses(startDate, endDate, branchId),
+    ];
 
+    // MANAGER bo'lmagan rol uchun kirim ham hisoblanadi
+    let incomePromise: Promise<any> | null = null;
+    if (!isManager) {
+      const paymentQuery = this.paymentRepo
+        .createQueryBuilder('p')
+        .select('SUM(p.amount)', 'total')
+        .where('p.createdAt BETWEEN :start AND :end', {
+          start: startDate,
+          end: endDate,
+        });
+      if (branchId)
+        paymentQuery.andWhere('p.branchId = :branchId', { branchId });
+      incomePromise = paymentQuery.getRawOne();
+    }
+
+    const [debtRes, activeStudents, newStudents, attendance, activeGroups, totalExpenses] =
+      await Promise.all(promises);
+
+    const incomeRes = incomePromise ? await incomePromise : null;
+    const totalIncome = Number(incomeRes?.total) || 0;
+    const totalDebt = Math.abs(Number(debtRes?.totalDebt) || 0);
+    const profit = isManager ? null : totalIncome - totalExpenses;
+
+    // MANAGER uchun kirim ma'lumotlari yashiriladi
     const result = {
-      totalIncome: Number(incomeRes?.total) || 0,
-      totalPending: Math.abs(Number(debtRes?.totalDebt) || 0),
+      ...(isManager
+        ? {}
+        : { totalIncome, profit }),
+      totalExpenses,
+      totalPending: totalDebt,
       activeStudents,
       newStudents,
       attendancePercent:
