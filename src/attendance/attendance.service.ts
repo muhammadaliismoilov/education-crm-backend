@@ -28,7 +28,11 @@ export class AttendanceService {
   ) {}
 
   private checkLessonTime(group: Group, role: UserRole): void {
-    if (role === UserRole.ADMIN || role === UserRole.SUPERADMIN) return;
+    if (
+      role === UserRole.ADMIN ||
+      role === UserRole.SUPERADMIN ||
+      role === UserRole.MANAGER
+    ) return;
 
     const rawStart = group.startTime?.includes('-')
       ? group.startTime.split('-')[0].trim()
@@ -91,8 +95,11 @@ export class AttendanceService {
     incomingLat?: number,
     incomingLon?: number,
   ): void {
-    if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN)
-      return;
+    if (
+      user.role === UserRole.ADMIN ||
+      user.role === UserRole.SUPERADMIN ||
+      user.role === UserRole.MANAGER
+    ) return;
     if (user.role !== UserRole.TEACHER) return;
 
     const branch = group.branch;
@@ -131,7 +138,7 @@ export class AttendanceService {
 
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
-      relations: ['students', 'branch'],
+      relations: ['students', 'branch', 'teacher'],
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
@@ -141,6 +148,16 @@ export class AttendanceService {
     ) {
       throw new ForbiddenException(
         "Sizda ushbu guruh davomatini ko'rish huquqi yo'q",
+      );
+    }
+
+    // Teacher faqat o'z guruhini ko'ra oladi
+    if (
+      user.role === UserRole.TEACHER &&
+      group.teacher?.id !== user.id
+    ) {
+      throw new ForbiddenException(
+        "Siz faqat o'z guruhingiz davomatini ko'ra olasiz",
       );
     }
 
@@ -198,7 +215,7 @@ export class AttendanceService {
 
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
-      relations: ['branch', 'students'],
+      relations: ['branch', 'students', 'teacher'],
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
@@ -208,6 +225,16 @@ export class AttendanceService {
     ) {
       throw new ForbiddenException(
         "Sizda ushbu guruhga davomat qilish huquqi yo'q",
+      );
+    }
+
+    // Teacher faqat o'z guruhida davomat qila oladi
+    if (
+      user.role === UserRole.TEACHER &&
+      group.teacher?.id !== user.id
+    ) {
+      throw new ForbiddenException(
+        "Siz faqat o'z guruhingizda davomat qila olasiz",
       );
     }
 
@@ -288,7 +315,7 @@ export class AttendanceService {
 
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
-      relations: ['branch', 'students'],
+      relations: ['branch', 'students', 'teacher'],
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
@@ -298,6 +325,16 @@ export class AttendanceService {
     ) {
       throw new ForbiddenException(
         "Sizda ushbu guruh davomatini tahrirlash huquqi yo'q",
+      );
+    }
+
+    // Teacher faqat o'z guruhida davomat qila oladi
+    if (
+      user.role === UserRole.TEACHER &&
+      group.teacher?.id !== user.id
+    ) {
+      throw new ForbiddenException(
+        "Siz faqat o'z guruhingizda davomat qila olasiz",
       );
     }
 

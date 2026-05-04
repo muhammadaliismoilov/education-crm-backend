@@ -9,6 +9,7 @@ import {
   Delete,
   UseGuards,
   ParseUUIDPipe,
+  ForbiddenException,
   Req,
   Query,
 } from '@nestjs/common';
@@ -231,11 +232,13 @@ export class BranchesController {
     return this.branchesService.findAll(page, limit);
   }
 
-  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
   @Get(':id')
   @ApiOperation({
     summary: "Filial ma'lumotlarini olish",
-    description: "ID bo'yicha filial to'liq ma'lumotlari qaytariladi.",
+    description:
+      "ID bo'yicha filial to'liq ma'lumotlari qaytariladi. " +
+      "Teacher faqat o'z filiallini ko'ra oladi (allowTeacherManualAttendance sozlamasini bilish uchun).",
   })
   @ApiParam({ name: 'id', description: 'Filial UUID si', format: 'uuid' })
   @ApiResponse({
@@ -244,11 +247,36 @@ export class BranchesController {
     schema: { example: WRAP(BRANCH_EXAMPLE) },
   })
   @ApiResponse({
+    status: 403,
+    description: "Teacher o'z filialidan boshqa filialni ko'ra olmaydi",
+    schema: {
+      example: {
+        statusCode: 403,
+        message: "Siz faqat o'z filialingizni ko'ra olasiz",
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
     status: 404,
     description: 'Filial topilmadi',
     schema: { example: NOT_FOUND() },
   })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: any,
+  ) {
+    // Teacher va Manager faqat o'z filialini ko'ra oladi
+    if (
+      req.user?.role === UserRole.TEACHER ||
+      req.user?.role === UserRole.MANAGER
+    ) {
+      if (req.user.branchId !== id) {
+        throw new ForbiddenException(
+          "Siz faqat o'z filialingizni ko'ra olasiz",
+        );
+      }
+    }
     return this.branchesService.findOne(id);
   }
 
