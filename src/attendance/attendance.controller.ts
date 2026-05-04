@@ -61,7 +61,7 @@ export class AttendanceController {
   // GET /attendance/sheet
   // ─────────────────────────────────────────────
   @Get('sheet')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
   @ApiOperation({
     summary: "Guruh talabalari ro'yxatini davomat uchun olish",
     description:
@@ -137,7 +137,7 @@ export class AttendanceController {
   // POST /attendance/bulk
   // ─────────────────────────────────────────────
   @Post('bulk')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Davomatni ommaviy saqlash yoki yangilash',
     description:
@@ -180,7 +180,7 @@ export class AttendanceController {
   // PATCH /attendance/single-update
   // ─────────────────────────────────────────────
   @Patch('single-update')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Bitta talabaning davomatini tahrirlash',
     description:
@@ -223,7 +223,7 @@ export class AttendanceController {
   // GET /attendance/monthly-report
   // ─────────────────────────────────────────────
   @Get('monthly-report')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Guruhning oylik pivot davomat hisoboti',
     description:
@@ -312,7 +312,7 @@ export class AttendanceController {
   // POST /attendance/face-verify
   // ─────────────────────────────────────────────
   @Post('face-verify')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Yuz orqali davomat belgilash',
     description:

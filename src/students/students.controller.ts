@@ -109,7 +109,7 @@ export class StudentsController {
   // POST /students
   // ─────────────────────────────────────────────
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @UseInterceptors(
     FileInterceptor('photo', {
       storage: diskStorage({
@@ -253,7 +253,7 @@ export class StudentsController {
   // GET /students
   // ─────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Barcha talabalar ro'yxati",
     description:
@@ -324,7 +324,7 @@ export class StudentsController {
   // GET /students/deleted
   // ─────────────────────────────────────────────
   @Get('deleted')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "O'chirilgan (arxivlangan) talabalar",
     description:
@@ -377,7 +377,7 @@ export class StudentsController {
   // GET /students/:id
   // ─────────────────────────────────────────────
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
   @ApiOperation({
     summary: "Bitta talaba to'liq ma'lumotlari",
     description:
@@ -403,7 +403,7 @@ export class StudentsController {
   // PATCH /students/:id
   // ─────────────────────────────────────────────
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Talaba ma'lumotlarini yangilash",
     description:
@@ -538,7 +538,7 @@ export class StudentsController {
   // DELETE /students/:id
   // ─────────────────────────────────────────────
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Talabani arxivlash (soft delete)',
     description:
@@ -568,7 +568,7 @@ export class StudentsController {
   // PATCH /students/:id/restore
   // ─────────────────────────────────────────────
   @Patch(':id/restore')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Arxivlangan talabani tiklash',
     description: 'Soft-delete qilingan talabani faol holatga qaytaradi.',
@@ -597,7 +597,7 @@ export class StudentsController {
   // DELETE /students/:id/permanent
   // ─────────────────────────────────────────────
   @Delete(':id/permanent')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Arxivlangan talabani butunlay o'chirish",
     description:

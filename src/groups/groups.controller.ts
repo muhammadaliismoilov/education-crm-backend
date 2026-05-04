@@ -76,7 +76,7 @@ export class GroupsController {
   // POST /groups
   // ─────────────────────────────────────────────
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Yangi o'quv guruhi yaratish",
     description:
@@ -115,7 +115,7 @@ export class GroupsController {
   // GET /groups/deleted
   // ─────────────────────────────────────────────
   @Get('deleted')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Arxivlangan guruhlarni qidirish va sahifalab olish',
   })
@@ -139,7 +139,7 @@ export class GroupsController {
   // GET /groups
   // ─────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Barcha guruhlarni qidirish va sahifalab olish',
     description:
@@ -192,7 +192,7 @@ export class GroupsController {
   // GET /groups/:id
   // ─────────────────────────────────────────────
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
   @ApiOperation({
     summary: "Guruh ma'lumotlari va talabalar ro'yxatini olish",
     description: 'teacher va students relation bilan birga qaytariladi.',
