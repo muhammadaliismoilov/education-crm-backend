@@ -45,7 +45,7 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @Get('finance/yearly')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Yillik moliyaviy tahlil hisoboti',
     description:
@@ -203,7 +203,7 @@ export class ReportsController {
   // GET /reports/finance
   // ─────────────────────────────────────────────
   @Get('finance')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Moliyaviy tahlil hisoboti',
     description:
@@ -258,7 +258,7 @@ export class ReportsController {
   // GET /reports/export/debtors
   // ─────────────────────────────────────────────
   @Get('export/debtors')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Qarzdorlar ro'yxatini Excel formatda yuklab olish",
     description:
@@ -288,7 +288,7 @@ export class ReportsController {
   // GET /reports/teachers-performance
   // ─────────────────────────────────────────────
   @Get('teachers-performance')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "O'qituvchilar samaradorligi hisoboti",
     description:

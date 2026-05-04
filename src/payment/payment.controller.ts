@@ -80,7 +80,7 @@ export class PaymentController {
   // POST /payments
   // ─────────────────────────────────────────────
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Yangi to'lov yaratish",
     description:
@@ -132,7 +132,7 @@ export class PaymentController {
   // GET /payments
   // ─────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Barcha to'lovlarni filtrlash va sahifalab olish",
     description: "Talaba ismi bo'yicha qidiruv va sahifalash imkoniyati.",
@@ -179,7 +179,7 @@ export class PaymentController {
   // GET /payments/:id/receipt
   // ─────────────────────────────────────────────
   @Get(':id/receipt')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "To'lov cheki ma'lumotlarini olish",
     description:
@@ -228,7 +228,7 @@ export class PaymentController {
   // GET /payments/:id
   // ─────────────────────────────────────────────
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Bitta to'lov ma'lumotini olish",
     description: 'student va group relation bilan birga qaytariladi.',
@@ -254,7 +254,7 @@ export class PaymentController {
   // PATCH /payments/:id
   // ─────────────────────────────────────────────
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "To'lovni tahrirlash",
     description:
@@ -284,7 +284,7 @@ export class PaymentController {
   // DELETE /payments/:id
   // ─────────────────────────────────────────────
   @Delete(':id')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "To'lovni o'chirish (bekor qilish)",
     description:
