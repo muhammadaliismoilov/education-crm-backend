@@ -386,12 +386,7 @@ export class SalaryService {
   }
 
   // 4. BARCHA TO'LANGAN OYLIKLAR
-  async findAll(
-    searchMonth?: string,
-    user?: any,
-    page = 1,
-    limit = 10,
-  ) {
+  async findAll(searchMonth?: string, user?: any, page = 1, limit = 10) {
     const query = this.payoutRepo
       .createQueryBuilder('payout')
       .withDeleted()

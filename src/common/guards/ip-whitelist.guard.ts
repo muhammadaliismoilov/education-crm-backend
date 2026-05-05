@@ -32,7 +32,7 @@ export class IpWhitelistGuard implements CanActivate {
     if (allowedIps.length === 0) {
       if (process.env.NODE_ENV === 'production') {
         this.logger.warn(
-          '⚠️  ALLOWED_IPS .env da ko\'rsatilmagan — IP cheklovi O\'CHIRILGAN! Production uchun xavfli!',
+          "⚠️  ALLOWED_IPS .env da ko'rsatilmagan — IP cheklovi O'CHIRILGAN! Production uchun xavfli!",
         );
       }
       return true;

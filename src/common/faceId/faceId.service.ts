@@ -47,7 +47,7 @@ export class FaceService implements OnModuleInit {
     await this.loadModels();
 
     const img = await loadImage(imagePath);
-    
+
     // SENIOR: 1-QADAM - CPU Qotib qolmasligi uchun rasmni siqish
     let width = img.width;
     let height = img.height;
@@ -63,7 +63,10 @@ export class FaceService implements OnModuleInit {
 
     // Kichik yorug'likda ham ishlashi uchun minConfidence 0.3 (default: 0.5)
     const detection = await faceapi
-      .detectSingleFace(canvas as any, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
+      .detectSingleFace(
+        canvas as any,
+        new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }),
+      )
       .withFaceLandmarks()
       .withFaceDescriptor();
 
@@ -100,7 +103,10 @@ export class FaceService implements OnModuleInit {
     ctx.drawImage(img as any, 0, 0, width, height);
 
     const detection = await faceapi
-      .detectSingleFace(canvas as any, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }))
+      .detectSingleFace(
+        canvas as any,
+        new faceapi.SsdMobilenetv1Options({ minConfidence: 0.3 }),
+      )
       .withFaceLandmarks()
       .withFaceDescriptor();
 

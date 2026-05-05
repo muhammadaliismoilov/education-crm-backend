@@ -32,7 +32,8 @@ export class AttendanceService {
       role === UserRole.ADMIN ||
       role === UserRole.SUPERADMIN ||
       role === UserRole.MANAGER
-    ) return;
+    )
+      return;
 
     const rawStart = group.startTime?.includes('-')
       ? group.startTime.split('-')[0].trim()
@@ -99,7 +100,8 @@ export class AttendanceService {
       user.role === UserRole.ADMIN ||
       user.role === UserRole.SUPERADMIN ||
       user.role === UserRole.MANAGER
-    ) return;
+    )
+      return;
     if (user.role !== UserRole.TEACHER) return;
 
     const branch = group.branch;
@@ -152,10 +154,7 @@ export class AttendanceService {
     }
 
     // Teacher faqat o'z guruhini ko'ra oladi
-    if (
-      user.role === UserRole.TEACHER &&
-      group.teacher?.id !== user.id
-    ) {
+    if (user.role === UserRole.TEACHER && group.teacher?.id !== user.id) {
       throw new ForbiddenException(
         "Siz faqat o'z guruhingiz davomatini ko'ra olasiz",
       );
@@ -229,10 +228,7 @@ export class AttendanceService {
     }
 
     // Teacher faqat o'z guruhida davomat qila oladi
-    if (
-      user.role === UserRole.TEACHER &&
-      group.teacher?.id !== user.id
-    ) {
+    if (user.role === UserRole.TEACHER && group.teacher?.id !== user.id) {
       throw new ForbiddenException(
         "Siz faqat o'z guruhingizda davomat qila olasiz",
       );
@@ -329,10 +325,7 @@ export class AttendanceService {
     }
 
     // Teacher faqat o'z guruhida davomat qila oladi
-    if (
-      user.role === UserRole.TEACHER &&
-      group.teacher?.id !== user.id
-    ) {
+    if (user.role === UserRole.TEACHER && group.teacher?.id !== user.id) {
       throw new ForbiddenException(
         "Siz faqat o'z guruhingizda davomat qila olasiz",
       );
@@ -462,8 +455,8 @@ export class AttendanceService {
       `Face verify: guruh=${group.name}, eng yuqori oxshashlik=${highestSimilarity}%`,
     );
 
-    // SENIOR: 2-QADAM - Similarity filtri xatosi to'g'irlandi. 
-    // Yuzingiz turli kundagi yorug'likda 0.45 distance gacha farq qiladi, bu bizning formula bilan 25% ga to'g'ri keladi. 
+    // SENIOR: 2-QADAM - Similarity filtri xatosi to'g'irlandi.
+    // Yuzingiz turli kundagi yorug'likda 0.45 distance gacha farq qiladi, bu bizning formula bilan 25% ga to'g'ri keladi.
     // (Bungacha u 0.27 ideal sharoit talab qilgan)
     if (!matchedStudent || highestSimilarity < 25) {
       return {

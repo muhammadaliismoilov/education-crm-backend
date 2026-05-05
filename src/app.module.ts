@@ -22,6 +22,8 @@ import { Branch } from './entities/branch.entity';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
+import { ContractsModule } from './contracts/contracts.module';
+import { ContractTemplatesModule } from './contract-templates/contract-templates.module';
 
 @Module({
   imports: [
@@ -66,6 +68,8 @@ import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
     ExpensesModule,
     CronModule,
     FaceModule,
+    ContractsModule,
+    ContractTemplatesModule,
   ],
   providers: [
     SubdomainMiddleware,

@@ -141,7 +141,9 @@ export class BranchesService {
   async update(id: string, dto: UpdateBranchDto, user?: any) {
     await this.findOne(id);
     if (user && user.role === UserRole.ADMIN && user.branchId !== id) {
-      throw new ForbiddenException("Siz faqat o'z filialingizni tahrirlay olasiz");
+      throw new ForbiddenException(
+        "Siz faqat o'z filialingizni tahrirlay olasiz",
+      );
     }
     await this.branchRepo.update(id, dto);
     return this.findOne(id);
@@ -219,5 +221,29 @@ export class BranchesService {
     );
 
     return this.findOne(user.branchId);
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // 9. O'qituvchi qo'lda davomat qila olish holatini olish
+  // ────────────────────────────────────────────────────────────
+  async getTeacherManualAttendanceStatus(user: any) {
+    if (!user.branchId) {
+      throw new ForbiddenException(
+        'Sizga hech qaysi filial biriktirilmagan. Superadminga murojaat qiling.',
+      );
+    }
+
+    const branch = await this.branchRepo.findOne({
+      where: { id: user.branchId },
+      select: ['id', 'allowTeacherManualAttendance'],
+    });
+
+    if (!branch) {
+      throw new NotFoundException('Sizga biriktirilgan filial topilmadi');
+    }
+
+    return {
+      allowTeacherManualAttendance: branch.allowTeacherManualAttendance,
+    };
   }
 }

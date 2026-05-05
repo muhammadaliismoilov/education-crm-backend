@@ -326,7 +326,12 @@ export class ReportsController {
             attendanceRate: 82,
           },
         ],
-        meta: { totalItems: 3, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+        meta: {
+          totalItems: 3,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
       }),
     },
   })

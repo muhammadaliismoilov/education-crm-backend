@@ -213,15 +213,15 @@ export class UpdateBranchLocationDto {
     example: 41.2995,
     description: 'Filial kengligi (latitude)',
   })
-  @IsNumber({}, { message: 'latitude — son bo\'lishi kerak' })
-  @IsNotEmpty({ message: 'latitude — bo\'sh bo\'lishi mumkin emas' })
+  @IsNumber({}, { message: "latitude — son bo'lishi kerak" })
+  @IsNotEmpty({ message: "latitude — bo'sh bo'lishi mumkin emas" })
   latitude: number;
 
   @ApiProperty({
     example: 69.2401,
     description: 'Filial uzunligi (longitude)',
   })
-  @IsNumber({}, { message: 'longitude — son bo\'lishi kerak' })
-  @IsNotEmpty({ message: 'longitude — bo\'sh bo\'lishi mumkin emas' })
+  @IsNumber({}, { message: "longitude — son bo'lishi kerak" })
+  @IsNotEmpty({ message: "longitude — bo'sh bo'lishi mumkin emas" })
   longitude: number;
 }

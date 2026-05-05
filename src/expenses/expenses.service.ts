@@ -7,7 +7,11 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Expense } from '../entities/expense.entity';
-import { CreateExpenseDto, UpdateExpenseDto, ExpenseFilterDto } from './expenses.dto';
+import {
+  CreateExpenseDto,
+  UpdateExpenseDto,
+  ExpenseFilterDto,
+} from './expenses.dto';
 import { UserRole } from '../entities/user.entity';
 
 @Injectable()
@@ -26,8 +30,7 @@ export class ExpensesService {
     const expense = this.expenseRepo.create({
       amount: dto.amount,
       description: dto.description,
-      expenseDate:
-        dto.expenseDate ?? new Date().toISOString().split('T')[0],
+      expenseDate: dto.expenseDate ?? new Date().toISOString().split('T')[0],
       createdById: actor.id,
       branchId: branchId || null,
     });
@@ -124,7 +127,9 @@ export class ExpensesService {
   async remove(id: string, actor: any): Promise<void> {
     const expense = await this.findOne(id, actor);
     await this.expenseRepo.softRemove(expense);
-    this.logger.log(`Xarajat arxivlandi (soft delete) [id: ${id}] [by: ${actor.id}]`);
+    this.logger.log(
+      `Xarajat arxivlandi (soft delete) [id: ${id}] [by: ${actor.id}]`,
+    );
   }
 
   async findAllDeleted(filter: ExpenseFilterDto, actor: any) {
@@ -190,11 +195,11 @@ export class ExpensesService {
 
     await this.expenseRepo.restore(id);
     this.logger.log(`Xarajat qayta tiklandi [id: ${id}] [by: ${actor.id}]`);
-    
+
     return this.expenseRepo.findOne({
       where: { id },
       relations: ['createdBy', 'branch'],
-    }) as Promise<Expense>;
+    });
   }
 
   async hardDelete(id: string, actor: any): Promise<void> {
@@ -214,13 +219,16 @@ export class ExpensesService {
     }
 
     if (!expense.deletedAt) {
-      throw new ForbiddenException("Faqat arxivlangan xarajatni butunlay o'chirish mumkin");
+      throw new ForbiddenException(
+        "Faqat arxivlangan xarajatni butunlay o'chirish mumkin",
+      );
     }
 
     await this.expenseRepo.remove(expense);
-    this.logger.log(`Xarajat butunlay o'chirildi [id: ${id}] [by: ${actor.id}]`);
+    this.logger.log(
+      `Xarajat butunlay o'chirildi [id: ${id}] [by: ${actor.id}]`,
+    );
   }
-
 
   // Dashboard / Analytics uchun jami xarajat hisoblash
   async getTotalExpenses(

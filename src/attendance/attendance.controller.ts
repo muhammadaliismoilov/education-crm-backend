@@ -264,7 +264,12 @@ export class AttendanceController {
             },
           },
         ],
-        meta: { totalItems: 10, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+        meta: {
+          totalItems: 10,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
         groupInfo: {
           id: 'bb096922-6249-4911-9a8c-9a503bb3e7d9',
           name: 'Node.js Backend',

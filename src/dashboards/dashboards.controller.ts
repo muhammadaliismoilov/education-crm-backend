@@ -32,7 +32,7 @@ export class DashboardController {
     summary: 'Markaziy dashboard statistikasi',
     description:
       "Berilgan sana oralig'ida jami daromad, xarajatlar, sof foyda, qarzdorlik, faol talabalar, " +
-      "yangi talabalar, davomat foizi va faol guruhlar sonini qaytaradi. \n\n" +
+      'yangi talabalar, davomat foizi va faol guruhlar sonini qaytaradi. \n\n' +
       "**Diqqat**: Agar foydalanuvchi MANAGER rolida bo'lsa, `totalIncome` va `profit` maydonlari yashiriladi.",
   })
   @ApiQuery({

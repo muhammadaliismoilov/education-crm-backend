@@ -253,7 +253,12 @@ export class StudentsController {
   // GET /students
   // ─────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN, UserRole.MANAGER)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.TEACHER,
+    UserRole.SUPERADMIN,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
     summary: "Barcha talabalar ro'yxati",
     description:
@@ -298,7 +303,12 @@ export class StudentsController {
             attendances: undefined,
           },
         ],
-        meta: { totalItems: 87, totalPages: 9, currentPage: 1, itemsPerPage: 10 },
+        meta: {
+          totalItems: 87,
+          totalPages: 9,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
       }),
     },
   })
