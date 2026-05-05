@@ -220,4 +220,28 @@ export class BranchesService {
 
     return this.findOne(user.branchId);
   }
+
+  // ────────────────────────────────────────────────────────────
+  // 9. O'qituvchi qo'lda davomat qila olish holatini olish
+  // ────────────────────────────────────────────────────────────
+  async getTeacherManualAttendanceStatus(user: any) {
+    if (!user.branchId) {
+      throw new ForbiddenException(
+        'Sizga hech qaysi filial biriktirilmagan. Superadminga murojaat qiling.',
+      );
+    }
+
+    const branch = await this.branchRepo.findOne({
+      where: { id: user.branchId },
+      select: ['id', 'allowTeacherManualAttendance'],
+    });
+
+    if (!branch) {
+      throw new NotFoundException('Sizga biriktirilgan filial topilmadi');
+    }
+
+    return {
+      allowTeacherManualAttendance: branch.allowTeacherManualAttendance,
+    };
+  }
 }

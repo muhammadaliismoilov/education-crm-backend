@@ -216,6 +216,26 @@ export class BranchesController {
     return this.branchesService.toggleTeacherManualAttendance(dto, req.user);
   }
 
+  // ─── TEACHER/MANAGER/ADMIN — O'qituvchining qo'lda davomat holatini olish ─────────
+  @Get('teacher-manual-attendance/status')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
+  @ApiOperation({
+    summary: "O'qituvchi qo'lda davomat qila olish holatini olish",
+    description: "Filialning allowTeacherManualAttendance holatini qaytaradi.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Holat muvaffaqiyatli olindi",
+    schema: {
+      example: WRAP({
+        allowTeacherManualAttendance: true,
+      }),
+    },
+  })
+  getTeacherManualAttendanceStatus(@Req() req: any) {
+    return this.branchesService.getTeacherManualAttendanceStatus(req.user);
+  }
+
   @Get()
   @ApiOperation({
     summary: 'Barcha filiallarni olish',

@@ -30,7 +30,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
       message = typeof res === 'object' ? res['message'] : res;
     } else {
       // DEBUG: Temporarily exposing error stack for debugging
-      message = exception instanceof Error ? exception.stack : 'Unknown Error: ' + String(exception);
+      message =
+        exception instanceof Error
+          ? exception.stack
+          : 'Unknown Error: ' + String(exception);
     }
 
     // 3. Terminalda (Log) xatoni to'liq ko'rish (Stack trace bilan)

@@ -69,8 +69,7 @@ async function bootstrap() {
 
       // VPS IP to'g'ridan CORS ga kirmaydi — faqat domen orqali
       const isAllowedDomain =
-        origin &&
-        (origin.includes('bar-bers.uz') || origin.includes('crm.uz'));
+        origin && (origin.includes('bar-bers.uz') || origin.includes('crm.uz'));
 
       if (
         !origin ||
