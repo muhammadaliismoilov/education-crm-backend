@@ -40,7 +40,10 @@ export class UsersService {
         throw new NotFoundException('Foydalanuvchi topilmadi');
       }
 
-      if (target.role !== UserRole.TEACHER && target.role !== UserRole.MANAGER) {
+      if (
+        target.role !== UserRole.TEACHER &&
+        target.role !== UserRole.MANAGER
+      ) {
         throw new ForbiddenException(
           'Admin faqat teacher yoki manager foydalanuvchilarni boshqara oladi',
         );

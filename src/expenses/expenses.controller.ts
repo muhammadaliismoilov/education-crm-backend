@@ -118,16 +118,16 @@ export class ExpensesController {
             createdBy: {
               id: 'uuid',
               fullName: 'Ali Valiyev',
-              role: 'admin'
-            }
-          }
+              role: 'admin',
+            },
+          },
         ],
         meta: {
           totalItems: 1,
           totalPages: 1,
           currentPage: 1,
-          itemsPerPage: 10
-        }
+          itemsPerPage: 10,
+        },
       },
     },
   })
@@ -138,7 +138,9 @@ export class ExpensesController {
   // GET /expenses/deleted — Arxivlangan xarajatlar ro'yxati
   @Get('deleted')
   @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
-  @ApiOperation({ summary: "Arxivlangan xarajatlar ro'yxati (filtrlash va sahifalash bilan)" })
+  @ApiOperation({
+    summary: "Arxivlangan xarajatlar ro'yxati (filtrlash va sahifalash bilan)",
+  })
   @ApiQuery({ name: 'page', required: false, example: 1 })
   @ApiQuery({ name: 'limit', required: false, example: 10 })
   @ApiQuery({
@@ -174,16 +176,16 @@ export class ExpensesController {
             createdBy: {
               id: 'uuid',
               fullName: 'Ali Valiyev',
-              role: 'admin'
-            }
-          }
+              role: 'admin',
+            },
+          },
         ],
         meta: {
           totalItems: 1,
           totalPages: 1,
           currentPage: 1,
-          itemsPerPage: 10
-        }
+          itemsPerPage: 10,
+        },
       },
     },
   })
@@ -338,9 +340,9 @@ export class ExpensesController {
       example: {
         statusCode: 403,
         message: "Faqat arxivlangan xarajatni butunlay o'chirish mumkin",
-        error: "Forbidden"
-      }
-    }
+        error: 'Forbidden',
+      },
+    },
   })
   @ApiResponse({
     status: 404,

@@ -181,7 +181,7 @@ export class GroupsService {
       // 1. Guruhdan hamma o'quvchilarni chiqaramiz (join table'dan o'chirish uchun Group'ni saqlaymiz)
       const studentsToArchive = [];
       const studentsToCheck = [...group.students]; // nusxa olamiz
-      
+
       group.students = []; // Hamma o'quvchilarni guruhdan chiqaramiz
       await queryRunner.manager.save(Group, group);
 
@@ -195,10 +195,15 @@ export class GroupsService {
           relations: ['enrolledGroups'],
         });
 
-        if (studentWithGroups && studentWithGroups.enrolledGroups.length === 0) {
+        if (
+          studentWithGroups &&
+          studentWithGroups.enrolledGroups.length === 0
+        ) {
           await queryRunner.manager.softRemove(Student, studentWithGroups);
           archivedStudentsCount++;
-          this.logger.log(`Talaba arxivlandi (guruhi qolmadi) [id: ${student.id}]`);
+          this.logger.log(
+            `Talaba arxivlandi (guruhi qolmadi) [id: ${student.id}]`,
+          );
         }
       }
 
@@ -212,9 +217,9 @@ export class GroupsService {
         `Guruh arxivlandi [id: ${id}]. ${archivedStudentsCount} ta talaba ham arxivlandi.`,
       );
 
-      return { 
-        message: 'Guruh arxivlandi', 
-        archivedStudents: archivedStudentsCount 
+      return {
+        message: 'Guruh arxivlandi',
+        archivedStudents: archivedStudentsCount,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -272,7 +277,7 @@ export class GroupsService {
     group.isActive = true;
     await this.groupRepo.save(group);
     await this.groupRepo.restore(id);
-    
+
     this.logger.log(`Guruh arxivdan tiklandi [id: ${id}]`);
     return this.getGroupDetails(id);
   }
@@ -284,14 +289,15 @@ export class GroupsService {
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
     if (!group.deletedAt) {
-      throw new BadRequestException("Faqat arxivlangan guruhni butunlay o'chirish mumkin");
+      throw new BadRequestException(
+        "Faqat arxivlangan guruhni butunlay o'chirish mumkin",
+      );
     }
 
     await this.groupRepo.remove(group);
     this.logger.log(`Guruh butunlay o'chirildi [id: ${id}]`);
     return { message: "Guruh butunlay o'chirildi" };
   }
-
 
   async addStudentToGroup(groupId: string, studentId: string) {
     const queryRunner = this.dataSource.createQueryRunner();

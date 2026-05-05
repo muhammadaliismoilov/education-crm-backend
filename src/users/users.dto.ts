@@ -53,7 +53,7 @@ export class CreateUserDto {
 
   @ApiProperty({
     example: UserRole.TEACHER,
-    description: "Foydalanuvchi roli: superadmin | admin | manager | teacher",
+    description: 'Foydalanuvchi roli: superadmin | admin | manager | teacher',
     enum: UserRole,
     default: UserRole.TEACHER,
   })

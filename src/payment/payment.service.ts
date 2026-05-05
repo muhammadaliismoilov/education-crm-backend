@@ -230,7 +230,7 @@ export class PaymentService {
       const cleanSearch = search.replace(/[\s\-\(\)]/g, '');
       query.andWhere(
         '(student.fullName ILike :search OR student.phone ILike :cleanSearch)',
-        { search: `%${search}%`, cleanSearch: `%${cleanSearch}%` }
+        { search: `%${search}%`, cleanSearch: `%${cleanSearch}%` },
       );
     }
 

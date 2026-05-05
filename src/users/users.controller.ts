@@ -124,7 +124,12 @@ export class UsersController {
   }
 
   @Get()
-  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
+  @Roles(
+    UserRole.SUPERADMIN,
+    UserRole.ADMIN,
+    UserRole.TEACHER,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
     summary: "Foydalanuvchilar ro'yxati",
     description: "Role, ism yoki login bo'yicha qidirish va sahifalash.",

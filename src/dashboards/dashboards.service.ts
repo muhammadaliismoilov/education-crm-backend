@@ -121,8 +121,14 @@ export class DashboardService {
       incomePromise = paymentQuery.getRawOne();
     }
 
-    const [debtRes, activeStudents, newStudents, attendance, activeGroups, totalExpenses] =
-      await Promise.all(promises);
+    const [
+      debtRes,
+      activeStudents,
+      newStudents,
+      attendance,
+      activeGroups,
+      totalExpenses,
+    ] = await Promise.all(promises);
 
     const incomeRes = incomePromise ? await incomePromise : null;
     const totalIncome = Number(incomeRes?.total) || 0;
@@ -131,9 +137,7 @@ export class DashboardService {
 
     // MANAGER uchun kirim ma'lumotlari yashiriladi
     const result = {
-      ...(isManager
-        ? {}
-        : { totalIncome, profit }),
+      ...(isManager ? {} : { totalIncome, profit }),
       totalExpenses,
       totalPending: totalDebt,
       activeStudents,

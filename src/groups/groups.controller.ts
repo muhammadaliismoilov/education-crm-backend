@@ -139,7 +139,12 @@ export class GroupsController {
   // GET /groups
   // ─────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN, UserRole.MANAGER)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.TEACHER,
+    UserRole.SUPERADMIN,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
     summary: 'Barcha guruhlarni qidirish va sahifalab olish',
     description:

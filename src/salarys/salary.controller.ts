@@ -101,7 +101,12 @@ export class SalaryController {
             ],
           },
         ],
-        meta: { totalItems: 2, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+        meta: {
+          totalItems: 2,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
         timestamp: '2026-03-13T10:00:00.000Z',
         startDate: '2026-03-01',
         endDate: '2026-03-31',
@@ -277,7 +282,12 @@ export class SalaryController {
     schema: {
       example: WRAP({
         data: [PAYOUT_EXAMPLE],
-        meta: { totalItems: 1, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+        meta: {
+          totalItems: 1,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
       }),
     },
   })

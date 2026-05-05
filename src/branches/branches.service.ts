@@ -141,7 +141,9 @@ export class BranchesService {
   async update(id: string, dto: UpdateBranchDto, user?: any) {
     await this.findOne(id);
     if (user && user.role === UserRole.ADMIN && user.branchId !== id) {
-      throw new ForbiddenException("Siz faqat o'z filialingizni tahrirlay olasiz");
+      throw new ForbiddenException(
+        "Siz faqat o'z filialingizni tahrirlay olasiz",
+      );
     }
     await this.branchRepo.update(id, dto);
     return this.findOne(id);
