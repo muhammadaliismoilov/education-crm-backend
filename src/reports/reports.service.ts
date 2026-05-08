@@ -8,6 +8,7 @@ import { Attendance } from '../entities/attendance.entity';
 import { Student } from '../entities/students.entity';
 import type { Cache } from 'cache-manager';
 import { User, UserRole } from '../entities/user.entity';
+import { Expense } from '../entities/expense.entity';
 import * as ExcelJS from 'exceljs';
 import * as express from 'express';
 import { SalaryService } from '../salarys/salary.service';
@@ -30,6 +31,8 @@ export class ReportsService {
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(Attendance)
     private attendanceRepo: Repository<Attendance>,
+    @InjectRepository(Expense)
+    private expenseRepo: Repository<Expense>,
     private salaryService: SalaryService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
@@ -59,6 +62,20 @@ export class ReportsService {
     if (branchId) incomeQuery.andWhere('p.branchId = :branchId', { branchId });
     const incomeByMonth = await incomeQuery
       .groupBy(`EXTRACT(MONTH FROM p."createdAt")`)
+      .getRawMany();
+
+    // ─── 1.5 XARAJATLAR - oylar bo'yicha ──────────────────────────────
+    const expenseQuery = this.expenseRepo
+      .createQueryBuilder('e')
+      .select([
+        `EXTRACT(MONTH FROM e."createdAt") AS month`,
+        `SUM(CAST(e.amount AS DECIMAL))    AS "totalExpense"`,
+      ])
+      .where(`e."createdAt" BETWEEN :start AND :end`, { start, end })
+      .andWhere('e."deletedAt" IS NULL');
+    if (branchId) expenseQuery.andWhere('e.branchId = :branchId', { branchId });
+    const expensesByMonth = await expenseQuery
+      .groupBy(`EXTRACT(MONTH FROM e."createdAt")`)
       .getRawMany();
 
     // ─── 2. QARZDORLIK - oylar bo'yicha ──────────────────────────────
@@ -144,6 +161,7 @@ export class ReportsService {
     let summaryIncome = 0;
     let summaryPending = 0;
     let summaryTeacherSal = 0;
+    let summaryExpenses = 0;
 
     const monthlyData = Array.from({ length: 12 }, (_, i) => {
       const monthNum = i + 1;
@@ -163,13 +181,17 @@ export class ReportsService {
         }
       }
 
+      const expenseRow = expensesByMonth.find((r) => Number(r.month) === monthNum);
+      const totalExpenses = Number(expenseRow?.totalExpense || 0);
+
       const salaryRow = monthlySalaries.find((r) => r.month === monthNum);
       const totalTeacherSalaries = salaryRow?.totalSalary || 0;
-      const netProfit = totalIncome - totalTeacherSalaries;
+      const netProfit = totalIncome - totalTeacherSalaries - totalExpenses;
 
       summaryIncome += totalIncome;
       summaryPending += totalPending;
       summaryTeacherSal += totalTeacherSalaries;
+      summaryExpenses += totalExpenses;
 
       return {
         month: monthNum,
@@ -177,6 +199,7 @@ export class ReportsService {
         totalIncome,
         totalPending,
         totalTeacherSalaries,
+        totalExpenses,
         netProfit,
       };
     });
@@ -186,7 +209,8 @@ export class ReportsService {
       totalIncome: summaryIncome,
       totalPending: summaryPending,
       totalTeacherSalaries: summaryTeacherSal,
-      netProfit: summaryIncome - summaryTeacherSal,
+      totalExpenses: summaryExpenses,
+      netProfit: summaryIncome - summaryTeacherSal - summaryExpenses,
       currency: "so'm",
       generatedAt: new Date(),
       period: { from: start, to: end },
@@ -240,6 +264,16 @@ export class ReportsService {
     const incomeMap = new Map(
       dailyIncomeRaw.map((r) => [r.date, Number(r.income || 0)]),
     );
+
+    // 1.5 Jami xarajatlar
+    const expenseQuery = this.expenseRepo
+      .createQueryBuilder('e')
+      .select('SUM(CAST(e.amount AS DECIMAL)) AS expense')
+      .where('e."createdAt" BETWEEN :start AND :end', { start, end })
+      .andWhere('e."deletedAt" IS NULL');
+    if (branchId) expenseQuery.andWhere('e.branchId = :branchId', { branchId });
+    const expenseRaw = await expenseQuery.getRawOne();
+    const totalExpenses = Number(expenseRaw?.expense || 0);
 
     // 2. Qarzdorlik (Pending amount)
     const debtQuery = this.paymentRepo
@@ -295,15 +329,14 @@ export class ReportsService {
     );
 
     // 4. O'qituvchilar joriy oyi uchun jami oyliklarni summaryda ko'rsatamiz
+    const totalIncome = Array.from(incomeMap.values()).reduce((a, b) => a + b, 0);
     const result = {
-      totalIncome: Math.round(
-        Array.from(incomeMap.values()).reduce((a, b) => a + b, 0),
-      ),
+      totalIncome: Math.round(totalIncome),
       totalPending,
       totalTeacherSalaries: Math.round(totalTeacherSalaries),
+      totalExpenses: Math.round(totalExpenses),
       netProfit: Math.round(
-        Array.from(incomeMap.values()).reduce((a, b) => a + b, 0) -
-          totalTeacherSalaries,
+        totalIncome - totalTeacherSalaries - totalExpenses,
       ),
       currency: "so'm",
       generatedAt: new Date(),

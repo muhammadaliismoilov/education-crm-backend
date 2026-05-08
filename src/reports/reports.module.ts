@@ -9,11 +9,15 @@ import { Attendance } from '../entities/attendance.entity';
 import { User } from '../entities/user.entity';
 import { SalaryModule } from '../salarys/salary.module';
 import { RedisCacheService } from '../common/redis/redis.cache';
+import { ExpensesModule } from '../expenses/expenses.module';
+
+import { Expense } from '../entities/expense.entity';
 
 @Module({
   imports: [
     SalaryModule,
-    TypeOrmModule.forFeature([Student, Payment, Group, Attendance, User]),
+    ExpensesModule,
+    TypeOrmModule.forFeature([Student, Payment, Group, Attendance, User, Expense]),
   ],
   controllers: [ReportsController],
   providers: [ReportsService, RedisCacheService],

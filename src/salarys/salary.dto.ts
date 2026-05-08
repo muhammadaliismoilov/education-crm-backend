@@ -1,8 +1,10 @@
 // salary.dto.ts
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsDateString,
   IsNotEmpty,
   IsNumber,
+  IsOptional,
   IsString,
   IsUUID,
   Matches,
@@ -31,17 +33,24 @@ export class PaySalaryDto {
 
   @ApiProperty({
     example: 2400000,
-    description: "To'lov miqdori (so'm). 0 dan katta bo'lishi kerak.",
+    description:
+      "Legacy maydon. Production hisob-kitob backendda qayta hisoblanadi.",
     minimum: 1,
+    required: false,
   })
+  @IsOptional()
   @IsNumber()
-  // TUZATISH: @Min(0) → @Min(1) — 0 so'm to'lov mantiqsiz
-  amount: number;
+  @Min(1, { message: "To'lov miqdori 0 dan katta bo'lishi kerak" })
+  amount?: number;
 
   @ApiProperty({
     example: '2026-03-01',
     description: 'Hisoblash boshlangan sana (YYYY-MM-DD)',
   })
+  @IsDateString(
+    {},
+    { message: "Boshlanish sanasi YYYY-MM-DD formatida bo'lishi kerak" },
+  )
   @IsString()
   @IsNotEmpty()
   startDate: string;
@@ -50,6 +59,10 @@ export class PaySalaryDto {
     example: '2026-03-31',
     description: 'Hisoblash tugagan sana (YYYY-MM-DD)',
   })
+  @IsDateString(
+    {},
+    { message: "Tugash sanasi YYYY-MM-DD formatida bo'lishi kerak" },
+  )
   @IsString()
   @IsNotEmpty()
   endDate: string;

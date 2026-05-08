@@ -7,7 +7,10 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { User, UserRole } from '../entities/user.entity';
-import { SalaryPayout } from '../entities/salaryPayout.entity';
+import {
+  SalaryPayout,
+  SalaryPayoutStatus,
+} from '../entities/salaryPayout.entity';
 import { Attendance } from '../entities/attendance.entity';
 import { PaySalaryDto } from './salary.dto';
 
@@ -24,7 +27,7 @@ export class SalaryService {
     private dataSource: DataSource,
   ) {}
 
-  // 1. BARCHA O'QITUVCHILAR OYLIGI
+  // 1. BARCHA O'QITUVCHILAR OYLIGI (Dashboard uchun)
   async getEstimatedSalaries(
     startDate?: string,
     endDate?: string,
@@ -49,41 +52,75 @@ export class SalaryService {
 
     const teachers = await this.userRepo.find({
       where: query,
+      relations: ['teachingGroups'],
     });
 
-    const report: any[] = [];
+    let totalPaidCount = 0;
+    let totalUnpaidCount = 0;
 
-    for (const teacher of teachers) {
+    const reportPromises = teachers.map(async (teacher) => {
+      // Mavjud to'lovni tekshirish (Faqat PAID statusdagilarni hisobga olamiz)
+      const existingPayout = await this.payoutRepo.findOne({
+        where: {
+          teacher: { id: teacher.id },
+          startDate: new Date(start),
+          endDate: new Date(end),
+          status: SalaryPayoutStatus.PAID,
+        },
+      });
+
       const salaryData = await this.calculateTeacherSalary(
         teacher.id,
         start,
         end,
       ).catch((err) => {
-        // SABABI: Bitta o'qituvchi hisoblashda xato bo'lsa boshqalari to'xtamasin,
-        // lekin xato logga tushsin — jimgina yutib yubormaslik uchun
         this.logger.warn(
           `Oylik hisoblashda xatolik [teacher: ${teacher.id}]: ${err.message}`,
         );
         return { totalSalary: 0, details: [] };
       });
 
-      if (salaryData.totalSalary > 0) {
-        report.push({
-          teacherId: teacher.id,
-          teacherName: teacher.fullName,
-          calculatedSalary: salaryData.totalSalary,
-          startDate: start,
-          endDate: end,
-          details: salaryData.details,
-        });
-      }
-    }
+      // Darslar sonini hisoblash
+      const totalLessons = (salaryData.details as any[]).reduce(
+        (sum: number, d: any) => sum + (d.attendanceCount || 0),
+        0,
+      );
+
+      const status = existingPayout ? 'PAID' : 'UNPAID';
+      
+      // Fan (Subject) - birinchi guruh nomidan olishga harakat qilamiz yoki default
+      const subject = teacher.teachingGroups?.[0]?.name?.split('-')[0] || 'O\'qituvchi';
+
+      return {
+        teacherId: teacher.id,
+        teacherName: teacher.fullName,
+        subject: subject,
+        calculatedSalary: salaryData.totalSalary,
+        totalLessons,
+        startDate: start,
+        endDate: end,
+        status,
+        paidAt: existingPayout?.paidAt || null,
+        payoutId: existingPayout?.id || null,
+        details: salaryData.details,
+      };
+    });
+
+    const report = await Promise.all(reportPromises);
+
+    totalPaidCount = report.filter((r) => r.status === 'PAID').length;
+    totalUnpaidCount = report.length - totalPaidCount;
 
     const totalItems = report.length;
     const paginatedData = report.slice((page - 1) * limit, page * limit);
 
     return {
       data: paginatedData,
+      summary: {
+        totalTeachers: totalItems,
+        totalPaid: totalPaidCount,
+        totalUnpaid: totalUnpaidCount,
+      },
       meta: {
         totalItems,
         totalPages: Math.ceil(totalItems / limit),
@@ -272,10 +309,20 @@ export class SalaryService {
       });
     }
 
+    const totalLessons = details.reduce((sum, d) => sum + d.attendanceCount, 0);
+    const averageHourlyRate = totalLessons > 0 ? Math.round(totalSalary / totalLessons) : 0;
+    
+    const startObj = new Date(startDate);
+    const endObj = new Date(endDate);
+    const daysCount = Math.round((endObj.getTime() - startObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
     return {
       teacherName: teacher.fullName,
       startDate,
       endDate,
+      daysCount,
+      totalLessons,
+      averageHourlyRate,
       totalSalary: Math.round(totalSalary),
       details,
     };
@@ -323,7 +370,22 @@ export class SalaryService {
 
   // 3. OYLIK TO'LASH
   async paySalary(dto: PaySalaryDto, user?: any) {
-    const { teacherId, month, amount, startDate, endDate } = dto;
+    const { teacherId, month, startDate, endDate } = dto;
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const forMonth = startDate.substring(0, 7);
+
+    if (start > end) {
+      throw new BadRequestException(
+        'Boshlanish sanasi tugash sanasidan keyin bo\'lishi mumkin emas',
+      );
+    }
+
+    if (month !== forMonth) {
+      throw new BadRequestException(
+        "To'lov oyi boshlanish sanasi oyiga mos bo'lishi kerak",
+      );
+    }
 
     const query: any = { id: teacherId, role: UserRole.TEACHER };
     if (user && user.role !== UserRole.SUPERADMIN) {
@@ -344,8 +406,9 @@ export class SalaryService {
       const existing = await queryRunner.manager.findOne(SalaryPayout, {
         where: {
           teacher: { id: teacherId },
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
+          startDate: start,
+          endDate: end,
+          status: SalaryPayoutStatus.PAID,
         },
       });
 
@@ -354,12 +417,28 @@ export class SalaryService {
           "Ushbu sana oralig'i uchun oylik allaqachon to'langan",
         );
 
+      const salaryData = await this.calculateTeacherSalary(
+        teacherId,
+        startDate,
+        endDate,
+        user,
+      );
+
+      if (salaryData.totalSalary <= 0) {
+        throw new BadRequestException(
+          "Ushbu sana oralig'i uchun to'lanadigan oylik mavjud emas",
+        );
+      }
+
       const payout = queryRunner.manager.create(SalaryPayout, {
-        amount,
-        forMonth: month,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        amount: salaryData.totalSalary,
+        forMonth,
+        status: SalaryPayoutStatus.PAID,
+        startDate: start,
+        endDate: end,
+        calculationDetails: salaryData,
         teacher: { id: teacherId },
+        paidBy: user?.id ? { id: user.id } : null,
         branch: teacher.branch ? { id: teacher.branch.id } : null,
       });
 
@@ -368,7 +447,7 @@ export class SalaryService {
 
       // SABABI: Moliyaviy to'lov — kim, qanchaga, qaysi oy audit uchun muhim
       this.logger.log(
-        `Oylik to'landi [teacher: ${teacherId}] [oy: ${month}] [summa: ${amount}]`,
+        `Oylik to'landi [teacher: ${teacherId}] [oy: ${forMonth}] [summa: ${salaryData.totalSalary}] [paidBy: ${user?.id ?? 'unknown'}]`,
       );
 
       return { message: 'Oylik muvaffaqiyatli saqlandi', payout: saved };
@@ -447,11 +526,14 @@ export class SalaryService {
   async remove(id: string) {
     const payout = await this.findOne(id);
 
-    // SABABI: Moliyaviy yozuvni o'chirish — qaytarib bo'lmaydigan harakat, audit uchun
+    // SABABI: Moliyaviy yozuvni o'chirish — qaytarib bo'lmaydigan harakat, audit uchun (Soft Delete va Cancel statusi)
     this.logger.log(
-      `Oylik o'chirildi [id: ${id}] [teacher: ${payout.teacher?.id}] [summa: ${payout.amount}]`,
+      `Oylik bekor qilindi (soft delete) [id: ${id}] [teacher: ${payout.teacher?.id}] [summa: ${payout.amount}]`,
     );
 
-    return await this.payoutRepo.remove(payout);
+    payout.status = SalaryPayoutStatus.CANCELLED;
+    await this.payoutRepo.save(payout);
+
+    return await this.payoutRepo.softRemove(payout);
   }
 }

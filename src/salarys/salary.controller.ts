@@ -167,6 +167,9 @@ export class SalaryController {
         teacherName: 'Jasur Toshmatov',
         startDate: '2026-03-01',
         endDate: '2026-03-31',
+        daysCount: 31,
+        totalLessons: 60,
+        averageHourlyRate: 40000,
         totalSalary: 2400000,
         details: [
           {
