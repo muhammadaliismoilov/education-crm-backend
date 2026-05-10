@@ -55,14 +55,17 @@ export class ContractsService {
         throw new NotFoundException('Shablon topilmadi');
       }
 
-      // Oddiy placeholder larni almashtiramiz
-      finalContent = template.content
+      // JSON formatida saqlangan contentni string ga o'tkazib placeholder larni almashtiramiz
+      const templateContentStr = JSON.stringify(template.content);
+      const replacedStr = templateContentStr
         .replace(/{{studentName}}/g, student.fullName)
         .replace(/{{parentName}}/g, student.parentName || '')
         .replace(/{{studentPhone}}/g, student.phone || '')
         .replace(/{{contractNumber}}/g, nextContractNumber.toString())
         .replace(/{{date}}/g, new Date().toLocaleDateString('uz-UZ'))
         .replace(/{{branchName}}/g, template.branch?.name || '');
+        
+      finalContent = JSON.parse(replacedStr);
     }
 
     const contract = this.contractRepo.create({
@@ -167,6 +170,22 @@ export class ContractsService {
       );
     }
 
+    let generatedHtml = '';
+    if (typeof contract.content === 'object' && contract.content !== null) {
+      for (const [key, value] of Object.entries(contract.content)) {
+        if (key === 'title') {
+          generatedHtml += `<h1>${value}</h1>`;
+        } else if (/^[a-zA-Z0-9]+$/.test(key)) {
+          // 'p', 'h2', 'div', 'span', va hokazo teglar orqali kelgan bo'lsa
+          generatedHtml += `<${key}>${value}</${key}>`;
+        } else {
+          generatedHtml += `<div>${value}</div>`;
+        }
+      }
+    } else {
+      generatedHtml = String(contract.content);
+    }
+
     const browser = await puppeteer.launch({
       headless: true,
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
@@ -185,7 +204,7 @@ export class ContractsService {
         </style>
       </head>
       <body>
-        ${contract.content}
+        ${generatedHtml}
       </body>
       </html>
     `;

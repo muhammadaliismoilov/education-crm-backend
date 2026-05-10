@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsUUID, IsObject } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateContractDto {
@@ -20,12 +20,12 @@ export class CreateContractDto {
   studentId: string;
 
   @ApiPropertyOptional({
-    description: "Shartnoma matni. Agar 'templateId' berilsa, ushbu maydon shablon asosida avtomatik to'ldiriladi.",
-    example: '<h1>Shartnoma</h1>...'
+    description: "Shartnoma matni. Agar 'templateId' berilsa, ushbu maydon shablon asosida avtomatik to'ldiriladi. JSON formatida bo'lishi kutiladi.",
+    example: { title: 'Shartnoma', body: '...' }
   })
-  @IsString()
+  @IsObject()
   @IsOptional()
-  content?: string;
+  content?: Record<string, any>;
 
   @ApiPropertyOptional({
     description: "Yuklangan shartnoma faylining manzili (URL). Agar tayyor PDF fayl bo'lsa ishlatiladi.",
@@ -55,12 +55,12 @@ export class UpdateContractDto {
   title?: string;
 
   @ApiPropertyOptional({
-    description: "Shartnomaning yangilangan matni. DIQQAT: Faqat 'DRAFT' holatidagi shartnomalarni tahrirlash mumkin.",
-    example: '<h1>Yangilangan Shartnoma</h1>...'
+    description: "Shartnomaning yangilangan matni. JSON formatida bo'lishi kutiladi. DIQQAT: Faqat 'DRAFT' holatidagi shartnomalarni tahrirlash mumkin.",
+    example: { title: 'Yangilangan Shartnoma', body: '...' }
   })
-  @IsString()
+  @IsObject()
   @IsOptional()
-  content?: string;
+  content?: Record<string, any>;
 
   @ApiPropertyOptional({ description: 'Yuklangan fayl manzili' })
   @IsString()

@@ -17,8 +17,8 @@ export class ContractTemplate {
   @Column()
   title: string;
 
-  @Column({ type: 'text' })
-  content: string;
+  @Column({ type: 'jsonb' })
+  content: Record<string, any>;
 
   @ManyToOne(() => Branch, { nullable: true })
   branch: Branch;

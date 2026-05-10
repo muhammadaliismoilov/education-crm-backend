@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsObject } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateContractTemplateDto {
@@ -11,13 +11,13 @@ export class CreateContractTemplateDto {
   title: string;
 
   @ApiProperty({
-    description: "Shartnoma matni. HTML formatini qo'llab-quvvatlaydi. " +
+    description: "Shartnoma matni JSON formatida. " +
       "Avtomatik to'ldiriladigan maydonlar: {{studentName}}, {{contractNumber}}, {{branchName}}, {{date}}, {{parentName}}.",
-    example: '<h1>Shartnoma №{{contractNumber}}</h1><p>{{studentName}} bilan {{branchName}} markazi o\'rtasida...</p>',
+    example: { title: 'Shartnoma №{{contractNumber}}', body: "{{studentName}} bilan {{branchName}} markazi o'rtasida..." },
   })
-  @IsString()
+  @IsObject()
   @IsNotEmpty()
-  content: string;
+  content: Record<string, any>;
 }
 
 export class UpdateContractTemplateDto {
@@ -30,10 +30,10 @@ export class UpdateContractTemplateDto {
   title?: string;
 
   @ApiPropertyOptional({ 
-    description: "Shartnomaning yangilangan HTML matni.",
-    example: '<h1>Yangilangan Shartnoma</h1><p>{{studentName}}...</p>'
+    description: "Shartnomaning yangilangan JSON matni.",
+    example: { title: 'Yangilangan Shartnoma', body: '{{studentName}}...' }
   })
-  @IsString()
+  @IsObject()
   @IsOptional()
-  content?: string;
+  content?: Record<string, any>;
 }
