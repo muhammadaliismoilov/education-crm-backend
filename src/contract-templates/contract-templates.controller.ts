@@ -23,7 +23,7 @@ import { UserRole } from '../entities/user.entity';
 const TEMPLATE_EXAMPLE = {
   id: 'uuid-string',
   title: 'Standard English Course Contract',
-  content: '<h1>Shartnoma №{{contractNumber}}</h1>...',
+  content: { title: 'Shartnoma №{{contractNumber}}', body: "{{studentName}} bilan {{branchName}} markazi o'rtasida..." },
   branch: { id: 'uuid', name: 'Tashkent' },
   createdAt: '2025-04-01T10:00:00Z',
   updatedAt: '2025-04-01T10:00:00Z',
@@ -46,7 +46,7 @@ export class ContractTemplatesController {
 
   @ApiOperation({
     summary: 'Yangi shablon yaratish',
-    description: "Tizimga yangi shartnoma shablonini qo'shadi. Ushbu shablon keyinchalik talabalar bilan shartnoma yaratishda asos bo'lib xizmat qiladi. " +
+    description: "Tizimga yangi shartnoma shablonini qo'shadi. Ushbu shablon keyinchalik talabalar bilan shartnoma yaratishda asos bo'lib xizmat qiladi. Shablon matni (content) JSON formatida kiritilishi talab etiladi. " +
       "Faqat Admin va Superadminlar uchun ruxsat berilgan.",
   })
   @ApiResponse({
@@ -94,7 +94,7 @@ export class ContractTemplatesController {
   @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
   @ApiOperation({ 
     summary: 'Shablonni tahrirlash',
-    description: "Mavjud shablonning nomi yoki matnini yangilaydi." 
+    description: "Mavjud shablonning nomi yoki matnini (JSON formatida) yangilaydi." 
   })
   @ApiResponse({
     status: 200,

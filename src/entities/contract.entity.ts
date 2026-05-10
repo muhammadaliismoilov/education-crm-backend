@@ -28,8 +28,8 @@ export class Contract {
   @Column({ type: 'int', default: 1 })
   contractNumber: number;
 
-  @Column({ type: 'text', nullable: true })
-  content: string;
+  @Column({ type: 'jsonb', nullable: true })
+  content: Record<string, any>;
 
   @Column({ nullable: true })
   fileUrl: string;

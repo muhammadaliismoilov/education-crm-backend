@@ -28,7 +28,7 @@ const CONTRACT_EXAMPLE = {
   id: 'uuid-string',
   title: 'Backend kursi shartnomasi',
   contractNumber: 15,
-  content: '<h1>Shartnoma</h1>...',
+  content: { title: 'Shartnoma', body: "Talaba qoidalarga rioya qilishi shart." },
   fileUrl: null,
   version: 1,
   status: 'DRAFT',
@@ -56,7 +56,7 @@ export class ContractsController {
   @ApiOperation({
     summary: 'Yangi shartnoma yaratish',
     description:
-      "Talaba uchun yangi shartnoma yaratadi. Agar 'templateId' berilsa, shartnoma matni avtomatik shakllanadi. " +
+      "Talaba uchun yangi shartnoma yaratadi. Agar 'templateId' berilsa, shartnoma matni JSON formatida shablon asosida avtomatik shakllanadi. " +
       "Yangi yaratilgan shartnoma 'DRAFT' holatida bo'ladi. Faqat Admin va Superadminlar yarata oladi.",
   })
   @ApiResponse({
@@ -110,7 +110,7 @@ export class ContractsController {
   @ApiOperation({
     summary: 'Shartnomani tahrirlash',
     description:
-      "Shartnoma nomi yoki matnini o'zgartiradi. DIQQAT: Faqat 'DRAFT' holatida tahrirlash mumkin. Tahrirlangandan so'ng versiya raqami oshadi.",
+      "Shartnoma nomi yoki matnini o'zgartiradi. Matn (content) JSON formatida kutiladi. DIQQAT: Faqat 'DRAFT' holatida tahrirlash mumkin. Tahrirlangandan so'ng versiya raqami oshadi.",
   })
   @ApiResponse({
     status: 200,
