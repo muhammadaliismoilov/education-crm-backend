@@ -10,6 +10,8 @@ import {
   CreateContractTemplateDto,
   UpdateContractTemplateDto,
 } from './dto/contract-template.dto';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
+import { UserRole } from '../entities/user.entity';
 
 @Injectable()
 export class ContractTemplatesService {
@@ -18,7 +20,9 @@ export class ContractTemplatesService {
     private contractTemplateRepo: Repository<ContractTemplate>,
   ) {}
 
-  async create(dto: CreateContractTemplateDto, user: any) {
+  async create(dto: CreateContractTemplateDto, user: AuthenticatedUser) {
+    // SUPERADMIN ham branchId talab qiladi — agar kelajakda global shablon kerak bo'lsa
+    // bu logikani kengaytirish mumkin
     if (!user.branchId) {
       throw new ForbiddenException('Sizga filial biriktirilmagan');
     }
@@ -31,16 +35,29 @@ export class ContractTemplatesService {
     return this.contractTemplateRepo.save(template);
   }
 
-  async findAll(user: any) {
+  async findAll(user: AuthenticatedUser) {
+    // SUPERADMIN barcha filiallarni ko'rishi mumkin (ixtiyoriy kengaytirish)
+    const where =
+      user.role === UserRole.SUPERADMIN && !user.branchId
+        ? {}
+        : { branch: { id: user.branchId } };
+
     return this.contractTemplateRepo.find({
-      where: { branch: { id: user.branchId } },
+      where,
+      relations: ['branch'],
       order: { createdAt: 'DESC' },
     });
   }
 
-  async findOne(id: string, user: any) {
+  async findOne(id: string, user: AuthenticatedUser) {
+    const where =
+      user.role === UserRole.SUPERADMIN && !user.branchId
+        ? { id }
+        : { id, branch: { id: user.branchId } };
+
     const template = await this.contractTemplateRepo.findOne({
-      where: { id, branch: { id: user.branchId } },
+      where,
+      relations: ['branch'],
     });
 
     if (!template) {
@@ -50,14 +67,14 @@ export class ContractTemplatesService {
     return template;
   }
 
-  async update(id: string, dto: UpdateContractTemplateDto, user: any) {
+  async update(id: string, dto: UpdateContractTemplateDto, user: AuthenticatedUser) {
     const template = await this.findOne(id, user);
 
     Object.assign(template, dto);
     return this.contractTemplateRepo.save(template);
   }
 
-  async remove(id: string, user: any) {
+  async remove(id: string, user: AuthenticatedUser) {
     const template = await this.findOne(id, user);
     await this.contractTemplateRepo.softRemove(template);
     return { message: "Shablon o'chirildi" };

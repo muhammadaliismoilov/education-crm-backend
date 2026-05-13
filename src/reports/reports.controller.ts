@@ -68,7 +68,8 @@ export class ReportsController {
           totalIncome: 3300000,
           totalPending: 300000,
           totalTeacherSalaries: 185808,
-          netProfit: 3114192,
+          totalExpenses: 50000,
+          netProfit: 3064192,
           currency: "so'm",
           generatedAt: '2026-03-16T10:00:00.000Z',
           period: {
@@ -91,7 +92,8 @@ export class ReportsController {
             totalIncome: 800000,
             totalPending: 0,
             totalTeacherSalaries: 92904,
-            netProfit: 707096,
+            totalExpenses: 20000,
+            netProfit: 687096,
           },
           {
             month: 3,
@@ -99,7 +101,8 @@ export class ReportsController {
             totalIncome: 2500000,
             totalPending: 300000,
             totalTeacherSalaries: 92904,
-            netProfit: 2407096,
+            totalExpenses: 30000,
+            netProfit: 2377096,
           },
           {
             month: 4,
@@ -230,7 +233,8 @@ export class ReportsController {
         totalIncome: 25000000,
         totalPending: 4800000,
         totalTeacherSalaries: 7200000,
-        netProfit: 17800000,
+        totalExpenses: 1500000,
+        netProfit: 16300000,
         currency: "so'm",
         generatedAt: '2026-03-13T10:00:00.000Z',
         period: {
