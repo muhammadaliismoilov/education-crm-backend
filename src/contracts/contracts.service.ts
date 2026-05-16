@@ -85,12 +85,44 @@ export class ContractsService implements OnModuleDestroy {
     }
   }
 
+  /** System Chrome yoki Chromium executable path ni aniqlash */
+  private getChromePath(): string | undefined {
+    const candidates = [
+      '/usr/bin/google-chrome',
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/snap/bin/chromium',
+    ];
+    const fs = require('fs');
+    for (const p of candidates) {
+      if (fs.existsSync(p)) return p;
+    }
+    return undefined; // Topilmasa Puppeteer o'z bundled Chromium ni ishlatadi
+  }
+
   /** Puppeteer browser singleton getter */
   private async getBrowser(): Promise<puppeteer.Browser> {
     if (!this.browser || !this.browser.connected) {
+      const executablePath = this.getChromePath();
+      if (executablePath) {
+        this.logger.log(`Chrome ishlatilmoqda: ${executablePath}`);
+      } else {
+        this.logger.warn('System Chrome topilmadi, bundled Chromium ishlatiladi');
+      }
+
       this.browser = await puppeteer.launch({
         headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        executablePath, // system Chrome bo'lsa ishlatiladi
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',   // /dev/shm kichik bo'lsa crash bo'lmaydi
+          '--disable-gpu',             // server da GPU yo'q
+          '--no-first-run',
+          '--no-zygote',               // root user uchun kerak
+          '--single-process',          // ba'zi muhitlarda barqarorroq
+        ],
       });
     }
     return this.browser;

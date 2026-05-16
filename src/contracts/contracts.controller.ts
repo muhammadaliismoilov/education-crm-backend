@@ -44,7 +44,7 @@ const S_CONTRACT = {
   content: {
     title: 'SHARTNOMA №15',
     body: "Ushbu shartnoma 13.05.2025 sanasida Yunusobod Filiali va Ali Ismoilov o'rtasida tuzildi. Ota-ona: Ismoil Karimov. Tel: +998901234567.",
-    footer: "Markaz vakili: ___________\nTalaba: ___________",
+    footer: 'Markaz vakili: ___________\nTalaba: ___________',
   },
   fileUrl: null,
   version: 1,
@@ -134,7 +134,7 @@ DRAFT → APPROVED → SIGNED
     examples: {
       with_template: {
         summary: '✅ Shablon orqali yaratish (tavsiya etiladi)',
-        description: 'templateId berilsa, content avtomatik to\'ldiriladi',
+        description: "templateId berilsa, content avtomatik to'ldiriladi",
         value: {
           title: 'Ali Ismoilov — Frontend kursi shartnomasi',
           studentId: 's1d2e3f4-a5b6-7890-abcd-ef1234567893',
@@ -142,10 +142,10 @@ DRAFT → APPROVED → SIGNED
         },
       },
       manual: {
-        summary: '✏️ Qo\'lda content yozish',
-        description: 'templateId yo\'q — content to\'liq berilishi shart',
+        summary: "✏️ Qo'lda content yozish",
+        description: "templateId yo'q — content to'liq berilishi shart",
         value: {
-          title: 'Ali Ismoilov — Qo\'l bilan yozilgan shartnoma',
+          title: "Ali Ismoilov — Qo'l bilan yozilgan shartnoma",
           studentId: 's1d2e3f4-a5b6-7890-abcd-ef1234567893',
           content: {
             title: 'SHARTNOMA №',
@@ -172,7 +172,7 @@ DRAFT → APPROVED → SIGNED
   })
   @ApiResponse({
     status: 400,
-    description: "❌ Validatsiya xatosi.",
+    description: '❌ Validatsiya xatosi.',
     schema: {
       example: ERR(
         ['studentId must be a UUID', 'title should not be empty'],
@@ -190,10 +190,7 @@ DRAFT → APPROVED → SIGNED
     description: "❌ O'quvchi yoki shablon topilmadi.",
     schema: { example: ERR("O'quvchi topilmadi", 404) },
   })
-  create(
-    @Body() dto: CreateContractDto,
-    @Req() req: IAuthenticatedRequest,
-  ) {
+  create(@Body() dto: CreateContractDto, @Req() req: IAuthenticatedRequest) {
     return this.contractsService.create(dto, req.user);
   }
 
@@ -232,7 +229,7 @@ Natijada \`student\`, \`createdBy\`, \`approvedBy\` relyatsiyalari ham keladi.
   })
   @ApiResponse({
     status: 200,
-    description: '✅ Sahifalangan shartnomalar ro\'yxati.',
+    description: "✅ Sahifalangan shartnomalar ro'yxati.",
     schema: { example: WRAP(S_PAGINATED) },
   })
   @ApiResponse({
@@ -270,7 +267,7 @@ Boshqa filialga tegishli shartnoma so'ralsa \`404\` qaytariladi.
   })
   @ApiResponse({
     status: 200,
-    description: '✅ Shartnoma ma\'lumotlari.',
+    description: "✅ Shartnoma ma'lumotlari.",
     schema: { example: WRAP(S_CONTRACT) },
   })
   @ApiResponse({
@@ -318,11 +315,11 @@ Shartnomaning \`title\`, \`content\` yoki \`fileUrl\` maydoni(larini) yangilaydi
     type: UpdateContractDto,
     examples: {
       title_only: {
-        summary: 'Faqat nomni o\'zgartirish',
+        summary: "Faqat nomni o'zgartirish",
         value: { title: 'Ali Ismoilov — Backend kursi shartnomasi' },
       },
       content_only: {
-        summary: 'Matnni o\'zgartirish',
+        summary: "Matnni o'zgartirish",
         value: {
           content: {
             title: 'YANGILANGAN SHARTNOMA №15',
@@ -340,7 +337,7 @@ Shartnomaning \`title\`, \`content\` yoki \`fileUrl\` maydoni(larini) yangilaydi
   })
   @ApiResponse({
     status: 400,
-    description: "❌ Shartnoma DRAFT holatida emas yoki validatsiya xatosi.",
+    description: '❌ Shartnoma DRAFT holatida emas yoki validatsiya xatosi.',
     schema: {
       example: ERR('Faqat DRAFT holatidagi shartnomani tahrirlash mumkin', 400),
     },
@@ -393,13 +390,16 @@ Shartnomani \`APPROVED\` holatiga o'tkazadi.
       example: WRAP({
         ...S_CONTRACT,
         status: 'APPROVED',
-        approvedBy: { id: 'u1d2e3f4-a5b6-7890-abcd-ef1234567894', fullName: 'Admin Bekzod' },
+        approvedBy: {
+          id: 'u1d2e3f4-a5b6-7890-abcd-ef1234567894',
+          fullName: 'Admin Bekzod',
+        },
       }),
     },
   })
   @ApiResponse({
     status: 400,
-    description: "❌ Shartnoma DRAFT holatida emas.",
+    description: '❌ Shartnoma DRAFT holatida emas.',
     schema: { example: ERR('Shartnoma DRAFT holatida emas', 400) },
   })
   @ApiResponse({
@@ -455,9 +455,12 @@ Shartnoma qog'ozda imzolangandan keyin tizimda \`SIGNED\` deb belgilaydi.
   })
   @ApiResponse({
     status: 400,
-    description: "❌ Shartnoma APPROVED holatida emas.",
+    description: '❌ Shartnoma APPROVED holatida emas.',
     schema: {
-      example: ERR('Faqat APPROVED shartnomani imzolangan deb belgilash mumkin', 400),
+      example: ERR(
+        'Faqat APPROVED shartnomani imzolangan deb belgilash mumkin',
+        400,
+      ),
     },
   })
   @ApiResponse({
@@ -503,7 +506,9 @@ Shartnomani o'chiradi (**soft delete** — bazadan butunlay o'chirilmaydi).
   @ApiResponse({
     status: 400,
     description: "❌ Imzolangan shartnomani o'chirib bo'lmaydi.",
-    schema: { example: ERR("Imzolangan shartnomani o'chirish mumkin emas", 400) },
+    schema: {
+      example: ERR("Imzolangan shartnomani o'chirish mumkin emas", 400),
+    },
   })
   @ApiResponse({
     status: 403,
@@ -646,7 +651,7 @@ Content-Disposition: inline; filename="student-{studentId}-contract.pdf"
   @ApiProduces('application/pdf')
   @ApiParam({
     name: 'studentId',
-    description: "Talabaning UUID identifikatori",
+    description: 'Talabaning UUID identifikatori',
     format: 'uuid',
     example: 's1d2e3f4-a5b6-7890-abcd-ef1234567893',
   })
@@ -662,7 +667,7 @@ Content-Disposition: inline; filename="student-{studentId}-contract.pdf"
   })
   @ApiResponse({
     status: 404,
-    description: "❌ Talabaga tegishli shartnoma topilmadi.",
+    description: '❌ Talabaga tegishli shartnoma topilmadi.',
     schema: { example: ERR('Talabaga tegishli shartnoma topilmadi.', 404) },
   })
   async printStudentContractPdf(
