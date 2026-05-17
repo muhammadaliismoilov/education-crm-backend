@@ -13,5 +13,6 @@ import { ContractTemplate } from '../entities/contract-template.entity';
   ],
   controllers: [ContractsController],
   providers: [ContractsService],
+  exports: [ContractsService],
 })
 export class ContractsModule {}
