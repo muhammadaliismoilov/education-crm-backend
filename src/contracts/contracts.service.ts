@@ -16,16 +16,7 @@ import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 import { UserRole } from '../entities/user.entity';
 import * as puppeteer from 'puppeteer';
 import * as he from 'he';
-
-/** Tizimda ruxsat etilgan placeholder kalitlar */
-const ALLOWED_PLACEHOLDERS: Record<string, string> = {
-  studentName: '',
-  parentName: '',
-  studentPhone: '',
-  contractNumber: '',
-  date: '',
-  branchName: '',
-};
+import * as fs from 'fs';
 
 /**
  * Xavfsiz bir-marta-o'tish (single-pass) placeholder almashtirish.
@@ -94,7 +85,7 @@ export class ContractsService implements OnModuleDestroy {
       '/usr/bin/chromium',
       '/snap/bin/chromium',
     ];
-    const fs = require('fs');
+    // Top-level import qilingan 'fs' modulini ishlatamiz (require() emas)
     for (const p of candidates) {
       if (fs.existsSync(p)) return p;
     }
@@ -103,7 +94,10 @@ export class ContractsService implements OnModuleDestroy {
 
   /** Puppeteer browser singleton getter */
   private async getBrowser(): Promise<puppeteer.Browser> {
-    if (!this.browser || !this.browser.connected) {
+    // browser.process() === null bo'lsa browser yopilgan
+    // browser.process() check — .connected propery Puppeteer API da mavjud emas
+    const isClosed = !this.browser || this.browser.process() === null;
+    if (isClosed) {
       const executablePath = this.getChromePath();
       if (executablePath) {
         this.logger.log(`Chrome ishlatilmoqda: ${executablePath}`);
@@ -141,14 +135,18 @@ export class ContractsService implements OnModuleDestroy {
       throw new NotFoundException("O'quvchi topilmadi");
     }
 
-    // ✅ Race condition fix: transaction + SELECT FOR UPDATE bilan atomik contractNumber
-    const contract = await this.dataSource.transaction(async (manager) => {
-      // Pessimistic lock — parallel so'rovlar bir xil raqam olmasligi uchun
-      const result = await manager.query<{ max: string | null }[]>(
-        `SELECT MAX("contractNumber") as max FROM contracts WHERE "branchId" = $1`,
-        [user.branchId],
-      );
-      const nextContractNumber = result[0]?.max ? Number(result[0].max) + 1 : 1;
+    // ✅ Race condition fix: SERIALIZABLE isolation level bilan atomik contractNumber
+    // SABABI: SELECT MAX oddiy query emas — ikki parallel transaction bir xil raqam olishi mumkin.
+    // SERIALIZABLE da PostgreSQL konflikt aniqlasa, bitta transaction abort qiladi.
+    const contract = await this.dataSource.transaction(
+      'SERIALIZABLE',
+      async (manager) => {
+        // Raqam: hozirgi filialdagi eng katta raqamdan 1 ortiq
+        const result = await manager.query<{ max: string | null }[]>(
+          `SELECT MAX("contractNumber") as max FROM contracts WHERE "branchId" = $1`,
+          [user.branchId],
+        );
+        const nextContractNumber = result[0]?.max ? Number(result[0].max) + 1 : 1;
 
       // Shablon bilan ishlash
       let finalContent = dto.content as Record<string, any> | undefined;
@@ -383,4 +381,108 @@ export class ContractsService implements OnModuleDestroy {
 
     return this.generatePdf(contract.id, user);
   }
+
+  /**
+   * Yangi talaba qo'shilganda yoki boshqa holatlarda avtomatik shartnoma yaratish.
+   * 
+   * Ishlash tartibi:
+   * 1. Filialga tegishli birinchi shablonni topadi
+   * 2. Shablon bo'lmasa — xatolik bermaydi, log yozadi va skip qiladi
+   * 3. Shablon bo'lsa — placeholderlarni talaba ma'lumotlari bilan almashtiradi
+   * 4. DRAFT holatida yangi shartnoma yaratadi
+   */
+  async autoGenerateContract(
+    studentId: string,
+    branchId: string,
+    userId: string,
+  ): Promise<Contract | null> {
+    try {
+      // 1. Talabani topish
+      const student = await this.studentRepo.findOne({
+        where: { id: studentId, branch: { id: branchId } },
+      });
+
+      if (!student) {
+        this.logger.warn(
+          `Auto-shartnoma: Talaba topilmadi [studentId: ${studentId}]`,
+        );
+        return null;
+      }
+
+      // 2. Filialga tegishli birinchi shablonni topish
+      const template = await this.contractTemplateRepo.findOne({
+        where: { branch: { id: branchId } },
+        relations: ['branch'],
+        order: { createdAt: 'DESC' },
+      });
+
+      if (!template) {
+        this.logger.warn(
+          `Auto-shartnoma: Filial uchun shablon topilmadi [branchId: ${branchId}]. ` +
+          `Avval "Shartnoma shablonlari" bo'limida shablon yarating.`,
+        );
+        return null;
+      }
+
+      // 3. Transaction ichida atomik contract yaratish
+      // ✅ SERIALIZABLE isolation: ikki parallel so'rov bir xil raqam olmasin
+      const contract = await this.dataSource.transaction(
+        'SERIALIZABLE',
+        async (manager) => {
+          // Raqam: hozirgi filialdagi eng katta raqamdan 1 ortiq
+          const result = await manager.query<{ max: string | null }[]>(
+            `SELECT MAX("contractNumber") as max FROM contracts WHERE "branchId" = $1`,
+            [branchId],
+          );
+          const nextContractNumber = result[0]?.max
+          ? Number(result[0].max) + 1
+          : 1;
+
+        // Placeholder qiymatlarini tayyorlash
+        const rawValues: Record<string, string> = {
+          studentName: student.fullName,
+          parentName: student.parentName || '',
+          studentPhone: student.phone || '',
+          contractNumber: nextContractNumber.toString(),
+          date: new Date().toLocaleDateString('uz-UZ'),
+          branchName: template.branch?.name || '',
+        };
+
+        // XSS himoya
+        const safeValues = escapeValues(rawValues);
+
+        const templateStr = JSON.stringify(template.content);
+        const replacedStr = replacePlaceholders(templateStr, safeValues);
+        const finalContent = JSON.parse(replacedStr);
+
+        const newContract = manager.create(Contract, {
+          title: `${student.fullName} — Shartnoma`,
+          student: { id: student.id },
+          content: finalContent,
+          branch: { id: branchId },
+          createdBy: { id: userId },
+          status: ContractStatus.DRAFT,
+          version: 1,
+          contractNumber: nextContractNumber,
+        });
+
+        return manager.save(Contract, newContract);
+      });
+
+      this.logger.log(
+        `✅ Avtomatik shartnoma yaratildi [student: ${student.fullName}] ` +
+        `[contract: ${contract.id}] [number: ${contract.contractNumber}]`,
+      );
+
+      return contract;
+    } catch (error) {
+      // Shartnoma yaratishdagi xato talaba yaratishni to'xtatmasin
+      this.logger.error(
+        `Auto-shartnoma yaratishda xato [studentId: ${studentId}]:`,
+        error.stack,
+      );
+      return null;
+    }
+  }
 }
+

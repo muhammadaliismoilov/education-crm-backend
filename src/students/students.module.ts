@@ -6,6 +6,7 @@ import { Student } from '../entities/students.entity';
 import { Group } from '../entities/group.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { FaceModule } from '../common/faceId/faceId.module';
+import { ContractsModule } from '../contracts/contracts.module';
 
 import { StudentSubscriber } from './student.subscriber';
 
@@ -13,6 +14,7 @@ import { StudentSubscriber } from './student.subscriber';
   imports: [
     TypeOrmModule.forFeature([Student, Group, StudentDiscount]),
     FaceModule,
+    ContractsModule,
   ],
   controllers: [StudentsController],
   providers: [StudentsService, StudentSubscriber],
