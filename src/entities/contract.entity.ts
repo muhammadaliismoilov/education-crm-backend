@@ -6,6 +6,7 @@ import {
   UpdateDateColumn,
   ManyToOne,
   DeleteDateColumn,
+  Index,
 } from 'typeorm';
 import { Student } from './students.entity';
 import { User } from './user.entity';
@@ -17,6 +18,17 @@ export enum ContractStatus {
   SIGNED = 'SIGNED',
 }
 
+@Index('IDX_contracts_active_student', ['student'], {
+  where: '"deletedAt" IS NULL',
+})
+@Index(
+  'IDX_contracts_active_branch_number_unique',
+  ['branch', 'contractNumber'],
+  {
+    unique: true,
+    where: '"deletedAt" IS NULL',
+  },
+)
 @Entity('contracts')
 export class Contract {
   @PrimaryGeneratedColumn('uuid')

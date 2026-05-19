@@ -8,10 +8,7 @@ import {
   Delete,
   UseGuards,
   Req,
-  Query,
   ParseUUIDPipe,
-  ParseIntPipe,
-  DefaultValuePipe,
 } from '@nestjs/common';
 import { ContractTemplatesService } from './contract-templates.service';
 import {
@@ -41,9 +38,9 @@ const S_TEMPLATE = {
   title: 'Standard Frontend Kursi Shartnomasi',
   content: {
     title: 'SHARTNOMA №{{contractNumber}}',
-    body: "Ushbu shartnoma {{date}} sanasida {{branchName}} o'quv markazi (keyingi o'rinlarda \"Markaz\") va {{studentName}} (ota-onasi: {{parentName}}, telefon: {{studentPhone}}) (keyingi o'rinlarda \"Talaba\") o'rtasida tuzildi.\n\n1. Markaz Talabaga sifatli ta'lim berish majburiyatini oladi.\n2. Talaba belgilangan to'lovlarni o'z vaqtida amalga oshirishi shart.",
+    body: "Ushbu shartnoma {{date}} sanasida {{branchName}} o'quv markazi (keyingi o'rinlarda \"Markaz\") va {{studentName}} (ota-onasi: {{parentName}}, telefon: {{parentPhone}}) (keyingi o'rinlarda \"Talaba\") o'rtasida tuzildi.\n\nTalaba telefoni: {{studentPhone}}.\nYo'nalish: {{direction}}.\nHujjat: {{documentNumber}}, JSHSHIR: {{pinfl}}.\n\n1. Markaz Talabaga sifatli ta'lim berish majburiyatini oladi.\n2. Talaba belgilangan to'lovlarni o'z vaqtida amalga oshirishi shart.",
     footer:
-      "Markaz vakili imzosi: ___________\nTalaba imzosi: ___________\nSana: {{date}}",
+      'Markaz vakili imzosi: ___________\nTalaba imzosi: ___________\nSana: {{date}}',
   },
   branch: {
     id: 'b1c2d3e4-f5a6-7890-abcd-ef1234567891',
@@ -96,21 +93,35 @@ Tizimga yangi shartnoma shabloni qo'shadi. Yaratilgan shablon keyinchalik
 \`POST /contracts\` endpointida \`templateId\` orqali ishlatiladi va
 talaba ma'lumotlari bilan avtomatik to'ldiriladi.
 
+### Schema
+\`content\` obyekt ko'rinishida bo'lishi kerak:
+- \`content.title\` — PDF sarlavhasi, majburiy
+- \`content.body\` — asosiy shartnoma matni, majburiy
+- \`content.footer\` — imzo/footer qismi, ixtiyoriy
+
+Shablon saqlanganda placeholderlar o'z holicha saqlanadi. Real shartnoma yaratilganda ular student/branch ma'lumotlari bilan almashtiriladi.
+
 ### Qo'llab-quvvatlanadigan Placeholder'lar
 | Placeholder | Ma'nosi |
 |---|---|
 | \`{{studentName}}\` | Talabaning to'liq ismi |
 | \`{{parentName}}\` | Ota-onasining ismi |
 | \`{{studentPhone}}\` | Talaba telefon raqami |
+| \`{{parentPhone}}\` | Ota-ona telefon raqami |
 | \`{{contractNumber}}\` | Shartnoma tartib raqami |
 | \`{{date}}\` | Shartnoma sanasi (uz-UZ formatida) |
 | \`{{branchName}}\` | Filial nomi |
+| \`{{documentNumber}}\` | Hujjat seriya/raqami |
+| \`{{pinfl}}\` | JSHSHIR/PINFL |
+| \`{{birthDate}}\` | Tug'ilgan sana |
+| \`{{direction}}\` | O'qish yo'nalishi |
 
 ### Eslatma
 - \`content.title\` — PDF sarlavhasi sifatida ko'rsatiladi (\`<h1>\`)
 - \`content.body\` — Asosiy matn (\`<div>\`)
 - \`content.footer\` — Pastki qism, imzo joylashtirish uchun (\`<div>\`)
-    `,
+- Noma'lum placeholderlar o'zgarmasdan qoladi
+	    `,
   })
   @ApiBody({
     type: CreateContractTemplateDto,
@@ -121,7 +132,7 @@ talaba ma'lumotlari bilan avtomatik to'ldiriladi.
           title: 'Asosiy Kurs Shartnomasi',
           content: {
             title: 'SHARTNOMA №{{contractNumber}}',
-            body: "{{studentName}} bilan {{branchName}} o'rtasida tuzildi.",
+            body: "{{date}} sanasida {{studentName}} bilan {{branchName}} o'rtasida shartnoma tuzildi.",
           },
         },
       },
@@ -131,7 +142,7 @@ talaba ma'lumotlari bilan avtomatik to'ldiriladi.
           title: 'Standard Frontend Kursi Shartnomasi',
           content: {
             title: 'SHARTNOMA №{{contractNumber}}',
-            body: "Ushbu shartnoma {{date}} sanasida {{branchName}} va {{studentName}} o'rtasida tuzildi. Ota-ona: {{parentName}}. Tel: {{studentPhone}}.",
+            body: "Ushbu shartnoma {{date}} sanasida {{branchName}} va {{studentName}} o'rtasida tuzildi.\n\nOta-ona: {{parentName}}. Ota-ona telefoni: {{parentPhone}}.\nTalaba telefoni: {{studentPhone}}.\nYo'nalish: {{direction}}.\nHujjat: {{documentNumber}}. JSHSHIR: {{pinfl}}.",
             footer:
               'Markaz vakili: ___________\nTalaba: ___________\nSana: {{date}}',
           },
@@ -146,7 +157,8 @@ talaba ma'lumotlari bilan avtomatik to'ldiriladi.
   })
   @ApiResponse({
     status: 400,
-    description: "❌ Validatsiya xatosi — majburiy maydonlar to'ldirilmagan yoki format noto'g'ri.",
+    description:
+      "❌ Validatsiya xatosi — majburiy maydonlar to'ldirilmagan yoki format noto'g'ri.",
     schema: {
       example: ERR(
         ['content.title should not be empty', 'title should not be empty'],
@@ -184,6 +196,14 @@ talaba ma'lumotlari bilan avtomatik to'ldiriladi.
 Foydalanuvchining fililiga tegishli barcha mavjud shablonlarni qaytaradi.
 Natijalar \`createdAt\` bo'yicha kamayish tartibida (yangilar birinchi) saralanadi.
 
+### Response
+Har bir item quyidagi maydonlar bilan keladi:
+- \`id\` — shablon UUID
+- \`title\` — shablon nomi
+- \`content.title/body/footer\` — shablon matni, placeholderlar bilan
+- \`branch\` — shablon tegishli filial
+- \`createdAt\`, \`updatedAt\`, \`deletedAt\`
+
 ### Frontend uchun eslatma
 - \`MANAGER\` faqat o'z filialidagi shablonlarni ko'radi
 - Shablon ID sini keyinchalik \`POST /contracts\` da \`templateId\` sifatida ishlating
@@ -215,7 +235,9 @@ Natijalar \`createdAt\` bo'yicha kamayish tartibida (yangilar birinchi) saralana
 
 UUID bo'yicha aniq bir shablonning to'liq ma'lumotlarini qaytaradi.
 Boshqa filialga tegishli shablon so'ralsa \`404\` qaytariladi (xavfsizlik).
-    `,
+
+Frontend bu response orqali edit modal/formani to'ldirishi mumkin. \`content\` ichidagi placeholderlar hali real qiymatga almashtirilmagan bo'ladi.
+	    `,
   })
   @ApiParam({
     name: 'id',
@@ -261,7 +283,8 @@ Faqat o'zgartirilishi kerak bo'lgan maydonlarni yuboring (partial update).
 ### Muhim
 - Bu shablon orqali yaratilgan **mavjud shartnomalar o'zgarmaydi**
 - Faqat kelajakda yaratilajak shartnomalar yangilangan shablonni ishlatadi
-    `,
+- \`content\` yuborilsa, \`content.title\` va \`content.body\` validatsiyadan o'tishi kerak
+	    `,
   })
   @ApiParam({
     name: 'id',
@@ -273,21 +296,21 @@ Faqat o'zgartirilishi kerak bo'lgan maydonlarni yuboring (partial update).
     type: UpdateContractTemplateDto,
     examples: {
       title_only: {
-        summary: 'Faqat nomni o\'zgartirish',
+        summary: "Faqat nomni o'zgartirish",
         value: { title: 'Standard Frontend Kursi Shartnomasi v2' },
       },
       content_only: {
-        summary: 'Faqat matnni o\'zgartirish',
+        summary: "Faqat matnni o'zgartirish",
         value: {
           content: {
             title: 'YANGILANGAN SHARTNOMA №{{contractNumber}}',
-            body: '{{studentName}} bilan yangilangan shartlar asosida...',
+            body: '{{studentName}} bilan yangilangan shartlar asosida. Yo‘nalish: {{direction}}.',
             footer: 'Imzo: ___________',
           },
         },
       },
       both: {
-        summary: 'Ikkisini ham o\'zgartirish',
+        summary: "Ikkisini ham o'zgartirish",
         value: {
           title: 'Yangi Nom',
           content: {
@@ -311,7 +334,7 @@ Faqat o'zgartirilishi kerak bo'lgan maydonlarni yuboring (partial update).
   })
   @ApiResponse({
     status: 400,
-    description: "❌ Validatsiya xatosi.",
+    description: '❌ Validatsiya xatosi.',
     schema: {
       example: ERR('content.title must be a string', 400),
     },

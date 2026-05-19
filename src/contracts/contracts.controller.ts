@@ -26,6 +26,7 @@ import {
   ApiBody,
   ApiProduces,
   ApiExtraModels,
+  getSchemaPath,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -71,6 +72,22 @@ const S_PAGINATED = {
   limit: 20,
 };
 
+const S_GENERATE_MISSING_RESULT = {
+  message: 'Ommaviy shartnoma yaratish yakunlandi',
+  total: 50,
+  created: 47,
+  skipped: 3,
+  failed: 0,
+};
+
+const S_GENERATE_MISSING_NO_TEMPLATE = {
+  message: 'Ommaviy shartnoma yaratish yakunlandi',
+  total: 50,
+  created: 0,
+  skipped: 50,
+  failed: 0,
+};
+
 const WRAP = (data: unknown, statusCode = 200) => ({
   data,
   statusCode,
@@ -95,6 +112,94 @@ const ERR = (message: string | string[], statusCode: number) => ({
 export class ContractsController {
   constructor(private readonly contractsService: ContractsService) {}
 
+  // ─────────────────────────────────────────────────
+  // POST /contracts/generate-missing
+  // Mavjud talabalarga ommaviy shartnoma yaratish
+  // ─────────────────────────────────────────────────
+  @Post('generate-missing')
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
+  @ApiOperation({
+    summary: '🔄 Eski talabalarga ommaviy shartnoma yaratish',
+    description: `
+**Kirish huquqi:** \`SUPERADMIN\`, \`ADMIN\`
+
+Filialda aktiv shartnomasi bo'lmagan barcha mavjud talabalarga **avtomatik** shartnoma yaratadi.
+Bu endpoint eski bazadagi talabalarni yangi shartnoma moduliga o'tkazish uchun ishlatiladi.
+
+### Ishlash tartibi:
+1. Foydalanuvchida \`branchId\` borligini tekshiradi
+2. Filialga tegishli, arxivlanmagan talabalarni oladi
+3. Aktiv shartnomasi yo'q talabalarni filtrlaydi
+4. Filialning eng so'nggi shabloni bilan \`DRAFT\` shartnoma yaratadi
+5. Har bir natijani \`created\`, \`skipped\`, \`failed\` bo'yicha hisoblaydi
+
+### Response maydonlari
+| Maydon | Ma'nosi |
+|---|---|
+| \`total\` | Endpoint tekshirgan, shartnomasi yo'q aktiv talabalar soni |
+| \`created\` | Yangi shartnoma muvaffaqiyatli yaratilgan talabalar soni |
+| \`skipped\` | Shablon yo'qligi, parallel jarayonda allaqachon yaratilgani yoki student topilmagani sabab o'tkazilganlar |
+| \`failed\` | Kutilmagan DB/server xatosi sabab yaratilmaganlar |
+
+> Muhim: filialda shablon bo'lmasa \`created=0\`, \`skipped=total\` bo'lib qaytadi. Bu xato emas, lekin frontend foydalanuvchiga "Avval shablon yarating" deb ko'rsatishi kerak.
+    `,
+  })
+  @ApiResponse({
+    status: 201,
+    description: '✅ Ommaviy yaratish yakunlandi.',
+    content: {
+      'application/json': {
+        schema: {
+          type: 'object',
+          properties: {
+            data: {
+              type: 'object',
+              properties: {
+                message: { type: 'string' },
+                total: { type: 'number', example: 50 },
+                created: { type: 'number', example: 47 },
+                skipped: { type: 'number', example: 3 },
+                failed: { type: 'number', example: 0 },
+              },
+            },
+            statusCode: { type: 'number', example: 201 },
+            timestamp: { type: 'string', example: new Date().toISOString() },
+          },
+        },
+        examples: {
+          success: {
+            summary: 'Shartnomalar yaratildi',
+            value: WRAP(S_GENERATE_MISSING_RESULT, 201),
+          },
+          no_template: {
+            summary: "Filialda shablon yo'q",
+            value: WRAP(S_GENERATE_MISSING_NO_TEMPLATE, 201),
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 403,
+    description:
+      '❌ Faqat ADMIN/SUPERADMIN yoki branchId mavjud foydalanuvchi ishlata oladi.',
+    schema: {
+      example: ERR(
+        'Ommaviy shartnoma yaratish uchun foydalanuvchida filial biriktirilgan bo‘lishi kerak',
+        403,
+      ),
+    },
+  })
+  async generateMissing(@Req() req: IAuthenticatedRequest) {
+    const result = await this.contractsService.generateMissingContracts(
+      req.user,
+    );
+    return {
+      message: 'Ommaviy shartnoma yaratish yakunlandi',
+      ...result,
+    };
+  }
+
   // ─────────────────────────
   // POST /contracts
   // ─────────────────────────
@@ -107,16 +212,50 @@ export class ContractsController {
 
 Talaba uchun yangi shartnoma yaratadi. Yangi shartnoma avtomatik \`DRAFT\` holatida bo'ladi.
 
-### Ikki usul bilan yaratish mumkin:
+### Majburiy request qoidasi
+\`title\` va \`studentId\` majburiy. Bundan tashqari quyidagilardan **kamida bittasi** bo'lishi shart:
+- \`templateId\` — shablon asosida avtomatik to'ldirish
+- \`content\` — tayyor JSON matn
+- \`fileUrl\` — oldindan yuklangan PDF/fayl havolasi
+
+Uchalasidan hech biri berilmasa \`400 Bad Request\` qaytadi.
+
+### Yaratish usullari
 
 **1. Shablon orqali** (\`templateId\` bering):
 - \`templateId\` orqali shablonni topadi
-- Placeholder larni (\`{{studentName}}\` va h.k.) talaba ma'lumotlari bilan avtomatik almashtiradi
+- Placeholderlarni talaba va filial ma'lumotlari bilan avtomatik almashtiradi
 - \`content\` maydonini berishga hojat yo'q
 
 **2. To'g'ridan-to'g'ri** (\`content\` bering):
 - \`templateId\` yo'q, \`content\` ni o'zingiz to'liq yozing
 - Placeholder lar almashtirilmaydi
+
+**3. Tayyor fayl bilan** (\`fileUrl\` bering):
+- Contract record yaratiladi, lekin PDF generation faqat \`content\` bor shartnomalar uchun ishlaydi
+- \`fileUrl\` faqat tashqaridan yuklangan tayyor faylni saqlash uchun
+
+### Duplicate himoyasi
+Bir studentda bitta aktiv shartnoma bor bo'lsa, qayta yaratish \`409 Conflict\` qaytaradi.
+Soft-delete qilingan shartnomalar aktiv hisoblanmaydi.
+
+### Contract number
+\`contractNumber\` har filial ichida ketma-ket beriladi va aktiv shartnomalar orasida unique saqlanadi.
+
+### Shablonda ishlaydigan placeholderlar
+| Placeholder | Ma'nosi |
+|---|---|
+| \`{{studentName}}\` | Talabaning to'liq ismi |
+| \`{{parentName}}\` | Ota-onasining ismi |
+| \`{{studentPhone}}\` | Talaba telefoni |
+| \`{{parentPhone}}\` | Ota-ona telefoni |
+| \`{{contractNumber}}\` | Filial ichidagi shartnoma raqami |
+| \`{{date}}\` | Shartnoma yaratilgan sana |
+| \`{{branchName}}\` | Filial nomi |
+| \`{{documentNumber}}\` | Hujjat seriya/raqami |
+| \`{{pinfl}}\` | JSHSHIR |
+| \`{{birthDate}}\` | Tug'ilgan sana |
+| \`{{direction}}\` | O'qish yo'nalishi |
 
 ### Shartnoma holatlari (Status Machine)
 \`\`\`
@@ -130,7 +269,14 @@ DRAFT → APPROVED → SIGNED
     `,
   })
   @ApiBody({
-    type: CreateContractDto,
+    schema: {
+      allOf: [{ $ref: getSchemaPath(CreateContractDto) }],
+      anyOf: [
+        { required: ['templateId'] },
+        { required: ['content'] },
+        { required: ['fileUrl'] },
+      ],
+    },
     examples: {
       with_template: {
         summary: '✅ Shablon orqali yaratish (tavsiya etiladi)',
@@ -163,6 +309,14 @@ DRAFT → APPROVED → SIGNED
           fileUrl: 'https://storage.example.com/contracts/contract-123.pdf',
         },
       },
+      invalid_empty_contract: {
+        summary: "❌ Noto'g'ri — content/template/file yo'q",
+        description: 'Backend 400 qaytaradi',
+        value: {
+          title: "Bo'sh shartnoma",
+          studentId: 's1d2e3f4-a5b6-7890-abcd-ef1234567893',
+        },
+      },
     },
   })
   @ApiResponse({
@@ -172,10 +326,11 @@ DRAFT → APPROVED → SIGNED
   })
   @ApiResponse({
     status: 400,
-    description: '❌ Validatsiya xatosi.',
+    description:
+      '❌ Validatsiya xatosi yoki templateId/content/fileUrl dan biri berilmagan.',
     schema: {
       example: ERR(
-        ['studentId must be a UUID', 'title should not be empty'],
+        'Shartnoma yaratish uchun templateId, content yoki fileUrl dan kamida bittasi kerak',
         400,
       ),
     },
@@ -189,6 +344,13 @@ DRAFT → APPROVED → SIGNED
     status: 404,
     description: "❌ O'quvchi yoki shablon topilmadi.",
     schema: { example: ERR("O'quvchi topilmadi", 404) },
+  })
+  @ApiResponse({
+    status: 409,
+    description: '❌ Studentda aktiv shartnoma allaqachon mavjud.',
+    schema: {
+      example: ERR("Ushbu o'quvchida aktiv shartnoma allaqachon mavjud", 409),
+    },
   })
   create(@Body() dto: CreateContractDto, @Req() req: IAuthenticatedRequest) {
     return this.contractsService.create(dto, req.user);
@@ -204,14 +366,20 @@ DRAFT → APPROVED → SIGNED
     description: `
 **Kirish huquqi:** \`SUPERADMIN\`, \`ADMIN\`, \`MANAGER\`
 
-Filialga tegishli barcha shartnomalarni sahifalab qaytaradi.
-Natijada \`student\`, \`createdBy\`, \`approvedBy\` relyatsiyalari ham keladi.
+	Filialga tegishli barcha shartnomalarni sahifalab qaytaradi.
+	Natijada \`student\`, \`createdBy\`, \`approvedBy\` relyatsiyalari ham keladi.
 
 ### Pagination
 - Default: \`page=1\`, \`limit=20\`
 - Maksimal limit: \`100\`
 - Response da \`total\` — jami shartnomalar soni
-    `,
+
+### Response ichidagi asosiy maydonlar
+- \`contractNumber\` — filial ichidagi shartnoma raqami
+- \`status\` — \`DRAFT\`, \`APPROVED\`, yoki \`SIGNED\`
+- \`content.title/body/footer\` — PDF qilishda ishlatiladigan matn
+- \`fileUrl\` — tashqi tayyor fayl URL'i, bo'lishi ham, \`null\` bo'lishi ham mumkin
+	    `,
   })
   @ApiQuery({
     name: 'page',
@@ -255,9 +423,13 @@ Natijada \`student\`, \`createdBy\`, \`approvedBy\` relyatsiyalari ham keladi.
     description: `
 **Kirish huquqi:** \`SUPERADMIN\`, \`ADMIN\`, \`MANAGER\`
 
-UUID orqali bitta shartnomaning to'liq ma'lumotlarini qaytaradi.
-Boshqa filialga tegishli shartnoma so'ralsa \`404\` qaytariladi.
-    `,
+	UUID orqali bitta shartnomaning to'liq ma'lumotlarini qaytaradi.
+	Boshqa filialga tegishli shartnoma so'ralsa \`404\` qaytariladi.
+
+### Response
+Response struktura \`GET /contracts\` dagi bitta item bilan bir xil:
+\`id\`, \`title\`, \`contractNumber\`, \`content\`, \`fileUrl\`, \`version\`, \`status\`, \`signedAt\`, \`student\`, \`createdBy\`, \`approvedBy\`.
+	    `,
   })
   @ApiParam({
     name: 'id',
@@ -540,6 +712,13 @@ Shartnomani o'chiradi (**soft delete** — bazadan butunlay o'chirilmaydi).
 Shartnomani \`content\` maydoni asosida PDF fayl sifatida generatsiya qiladi
 va brauzerga binary oqim (stream) sifatida qaytaradi.
 
+### PDF render qoidasi
+- \`content.title\` → PDF sarlavhasi
+- \`content.body\` → asosiy matn
+- \`content.footer\` → imzo/footer qismi
+- Matndagi yangi qatorlar saqlanadi
+- HTML/script kiritilsa escape qilinadi
+
 ### Frontend integratsiya
 
 \`\`\`javascript
@@ -629,6 +808,11 @@ Content-Disposition: inline; filename="contract-{id}.pdf"
 
 Talabaning UUID'i bo'yicha uning **eng so'nggi yaratilgan** shartnomasini
 PDF formatida qaytaradi. Shartnoma ID ni bilmasangiz — bu endpointdan foydalaning.
+
+### Qachon 404 qaytadi?
+- Studentda umuman shartnoma bo'lmasa
+- Shartnoma boshqa filialga tegishli bo'lsa
+- Shartnoma soft-delete qilingan bo'lsa
 
 ### Frontend integratsiya
 \`\`\`javascript

@@ -51,7 +51,9 @@ import { ContractTemplatesModule } from './contract-templates/contract-templates
         password: configService.get<string>('DB_PASS'),
         database: configService.get<string>('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: true, //process.env.NODE_ENV !== 'production', // Production'da XAVFLI — migratsiya ishlating!
+        synchronize:
+          process.env.NODE_ENV !== 'production' &&
+          configService.get<string>('DB_SYNCHRONIZE') === 'true',
       }),
     }),
     TypeOrmModule.forFeature([Branch]),

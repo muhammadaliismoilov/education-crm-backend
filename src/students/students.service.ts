@@ -15,6 +15,7 @@ import { Invoice } from '../entities/invoice.entity';
 import { Payment } from '../entities/payment.entity';
 import { FaceService } from '../common/faceId/faceId.service';
 import { ContractsService } from '../contracts/contracts.service';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -154,7 +155,11 @@ export class StudentsService {
   // 1. CREATE
   // ─────────────────────────────────────────────
 
-  async create(dto: CreateStudentDto, user: any, file?: Express.Multer.File) {
+  async create(
+    dto: CreateStudentDto,
+    user: AuthenticatedUser,
+    file?: Express.Multer.File,
+  ) {
     let faceDescriptor: number[] | undefined;
     if (file) {
       faceDescriptor = await this.verifyFace(file);
@@ -305,21 +310,23 @@ export class StudentsService {
 
       await queryRunner.commitTransaction();
 
-      // ✅ Avtomatik shartnoma yaratish (non-blocking)
+      // ✅ Avtomatik shartnoma yaratish (student transaction commit bo'lgandan keyin)
       const branchId =
         user.role === 'superadmin' && dto.branchId
           ? dto.branchId
           : user.branchId;
       if (branchId) {
-        // Shartnoma yaratish asynchron — talaba yaratishni sekinlashtirmasin
-        this.contractsService
-          .autoGenerateContract(saved.id, branchId, user.id)
-          .catch((err) => {
-            this.logger.error(
-              `Avtomatik shartnoma yaratishda xato [student: ${saved.id}]:`,
-              err.stack,
-            );
-          });
+        const generatedContract =
+          await this.contractsService.autoGenerateContract(
+            saved.id,
+            branchId,
+            user.id,
+          );
+        if (!generatedContract) {
+          this.logger.warn(
+            `Talaba yaratildi, lekin avtomatik shartnoma yozilmadi [student: ${saved.id}]`,
+          );
+        }
       }
 
       // Transaction tashqarisida findOne chaqiramiz (o'qish xavfsiz)

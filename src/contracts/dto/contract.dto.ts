@@ -13,7 +13,8 @@ import { ContractContentDto } from '../../contract-templates/dto/contract-templa
 
 export class CreateContractDto {
   @ApiProperty({
-    description: "Shartnoma nomi.",
+    description:
+      "Shartnoma nomi. Ro'yxat va detail sahifalarda ko'rsatiladi. Avtomatik contractlarda backend student ismidan nom beradi.",
     example: 'Ali Karimov - Frontend kursi shartnomasi',
   })
   @IsString()
@@ -32,7 +33,7 @@ export class CreateContractDto {
 
   @ApiPropertyOptional({
     description:
-      "Shartnoma matni. Agar 'templateId' berilsa, ushbu maydon shablon asosida avtomatik to'ldiriladi.",
+      "Shartnoma matni. 'templateId' berilsa, content yuborish shart emas — backend shablonni real student ma'lumotlari bilan to'ldiradi. Agar templateId berilmasa, content tayyor holatda yuborilishi mumkin.",
     type: ContractContentDto,
   })
   @ValidateNested()
@@ -41,7 +42,8 @@ export class CreateContractDto {
   content?: ContractContentDto;
 
   @ApiPropertyOptional({
-    description: 'Tayyor PDF fayl URL manzili (faqat HTTPS).',
+    description:
+      "Tayyor PDF/fayl URL manzili (faqat HTTPS). Bu holatda contract record yaratiladi, lekin backend PDF generatsiyasi faqat 'content' bor shartnomalarda ishlaydi.",
     example: 'https://storage.example.com/contracts/contract-123.pdf',
   })
   @IsUrl({ protocols: ['https'], require_tld: true })
@@ -49,7 +51,8 @@ export class CreateContractDto {
   fileUrl?: string;
 
   @ApiPropertyOptional({
-    description: "Shartnoma yaratishda foydalaniladigan shablonning UUID identifikatori.",
+    description:
+      "Shartnoma yaratishda foydalaniladigan shablon UUID'i. Template shu filialga tegishli bo'lishi kerak.",
     example: 'bb096922-6249-4911-9a8c-9a503bb3e7d9',
     format: 'uuid',
   })
@@ -70,7 +73,7 @@ export class UpdateContractDto {
 
   @ApiPropertyOptional({
     description:
-      "Shartnomaning yangilangan matni. DIQQAT: Faqat 'DRAFT' holatidagi shartnomalarni tahrirlash mumkin.",
+      "Shartnomaning yangilangan matni. DIQQAT: faqat 'DRAFT' holatidagi shartnomalarni tahrirlash mumkin. APPROVED/SIGNED contractlarda 400 qaytadi.",
     type: ContractContentDto,
   })
   @ValidateNested()
@@ -79,7 +82,8 @@ export class UpdateContractDto {
   content?: ContractContentDto;
 
   @ApiPropertyOptional({
-    description: 'Yangilangan fayl URL manzili (faqat HTTPS).',
+    description:
+      "Yangilangan fayl URL manzili (faqat HTTPS). Faqat 'DRAFT' contractda o'zgartirish mumkin.",
   })
   @IsUrl({ protocols: ['https'], require_tld: true })
   @IsOptional()

@@ -2,7 +2,6 @@ import {
   IsString,
   IsNotEmpty,
   IsOptional,
-  IsObject,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
@@ -16,8 +15,9 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
  */
 export class ContractContentDto {
   @ApiProperty({
-    description: 'Shartnoma sarlavhasi. Placeholder: {{contractNumber}}',
-    example: 'Shartnoma №{{contractNumber}}',
+    description:
+      'Shartnoma sarlavhasi. PDFda sarlavha sifatida chiqadi. Placeholder ishlatish mumkin: {{contractNumber}}, {{studentName}}, {{date}}.',
+    example: 'SHARTNOMA №{{contractNumber}}',
   })
   @IsString()
   @IsNotEmpty()
@@ -26,8 +26,10 @@ export class ContractContentDto {
 
   @ApiProperty({
     description:
-      "Shartnoma asosiy matni. Placeholderlar: {{studentName}}, {{parentName}}, {{studentPhone}}, {{date}}, {{branchName}}.",
-    example: "{{studentName}} bilan {{branchName}} markazi o'rtasida...",
+      "Shartnoma asosiy matni. PDFda asosiy matn sifatida chiqadi. Qo'llab-quvvatlanadigan placeholderlar: " +
+      '{{studentName}}, {{parentName}}, {{studentPhone}}, {{parentPhone}}, {{contractNumber}}, {{date}}, {{branchName}}, {{documentNumber}}, {{pinfl}}, {{birthDate}}, {{direction}}.',
+    example:
+      "{{date}} sanasida {{branchName}} va {{studentName}} o'rtasida shartnoma tuzildi. Ota-ona: {{parentName}}, tel: {{parentPhone}}.",
   })
   @IsString()
   @IsNotEmpty()
@@ -35,8 +37,10 @@ export class ContractContentDto {
   body: string;
 
   @ApiPropertyOptional({
-    description: 'Shartnoma pastki qismi (footer). Ixtiyoriy.',
-    example: "Imzo: ___________",
+    description:
+      'Shartnoma pastki qismi (footer). PDFda imzo va sana qismi sifatida chiqadi. Ixtiyoriy.',
+    example:
+      'Markaz vakili: ___________\nOta-ona/Talaba: ___________\nSana: {{date}}',
   })
   @IsString()
   @IsOptional()
@@ -46,8 +50,9 @@ export class ContractContentDto {
 
 export class CreateContractTemplateDto {
   @ApiProperty({
-    description: "Shartnoma shablonining nomi.",
-    example: 'Standard English Course Contract',
+    description:
+      "Shartnoma shablonining ichki nomi. Frontend ro'yxatda shu nomni ko'rsatadi.",
+    example: 'Standard English kursi shartnomasi',
   })
   @IsString()
   @IsNotEmpty()
@@ -57,7 +62,8 @@ export class CreateContractTemplateDto {
   @ApiProperty({
     description:
       "Shartnoma matni tuzilgan JSON formatida. Avtomatik to'ldiriladigan maydonlar: " +
-      '{{studentName}}, {{contractNumber}}, {{branchName}}, {{date}}, {{parentName}}, {{studentPhone}}.',
+      '{{studentName}}, {{parentName}}, {{studentPhone}}, {{parentPhone}}, {{contractNumber}}, {{date}}, {{branchName}}, {{documentNumber}}, {{pinfl}}, {{birthDate}}, {{direction}}. ' +
+      'Yaratilgan shartnomada placeholderlar real qiymatlar bilan almashtiriladi.',
     type: ContractContentDto,
   })
   @ValidateNested()
@@ -76,7 +82,7 @@ export class UpdateContractTemplateDto {
   title?: string;
 
   @ApiPropertyOptional({
-    description: "Shartnomaning yangilangan matni.",
+    description: 'Shartnomaning yangilangan matni.',
     type: ContractContentDto,
   })
   @ValidateNested()
