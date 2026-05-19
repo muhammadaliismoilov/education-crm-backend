@@ -468,7 +468,7 @@ export class SalaryService {
   async findAll(searchMonth?: string, user?: any, page = 1, limit = 10) {
     const query = this.payoutRepo
       .createQueryBuilder('payout')
-      .withDeleted()
+      // withDeleted() olib tashlandi — o'chirilgan yozuvlar ko'rsatilmasin
       .leftJoinAndSelect('payout.teacher', 'teacher')
       .orderBy('payout.createdAt', 'DESC');
 
@@ -503,7 +503,7 @@ export class SalaryService {
     const payout = await this.payoutRepo.findOne({
       where: { id },
       relations: ['teacher'],
-      withDeleted: true,
+      // withDeleted olib tashlandi — o'chirilgan yozuvni tahrirlash/topish mumkin emas
     });
     if (!payout) throw new NotFoundException("Oylik to'lovi topilmadi");
     return payout;

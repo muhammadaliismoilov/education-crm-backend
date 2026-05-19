@@ -35,6 +35,7 @@ import { Roles } from '../common/guards/roles.decarator';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { IAuthenticatedRequest } from '../common/interfaces/auth.interface';
 
 // ─── Reusable example lar ───────────────────────────────────────────────────
 
@@ -78,7 +79,7 @@ const STUDENT_EXAMPLE = {
   deletedAt: null,
 };
 
-const WRAP = (data: any, statusCode = 200) => ({
+const WRAP = (data: unknown, statusCode = 200) => ({
   data,
   statusCode,
   timestamp: '2026-03-13 10:00:00',
@@ -135,7 +136,13 @@ export class StudentsController {
     description:
       'Yangi talaba yaratadi. Rasm ixtiyoriy — JPG, PNG, WEBP, max 5MB. ' +
       "Bir nechta guruhga bir vaqtda qo'shish mumkin. " +
-      'Rasm yuborilsa yuz avtomatik taniladi va faceDescriptor saqlanadi.',
+      'Rasm yuborilsa yuz avtomatik taniladi va faceDescriptor saqlanadi.\n\n' +
+      '### Shartnoma avtomatik yaratish\n' +
+      "Talaba muvaffaqiyatli yaratilgandan keyin backend shu filialning eng so'nggi shartnoma shabloni orqali DRAFT shartnoma yaratishga urinadi.\n" +
+      "- Filialda shablon bo'lsa: shartnoma avtomatik yaratiladi\n" +
+      "- Shablon bo'lmasa: talaba baribir yaratiladi, shartnoma yozilmaydi va backend logda ogohlantiradi\n" +
+      "- Response student ma'lumotlarini qaytaradi; contract obyekt response ichiga qo'shilmaydi\n" +
+      "- Frontend contract bor-yo'qligini contract API orqali tekshiradi: GET /contracts yoki GET /contracts/student/{studentId}/print",
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -210,7 +217,8 @@ export class StudentsController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Talaba muvaffaqiyatli yaratildi',
+    description:
+      "Talaba muvaffaqiyatli yaratildi. Agar filialda shartnoma shabloni mavjud bo'lsa, backend shu student uchun DRAFT contract ham yaratadi. Response faqat student obyektini qaytaradi.",
     schema: { example: WRAP(STUDENT_EXAMPLE, 201) },
   })
   @ApiResponse({
@@ -243,7 +251,7 @@ export class StudentsController {
   })
   async create(
     @Body() dto: CreateStudentDto,
-    @Req() req: any,
+    @Req() req: IAuthenticatedRequest,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.studentsService.create(dto, req.user, file);
@@ -313,11 +321,11 @@ export class StudentsController {
     },
   })
   async findAll(
+    @Req() req: IAuthenticatedRequest,
     @Query('search') search?: string,
     @Query('groupName') groupName?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page = 1,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit = 10,
-    @Req() req?: any,
     @Query('branchId') branchId?: string,
   ) {
     return this.studentsService.findAll(
@@ -375,10 +383,10 @@ export class StudentsController {
     },
   })
   async findAllDeleted(
+    @Req() req: IAuthenticatedRequest,
     @Query('search') search?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page = 1,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit = 10,
-    @Req() req?: any,
   ) {
     return this.studentsService.findAllDeleted(search, page, limit, req.user);
   }
@@ -405,7 +413,10 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: IAuthenticatedRequest,
+  ) {
     return this.studentsService.findOne(id, req.user);
   }
 
@@ -538,7 +549,7 @@ export class StudentsController {
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateStudentDto,
-    @Req() req: any,
+    @Req() req: IAuthenticatedRequest,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.studentsService.update(id, dto, req.user, file);
@@ -570,7 +581,10 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: IAuthenticatedRequest,
+  ) {
     return this.studentsService.remove(id, req.user);
   }
 
@@ -599,7 +613,10 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async restore(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+  async restore(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: IAuthenticatedRequest,
+  ) {
     return this.studentsService.restore(id, req.user);
   }
 
@@ -640,7 +657,10 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async hardDelete(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+  async hardDelete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: IAuthenticatedRequest,
+  ) {
     return this.studentsService.hardDelete(id, req.user);
   }
 }
