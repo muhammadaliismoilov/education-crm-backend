@@ -78,47 +78,15 @@ export class ReportsService {
       .groupBy(`EXTRACT(MONTH FROM e."createdAt")`)
       .getRawMany();
 
-    // ─── 2. QARZDORLIK - oylar bo'yicha ──────────────────────────────
-    // Active student-group memberships in the branch
-    const membershipsQuery = this.studentRepo.manager
-      .createQueryBuilder()
-      .select([
-        's.id                                                        AS "studentId"',
-        'g.id                                                        AS "groupId"',
-        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END AS "effectivePrice"`,
-      ])
-      .from('students', 's')
-      .innerJoin('group_students', 'gs', 'gs."studentsId" = s.id')
-      .innerJoin('groups', 'g', 'g.id = gs."groupsId"')
-      .leftJoin(
-        'student_discounts',
-        'sd',
-        'sd."studentId" = s.id AND sd."groupId" = g.id',
-      )
-      .where('s."deletedAt" IS NULL');
-    if (branchId) membershipsQuery.andWhere('s."branchId" = :branchId', { branchId });
-    const memberships = await membershipsQuery.getRawMany();
-
-    // Payments for the year grouped by month, student, and group
-    const paymentsQuery = this.paymentRepo
-      .createQueryBuilder('p')
-      .select([
-        `EXTRACT(MONTH FROM p."createdAt") AS month`,
-        `p."studentId"                     AS "studentId"`,
-        `p."groupId"                       AS "groupId"`,
-        `SUM(CAST(p.amount AS DECIMAL))    AS "totalPaid"`,
-      ])
-      .where(`p."createdAt" BETWEEN :start AND :end`, { start, end })
-      .groupBy(`EXTRACT(MONTH FROM p."createdAt"), p."studentId", p."groupId"`);
-    if (branchId) paymentsQuery.andWhere('p.branchId = :branchId', { branchId });
-    const paymentsByMonth = await paymentsQuery.getRawMany();
-
-    // Fast lookup map: key = "month_studentId_groupId" -> totalPaid
-    const paymentsMap = new Map<string, number>();
-    for (const p of paymentsByMonth) {
-      const key = `${Number(p.month)}_${p.studentId}_${p.groupId}`;
-      paymentsMap.set(key, Number(p.totalPaid || 0));
-    }
+    // ─── 2. QARZDORLIK — student.balance asosida (manfiy balance = qarz) ─
+    const debtQuery = this.studentRepo
+      .createQueryBuilder('s')
+      .select('SUM(s.balance)', 'totalDebt')
+      .where('s.balance < 0')
+      .andWhere('s."deletedAt" IS NULL');
+    if (branchId) debtQuery.andWhere('s."branchId" = :branchId', { branchId });
+    const debtResult = await debtQuery.getRawOne();
+    const totalStudentDebt = Math.abs(Number(debtResult?.totalDebt || 0));
 
     // ─── 3. O'QITUVCHILAR OYLIKLARINI - oylar bo'yicha ───────────────
     const teacherQuery: any = { role: UserRole.TEACHER };
@@ -175,9 +143,11 @@ export class ReportsService {
 
     // ─── 4. 12 OYNI MAP QILISH ────────────────────────────────────────
     let summaryIncome = 0;
-    let summaryPending = 0;
     let summaryTeacherSal = 0;
     let summaryExpenses = 0;
+
+    const currentMonth = new Date().getMonth() + 1; // 1-12
+    const currentYear = new Date().getFullYear();
 
     const monthlyData = Array.from({ length: 12 }, (_, i) => {
       const monthNum = i + 1;
@@ -185,15 +155,12 @@ export class ReportsService {
       const incomeRow = incomeByMonth.find((r) => Number(r.month) === monthNum);
       const totalIncome = Number(incomeRow?.totalIncome || 0);
 
-      let totalPending = 0;
-      for (const membership of memberships) {
-        const effectivePrice = Number(membership.effectivePrice || 0);
-        const key = `${monthNum}_${membership.studentId}_${membership.groupId}`;
-        const totalPaid = paymentsMap.get(key) || 0;
-        if (effectivePrice > totalPaid) {
-          totalPending += effectivePrice - totalPaid;
-        }
-      }
+      // Qarzdorlik faqat joriy oy uchun ko'rsatiladi (student.balance asosida)
+      // O'tgan va kelasi oylar uchun 0, chunki aniq hisoblash mumkin emas
+      const totalPending =
+        year === currentYear && monthNum === currentMonth
+          ? totalStudentDebt
+          : 0;
 
       const expenseRow = expensesByMonth.find((r) => Number(r.month) === monthNum);
       const totalExpenses = Number(expenseRow?.totalExpense || 0);
@@ -203,7 +170,6 @@ export class ReportsService {
       const netProfit = totalIncome - totalTeacherSalaries - totalExpenses;
 
       summaryIncome += totalIncome;
-      summaryPending += totalPending;
       summaryTeacherSal += totalTeacherSalaries;
       summaryExpenses += totalExpenses;
 
@@ -221,7 +187,7 @@ export class ReportsService {
     // ─── 5. YILLIK SUMMARY ────────────────────────────────────────────
     const summary = {
       totalIncome: summaryIncome,
-      totalPending: summaryPending,
+      totalPending: totalStudentDebt,
       totalTeacherSalaries: summaryTeacherSal,
       totalExpenses: summaryExpenses,
       netProfit: summaryIncome - summaryTeacherSal - summaryExpenses,
@@ -289,54 +255,15 @@ export class ReportsService {
     const expenseRaw = await expenseQuery.getRawOne();
     const totalExpenses = Number(expenseRaw?.expense || 0);
 
-    // 2. Qarzdorlik (Pending amount)
-    // Active student-group memberships in the branch
-    const membershipsQuery = this.studentRepo.manager
-      .createQueryBuilder()
-      .select([
-        's.id                                                        AS "studentId"',
-        'g.id                                                        AS "groupId"',
-        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END AS "effectivePrice"`,
-      ])
-      .from('students', 's')
-      .innerJoin('group_students', 'gs', 'gs."studentsId" = s.id')
-      .innerJoin('groups', 'g', 'g.id = gs."groupsId"')
-      .leftJoin(
-        'student_discounts',
-        'sd',
-        'sd."studentId" = s.id AND sd."groupId" = g.id',
-      )
-      .where('s."deletedAt" IS NULL');
-    if (branchId) membershipsQuery.andWhere('s."branchId" = :branchId', { branchId });
-    const memberships = await membershipsQuery.getRawMany();
-
-    // Payments for the given date range, grouped by student and group
-    const paymentsQuery = this.paymentRepo
-      .createQueryBuilder('p')
-      .select([
-        'p."studentId"                     AS "studentId"',
-        'p."groupId"                       AS "groupId"',
-        'SUM(CAST(p.amount AS DECIMAL))    AS "totalPaid"',
-      ])
-      .where('p."createdAt" BETWEEN :start AND :end', { start, end })
-      .groupBy('p."studentId", p."groupId"');
-    if (branchId) paymentsQuery.andWhere('p.branchId = :branchId', { branchId });
-    const paymentsList = await paymentsQuery.getRawMany();
-
-    // Fast lookup map: key = "studentId_groupId" -> totalPaid
-    const paymentsMap = new Map<string, number>();
-    for (const p of paymentsList) {
-      paymentsMap.set(`${p.studentId}_${p.groupId}`, Number(p.totalPaid || 0));
-    }
-
-    let totalPending = 0;
-    for (const membership of memberships) {
-      const effectivePrice = Number(membership.effectivePrice || 0);
-      const totalPaid = paymentsMap.get(`${membership.studentId}_${membership.groupId}`) || 0;
-      if (effectivePrice > totalPaid) {
-        totalPending += effectivePrice - totalPaid;
-      }
-    }
+    // 2. Qarzdorlik — student.balance asosida (manfiy balance = qarz)
+    const debtQuery = this.studentRepo
+      .createQueryBuilder('s')
+      .select('SUM(s.balance)', 'totalDebt')
+      .where('s.balance < 0')
+      .andWhere('s."deletedAt" IS NULL');
+    if (branchId) debtQuery.andWhere('s."branchId" = :branchId', { branchId });
+    const debtResult = await debtQuery.getRawOne();
+    const totalPending = Math.abs(Number(debtResult?.totalDebt || 0));
 
     // 3. O'qituvchilar oyligi (Salaries)
     const teacherQuery: any = { role: UserRole.TEACHER };
