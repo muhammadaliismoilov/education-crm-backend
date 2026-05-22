@@ -57,6 +57,59 @@
 #             rm -f crm-image.tar.gz
 
 
+# name: Deploy Education CRM (PM2)
+
+# on:
+#   push:
+#     branches:
+#       - main
+
+# jobs:
+#   deploy:
+#     runs-on: ubuntu-latest
+
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+
+#       - name: Copy project to VPS
+#         uses: appleboy/scp-action@v0.1.7
+#         with:
+#           host: ${{ secrets.SERVER_IP }}
+#           username: root
+#           key: ${{ secrets.SSH_PRIVATE_KEY }}
+#           source: "."
+#           target: "/var/www/education-crm"
+
+#       - name: Deploy on VPS
+#         uses: appleboy/ssh-action@v1.0.3
+#         with:
+#           host: ${{ secrets.SERVER_IP }}
+#           username: root
+#           key: ${{ secrets.SSH_PRIVATE_KEY }}
+#           command_timeout: 10m
+#           script: |
+#             cd /var/www/education-crm
+
+#             # Node modules o‘rnatish
+#             npm install
+
+#             # NestJS bo‘lsa build qilish
+#             npm run build
+
+#             # Agar pm2 yo‘q bo‘lsa o‘rnatish
+#             npm install -g pm2
+
+#             # Eski processni o‘chirish
+#             pm2 delete education-crm || true
+
+#             # Dist dan ishga tushirish
+#             pm2 start dist/main.js --name education-crm
+
+#             # PM2 ni saqlash
+#             pm2 save
+
+
 name: Deploy Education CRM (PM2)
 
 on:
@@ -67,10 +120,19 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install & Build
+        run: |
+          npm install
+          npm run build
 
       - name: Copy project to VPS
         uses: appleboy/scp-action@v0.1.7
@@ -78,7 +140,7 @@ jobs:
           host: ${{ secrets.SERVER_IP }}
           username: root
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          source: "."
+          source: "dist/,package.json,package-lock.json"
           target: "/var/www/education-crm"
 
       - name: Deploy on VPS
@@ -90,21 +152,11 @@ jobs:
           command_timeout: 10m
           script: |
             cd /var/www/education-crm
-
-            # Node modules o‘rnatish
-            npm install
-
-            # NestJS bo‘lsa build qilish
-            npm run build
-
-            # Agar pm2 yo‘q bo‘lsa o‘rnatish
+            # Faqat production dependencies o'rnatish
+            npm install --omit=dev
+            # PM2 o'rnatish (yo'q bo'lsa)
             npm install -g pm2
-
-            # Eski processni o‘chirish
+            # Restart
             pm2 delete education-crm || true
-
-            # Dist dan ishga tushirish
             pm2 start dist/main.js --name education-crm
-
-            # PM2 ni saqlash
             pm2 save
