@@ -91,11 +91,7 @@ const NOT_FOUND = {
   error: 'Not Found',
 };
 
-const CONFLICT = {
-  statusCode: 409,
-  message: "Bu telefon raqam allaqachon ro'yxatda bor",
-  error: 'Conflict',
-};
+
 
 // ────────────────────────────────────────────────────────────────────────────
 
@@ -244,11 +240,7 @@ export class StudentsController {
       },
     },
   })
-  @ApiResponse({
-    status: 409,
-    description: 'Telefon, PINFL yoki hujjat raqami allaqachon mavjud',
-    schema: { example: CONFLICT },
-  })
+
   async create(
     @Body() dto: CreateStudentDto,
     @Req() req: IAuthenticatedRequest,
@@ -541,11 +533,7 @@ export class StudentsController {
     description: 'Talaba yoki guruh topilmadi',
     schema: { example: NOT_FOUND },
   })
-  @ApiResponse({
-    status: 409,
-    description: 'Telefon, PINFL yoki hujjat raqami band',
-    schema: { example: CONFLICT },
-  })
+
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateStudentDto,
