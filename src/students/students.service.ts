@@ -174,28 +174,9 @@ export class StudentsService {
       const { groupIds, pinfl, documentNumber, discounts, ...studentData } =
         dto;
 
-      const existing = await queryRunner.manager.findOne(Student, {
-        where: [
-          { phone: dto.phone },
-          ...(pinfl ? [{ pinfl }] : []),
-          ...(documentNumber ? [{ documentNumber }] : []),
-        ],
-      });
-
-      if (existing) {
-        if (existing.phone === dto.phone)
-          throw new ConflictException(
-            "Ushbu telefon raqamli o'quvchi allaqachon mavjud",
-          );
-        if (pinfl && existing.pinfl === pinfl)
-          throw new ConflictException(
-            "Ushbu JSHSHIR (PINFL) raqamli o'quvchi allaqachon mavjud",
-          );
-        if (documentNumber && existing.documentNumber === documentNumber)
-          throw new ConflictException(
-            "Ushbu seria raqamli o'quvchi allaqachon mavjud",
-          );
-      }
+      // Bo'sh stringlarni null ga aylantirish (data tozaligi uchun)
+      const safePinfl = pinfl?.trim() || null;
+      const safeDocumentNumber = documentNumber?.trim() || null;
 
       const groups = await queryRunner.manager.findBy(Group, {
         id: In(groupIds),
@@ -211,8 +192,8 @@ export class StudentsService {
         phone: studentData.phone,
         parentName: studentData.parentName,
         parentPhone: studentData.parentPhone,
-        documentNumber,
-        pinfl,
+        documentNumber: safeDocumentNumber,
+        pinfl: safePinfl,
         birthDate: studentData.birthDate
           ? new Date(studentData.birthDate)
           : undefined,
@@ -345,10 +326,14 @@ export class StudentsService {
       ) {
         throw error;
       }
-      if (error.code === '23505')
-        throw new ConflictException(
-          "Ma'lumotlar bazasida takrorlanish yuz berdi.",
+      if (error.code === '23505') {
+        this.logger.warn(
+          `DB takrorlanish xatosi [tel: ${dto.phone}]: ${error.detail}`,
         );
+        throw new BadRequestException(
+          "Ma'lumotlar bazasida kutilmagan takrorlanish yuz berdi.",
+        );
+      }
 
       this.logger.error(
         `Talaba yaratishda xatolik [tel: ${dto.phone}]`,
@@ -389,7 +374,7 @@ export class StudentsService {
     if (search) {
       const cleanSearch = search.replace(/[\s\-\(\)]/g, '');
       query.andWhere(
-        '(student.fullName ILike :search OR student.phone ILike :cleanSearch)',
+        '(student.fullName ILike :search OR student.phone ILike :cleanSearch OR group.name ILike :search)',
         { search: `%${search}%`, cleanSearch: `%${cleanSearch}%` },
       );
     }
@@ -502,30 +487,9 @@ export class StudentsService {
         );
       }
 
-      if (phone?.trim() || pinfl?.trim() || documentNumber?.trim()) {
-        const conflictCheck = await queryRunner.manager.findOne(Student, {
-          where: [
-            ...(phone?.trim() ? [{ phone }] : []),
-            ...(pinfl?.trim() ? [{ pinfl }] : []),
-            ...(documentNumber?.trim() ? [{ documentNumber }] : []),
-          ],
-        });
-        if (conflictCheck && conflictCheck.id !== id) {
-          if (phone?.trim() && conflictCheck.phone === phone)
-            throw new ConflictException(
-              "Ushbu telefon raqami boshqa o'quvchida band",
-            );
-          if (pinfl?.trim() && conflictCheck.pinfl === pinfl)
-            throw new ConflictException("Ushbu PINFL boshqa o'quvchida band");
-          if (
-            documentNumber?.trim() &&
-            conflictCheck.documentNumber === documentNumber
-          )
-            throw new ConflictException(
-              "Ushbu hujjat raqami boshqa o'quvchida band",
-            );
-        }
-      }
+      // Bo'sh stringlarni null ga aylantirish
+      const safePinfl = pinfl?.trim() || null;
+      const safeDocumentNumber = documentNumber?.trim() || null;
 
       let newGroupsToCharge: Group[] = [];
       let needsBalanceRecalc = false;
@@ -562,9 +526,9 @@ export class StudentsService {
         updateData.parentPhone,
         student.parentPhone,
       );
-      student.pinfl = this.keepIfEmpty(pinfl, student.pinfl);
+      student.pinfl = this.keepIfEmpty(safePinfl, student.pinfl);
       student.documentNumber = this.keepIfEmpty(
-        documentNumber,
+        safeDocumentNumber,
         student.documentNumber,
       );
       student.direction = this.keepIfEmpty(
@@ -730,10 +694,14 @@ export class StudentsService {
       ) {
         throw error;
       }
-      if (error.code === '23505')
-        throw new ConflictException(
-          "Ma'lumotlar bazasida takrorlanish yuz berdi",
+      if (error.code === '23505') {
+        this.logger.warn(
+          `DB takrorlanish xatosi [id: ${id}]: ${error.detail}`,
         );
+        throw new BadRequestException(
+          "Ma'lumotlar bazasida kutilmagan takrorlanish yuz berdi.",
+        );
+      }
 
       this.logger.error(`Talaba yangilashda xatolik [id: ${id}]`, error.stack);
       throw error;

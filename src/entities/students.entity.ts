@@ -31,8 +31,8 @@ export class Student {
   @Column()
   fullName: string;
 
-  @Index({ unique: true })
-  @Column({ unique: true })
+  @Index()
+  @Column()
   phone: string;
 
   @Column({ nullable: true })
@@ -49,12 +49,11 @@ export class Student {
   })
   documentType: DocumentType; // Masalan: 'PASSPORT' yoki 'BIRTH_CERTIFICATE'
 
-  @Column({ unique: true, nullable: true })
+  @Column({ nullable: true })
   documentNumber: string; // Seriya va raqam birga: 'AB1234567'
 
-  @Index({ unique: true, where: 'pinfl IS NOT NULL' })
-  @Column({ unique: true, length: 14, nullable: true })
-  pinfl: string; // 14 xonali JSHSHIR - bu eng aniq identifikator
+  @Column({ length: 14, nullable: true })
+  pinfl: string; // 14 xonali JSHSHIR - ixtiyoriy
 
   @Column({ type: 'date', nullable: true })
   birthDate: Date; // Talabaning tug'ilgan sanasi
