@@ -138,7 +138,7 @@ export class BranchesController {
 
   // ─── ADMIN — O'z filialining lokatsiyasini tahrirlash ─────────────────────
   @Patch('my-location')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "O'z filiali lokatsiyasini tahrirlash (faqat Admin)",
     description:
@@ -175,7 +175,7 @@ export class BranchesController {
 
   // ─── ADMIN — O'qituvchining qo'lda davomat sozlamasini o'zgartirish ─────────
   @Patch('teacher-manual-attendance')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "O'qituvchi qo'lda davomat sozlamasini o'zgartirish (faqat Admin)",
     description:
