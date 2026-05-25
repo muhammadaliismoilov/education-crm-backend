@@ -204,7 +204,7 @@ Bu endpoint eski bazadagi talabalarni yangi shartnoma moduliga o'tkazish uchun i
   // POST /contracts
   // ─────────────────────────
   @Post()
-  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: '🆕 Yangi shartnoma yaratish',
     description: `
@@ -463,7 +463,7 @@ Response struktura \`GET /contracts\` dagi bitta item bilan bir xil:
   // PATCH /contracts/:id
   // ─────────────────────────
   @Patch(':id')
-  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: '✏️ Shartnomani tahrirlash',
     description: `
@@ -531,11 +531,11 @@ Shartnomaning \`title\`, \`content\` yoki \`fileUrl\` maydoni(larini) yangilaydi
   // PATCH /contracts/:id/approve
   // ─────────────────────────────
   @Patch(':id/approve')
-  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: '✅ Shartnomani tasdiqlash — DRAFT → APPROVED',
     description: `
-**Kirish huquqi:** \`SUPERADMIN\`, \`ADMIN\`
+**Kirish huquqi:** \`SUPERADMIN\`, \`ADMIN\`, \`MANAGER\`
 
 Shartnomani \`APPROVED\` holatiga o'tkazadi.
 
