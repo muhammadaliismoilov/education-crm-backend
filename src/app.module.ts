@@ -15,6 +15,7 @@ import { DashboardModule } from './dashboards/dashboards.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
 import { CronModule } from './cron/cron.module';
+import { ScheduleModule } from '@nestjs/schedule';
 import { FaceModule } from './common/faceId/faceId.module';
 import { BranchesModule } from './branches/branches.module';
 import { ExpensesModule } from './expenses/expenses.module';
@@ -28,6 +29,7 @@ import { ContractTemplatesModule } from './contract-templates/contract-templates
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
     CacheModule.registerAsync({
       isGlobal: true,

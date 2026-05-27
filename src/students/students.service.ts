@@ -6,7 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, In, Between } from 'typeorm';
+import { DataSource, Repository, In } from 'typeorm';
 import { DocumentType, Student } from '../entities/students.entity';
 import { Group } from '../entities/group.entity';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
@@ -75,19 +75,18 @@ export class StudentsService {
     };
   }
 
-  private getCurrentMonthBounds(): { start: Date; end: Date } {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const end = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
-    );
-    return { start, end };
+  private getCurrentMonthBounds(): { billingMonth: string } {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Tashkent',
+      year: 'numeric',
+      month: '2-digit',
+    }).formatToParts(new Date());
+    const year = Number(parts.find((part) => part.type === 'year')?.value);
+    const month = Number(parts.find((part) => part.type === 'month')?.value);
+
+    return {
+      billingMonth: `${year}-${String(month).padStart(2, '0')}-01`,
+    };
   }
 
   private async recalculateStudentBalance(
@@ -249,6 +248,7 @@ export class StudentsService {
 
       // SENIOR: Batch Insert for Invoices
       let initialBalanceDebt = 0;
+      const { billingMonth } = this.getCurrentMonthBounds();
       const invoicesToSave: Invoice[] = [];
       for (const group of groups) {
         const discount = discounts?.find((d) => d.groupId === group.id);
@@ -262,6 +262,7 @@ export class StudentsService {
             queryRunner.manager.create(Invoice, {
               amount: effectivePrice,
               type: 'monthly_fee',
+              billingMonth,
               student: { id: saved.id },
               group: { id: group.id },
             }),
@@ -601,12 +602,12 @@ export class StudentsService {
 
       // Yangi qo'shilgan guruhlar uchun initial invoice
       if (newGroupsToCharge.length > 0) {
-        const { start, end } = this.getCurrentMonthBounds();
+        const { billingMonth } = this.getCurrentMonthBounds();
         const existingInvoices = await queryRunner.manager.find(Invoice, {
           where: {
             student: { id },
             type: 'monthly_fee',
-            createdAt: Between(start, end),
+            billingMonth,
           },
           relations: ['group'],
         });
@@ -629,6 +630,7 @@ export class StudentsService {
                 queryRunner.manager.create(Invoice, {
                   amount: effectivePrice,
                   type: 'monthly_fee',
+                  billingMonth,
                   student: { id },
                   group: { id: group.id },
                 }),

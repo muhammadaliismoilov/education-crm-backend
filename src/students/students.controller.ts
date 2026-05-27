@@ -91,8 +91,6 @@ const NOT_FOUND = {
   error: 'Not Found',
 };
 
-
-
 // ────────────────────────────────────────────────────────────────────────────
 
 @ApiTags('Students')
@@ -116,6 +114,7 @@ export class StudentsController {
           cb(null, `temp_${unique}${extname(file.originalname)}`);
         },
       }),
+      limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
           return cb(
@@ -240,7 +239,6 @@ export class StudentsController {
       },
     },
   })
-
   async create(
     @Body() dto: CreateStudentDto,
     @Req() req: IAuthenticatedRequest,
@@ -533,7 +531,6 @@ export class StudentsController {
     description: 'Talaba yoki guruh topilmadi',
     schema: { example: NOT_FOUND },
   })
-
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateStudentDto,

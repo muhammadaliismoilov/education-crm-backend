@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Group } from '../entities/group.entity';
-import { Between, DataSource, Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { CreateGroupDto, UpdateGroupDto } from './group.dto';
 import { Student } from '../entities/students.entity';
 import { Invoice } from '../entities/invoice.entity';
@@ -23,19 +23,18 @@ export class GroupsService {
     @InjectDataSource() private dataSource: DataSource,
   ) {}
 
-  private getCurrentMonthBounds(): { start: Date; end: Date } {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const end = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
-    );
-    return { start, end };
+  private getCurrentMonthBounds(): { billingMonth: string } {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Tashkent',
+      year: 'numeric',
+      month: '2-digit',
+    }).formatToParts(new Date());
+    const year = Number(parts.find((part) => part.type === 'year')?.value);
+    const month = Number(parts.find((part) => part.type === 'month')?.value);
+
+    return {
+      billingMonth: `${year}-${String(month).padStart(2, '0')}-01`,
+    };
   }
 
   private async recalculateStudentBalance(
@@ -307,7 +306,7 @@ export class GroupsService {
     try {
       const group = await queryRunner.manager.findOne(Group, {
         where: { id: groupId },
-        relations: ['students'],
+        relations: ['students', 'branch'],
       });
       if (!group) throw new NotFoundException('Guruh topilmadi');
 
@@ -336,13 +335,13 @@ export class GroupsService {
           : Number(group.price || 0);
 
       if (effectivePrice > 0) {
-        const { start, end } = this.getCurrentMonthBounds();
+        const { billingMonth } = this.getCurrentMonthBounds();
         const existingThisMonth = await queryRunner.manager.findOne(Invoice, {
           where: {
             student: { id: studentId },
             group: { id: groupId },
             type: 'monthly_fee',
-            createdAt: Between(start, end),
+            billingMonth,
           },
         });
 
@@ -350,8 +349,10 @@ export class GroupsService {
           const invoice = queryRunner.manager.create(Invoice, {
             amount: effectivePrice,
             type: 'monthly_fee',
+            billingMonth,
             student: { id: studentId },
             group: { id: groupId },
+            branch: group.branch ? { id: group.branch.id } : null,
           });
           await queryRunner.manager.save(invoice);
         }
