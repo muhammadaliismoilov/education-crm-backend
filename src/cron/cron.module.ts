@@ -9,6 +9,6 @@ import { Invoice } from '../entities/invoice.entity';
 @Module({
   imports: [TypeOrmModule.forFeature([Student, StudentDiscount, Invoice])],
   providers: [CronService],
-  exports: [CronService], // Agar boshqa modullarda kerak bo'lsa
+  exports: [CronService], // Agar boshqa modullarda kerak bo'lsafghfghfghf
 })
 export class CronModule {}
