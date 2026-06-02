@@ -235,7 +235,7 @@ export class GroupsController {
   // PATCH /groups/:id
   // ─────────────────────────────────────────────
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: 'Guruh sozlamalarini tahrirlash',
     description:

@@ -175,7 +175,7 @@ export class BranchesController {
 
   // ─── ADMIN — O'qituvchining qo'lda davomat sozlamasini o'zgartirish ─────────
   @Patch('teacher-manual-attendance')
-  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "O'qituvchi qo'lda davomat sozlamasini o'zgartirish (faqat Admin)",
     description:
@@ -215,7 +215,12 @@ export class BranchesController {
 
   // ─── TEACHER/MANAGER/ADMIN — O'qituvchining qo'lda davomat holatini olish ─────────
   @Get('teacher-manual-attendance/status')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.TEACHER,
+    UserRole.MANAGER,
+    UserRole.SUPERADMIN,
+  )
   @ApiOperation({
     summary: "O'qituvchi qo'lda davomat qila olish holatini olish",
     description: 'Filialning allowTeacherManualAttendance holatini qaytaradi.',
