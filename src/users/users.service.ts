@@ -11,6 +11,7 @@ import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { CreateUserDto, UpdateUserDto } from './users.dto';
 import { User, UserRole } from '../entities/user.entity';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 @Injectable()
 export class UsersService {
@@ -20,7 +21,7 @@ export class UsersService {
     @InjectRepository(User) private readonly userRepo: Repository<User>,
   ) {}
 
-  private assertManagePermission(actor: any, target: User): void {
+  private assertManagePermission(actor: AuthenticatedUser | undefined, target: User): void {
     if (!actor) return;
 
     if (target.id === actor.id) {
@@ -86,7 +87,7 @@ export class UsersService {
   //   return saved;
   // }
 
-  async create(dto: CreateUserDto, creator: any): Promise<User> {
+  async create(dto: CreateUserDto, creator: AuthenticatedUser): Promise<Omit<User, 'password' | 'refreshToken'>> {
     if (creator) {
       if (
         creator.role === UserRole.ADMIN &&
@@ -123,14 +124,18 @@ export class UsersService {
       `Foydalanuvchi yaratildi [id: ${saved.id}] [login: ${saved.login}] [role: ${saved.role}]`,
     );
 
-    return saved;
+    // SECURITY FIX: save() dan keyin entity da password hash qoladi.
+    // select: false faqat find() da ishlaydi, save() dan qaytgan obyektda emas.
+    // Shuning uchun response ga parol hash chiqmasligi uchun o'chiramiz.
+    const { password: _, refreshToken: __, ...safeUser } = saved;
+    return safeUser as Omit<User, 'password' | 'refreshToken'>;
   }
   async findAll(
     role?: UserRole,
     search?: string,
     page = 1,
     limit = 10,
-    user?: any,
+    user?: AuthenticatedUser,
     branchId?: string,
   ) {
     const query = this.userRepo
@@ -227,7 +232,7 @@ export class UsersService {
     return this.findOne(id);
   }
 
-  async remove(id: string, actor?: any): Promise<void> {
+  async remove(id: string, actor?: AuthenticatedUser): Promise<void> {
     const user = await this.findOne(id);
     this.assertManagePermission(actor, user);
     await this.userRepo.softRemove(user);
@@ -242,7 +247,7 @@ export class UsersService {
     search?: string,
     page = 1,
     limit = 10,
-    user?: any,
+    user?: AuthenticatedUser,
     branchId?: string,
   ) {
     const query = this.userRepo
@@ -281,7 +286,7 @@ export class UsersService {
     };
   }
 
-  async restore(id: string, actor?: any): Promise<User> {
+  async restore(id: string, actor?: AuthenticatedUser): Promise<User> {
     const user = await this.userRepo.findOne({
       where: { id },
       withDeleted: true,
@@ -299,7 +304,7 @@ export class UsersService {
     return this.findOne(id);
   }
 
-  async hardDelete(id: string, actor?: any): Promise<void> {
+  async hardDelete(id: string, actor?: AuthenticatedUser): Promise<void> {
     const user = await this.userRepo.findOne({
       where: { id },
       withDeleted: true,

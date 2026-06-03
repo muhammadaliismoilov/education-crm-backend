@@ -12,6 +12,7 @@ import { Expense } from '../entities/expense.entity';
 import * as ExcelJS from 'exceljs';
 import * as express from 'express';
 import { SalaryService } from '../salarys/salary.service';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 //  Redis uchun sekundda (millisekund emas!)
 const CACHE_TTL = {
@@ -37,7 +38,7 @@ export class ReportsService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  async getYearlyFinancialOverview(year: number, user?: any) {
+  async getYearlyFinancialOverview(year: number, user?: AuthenticatedUser) {
     const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
     const cacheKey = `finance_yearly_${year}_${branchId || 'all'}`;
 
@@ -210,7 +211,7 @@ export class ReportsService {
   // ─────────────────────────────────────────────
   // 1. MOLIYAVIY TAHLIL (Kunlik va Oylik)
   // ─────────────────────────────────────────────
-  async getFinancialOverview(startDate: Date, endDate: Date, user?: any) {
+  async getFinancialOverview(startDate: Date, endDate: Date, user?: AuthenticatedUser) {
     const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
     const start = new Date(startDate);
     start.setUTCHours(0, 0, 0, 0);
@@ -313,7 +314,7 @@ export class ReportsService {
   // ─────────────────────────────────────────────
   // 2. QARZDORLAR EXCEL EXPORT
   // ─────────────────────────────────────────────
-  async exportDebtorsToExcel(res: express.Response, user?: any) {
+  async exportDebtorsToExcel(res: express.Response, user?: AuthenticatedUser) {
     const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
     const rawQuery = this.studentRepo.manager
       .createQueryBuilder()
@@ -427,7 +428,7 @@ export class ReportsService {
   async getTeacherPerformance(
     startDate: Date,
     endDate: Date,
-    user?: any,
+    user?: AuthenticatedUser,
     page = 1,
     limit = 10,
   ) {

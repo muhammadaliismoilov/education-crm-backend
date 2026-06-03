@@ -14,6 +14,7 @@ import { MarkAttendanceDto } from './mark-attendance.dto';
 import { UpdateSingleAttendanceDto } from './update-single-attendance.dto';
 import { UserRole } from '../entities/user.entity';
 import { FaceService } from '../common/faceId/faceId.service';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 @Injectable()
 export class AttendanceService {
@@ -92,7 +93,7 @@ export class AttendanceService {
 
   private checkLocation(
     group: Group,
-    user: any,
+    user: AuthenticatedUser,
     incomingLat?: number,
     incomingLon?: number,
   ): void {
@@ -131,7 +132,7 @@ export class AttendanceService {
     }
   }
 
-  async getAttendanceSheet(groupId: string, date: string, user: any) {
+  async getAttendanceSheet(groupId: string, date: string, user: AuthenticatedUser) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new BadRequestException(
         "Sana formati noto'g'ri. To'g'ri format: YYYY-MM-DD",
@@ -203,7 +204,7 @@ export class AttendanceService {
     };
   }
 
-  async markBulk(dto: MarkAttendanceDto, user: any) {
+  async markBulk(dto: MarkAttendanceDto, user: AuthenticatedUser) {
     const { groupId, date, students } = dto;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -306,7 +307,7 @@ export class AttendanceService {
     }
   }
 
-  async updateSingleAttendance(dto: UpdateSingleAttendanceDto, user: any) {
+  async updateSingleAttendance(dto: UpdateSingleAttendanceDto, user: AuthenticatedUser) {
     const { groupId, date, studentId, isPresent } = dto;
 
     const group = await this.groupRepo.findOne({
@@ -376,7 +377,7 @@ export class AttendanceService {
     groupId: string,
     date: string,
     base64: string,
-    user: any,
+    user: AuthenticatedUser,
     latitude?: number,
     longitude?: number,
   ) {
@@ -515,7 +516,7 @@ export class AttendanceService {
   async getGroupMonthlyAttendance(
     groupId: string,
     month?: string,
-    user?: any,
+    user?: AuthenticatedUser,
     page = 1,
     limit = 10,
   ) {

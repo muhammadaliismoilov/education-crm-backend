@@ -255,7 +255,7 @@ export class ContractsService implements OnModuleDestroy {
       documentNumber: student.documentNumber || '',
       pinfl: student.pinfl || '',
       birthDate: formatUzDate(student.birthDate),
-      direction: student.direction || '',
+      direction: student.enrolledGroups?.map((g) => g.name).join(', ') || '',
     };
   }
 
@@ -309,6 +309,7 @@ export class ContractsService implements OnModuleDestroy {
     // Branch izolyatsiyasi: o'quvchi faqat xuddi shu filialdan bo'lishi shart
     const student = await this.studentRepo.findOne({
       where: { id: dto.studentId, branch: { id: user.branchId } },
+      relations: ['enrolledGroups'],
     });
     if (!student) {
       throw new NotFoundException("O'quvchi topilmadi");
@@ -581,6 +582,7 @@ export class ContractsService implements OnModuleDestroy {
 
     const student = await this.studentRepo.findOne({
       where: { id: studentId, branch: { id: branchId } },
+      relations: ['enrolledGroups'],
     });
 
     if (!student) {

@@ -197,8 +197,6 @@ export class StudentsService {
           ? new Date(studentData.birthDate)
           : undefined,
         documentType: studentData.documentType as DocumentType,
-        direction:
-          dto.direction || (groups.length > 0 ? groups[0].name : undefined),
         enrolledGroups: groups,
         branch:
           user.role === 'superadmin' && dto.branchId
@@ -354,7 +352,7 @@ export class StudentsService {
     groupName?: string,
     page = 1,
     limit = 10,
-    user?: any,
+    user?: AuthenticatedUser,
     branchId?: string,
   ) {
     const query = this.studentRepo
@@ -381,7 +379,7 @@ export class StudentsService {
     }
 
     if (groupName) {
-      query.andWhere('student.direction = :groupName', { groupName });
+      query.andWhere('group.name = :groupName', { groupName });
     }
 
     const [items, total] = await query
@@ -404,7 +402,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 3. FIND ONE
   // ─────────────────────────────────────────────
-  async findOne(id: string, user?: any) {
+  async findOne(id: string, user?: AuthenticatedUser) {
     const student = await this.studentRepo.findOne({
       where: { id },
       relations: [
@@ -439,7 +437,7 @@ export class StudentsService {
   async update(
     id: string,
     dto: UpdateStudentDto,
-    user: any,
+    user: AuthenticatedUser,
     file?: Express.Multer.File,
   ) {
     let faceDescriptor: number[] | undefined;
@@ -507,7 +505,6 @@ export class StudentsService {
         newGroupsToCharge = groups.filter((g) => !oldGroupIds.has(g.id));
 
         student.enrolledGroups = groups;
-        if (!dto.direction?.trim()) student.direction = groups[0].name;
       }
 
       if (user.role === 'superadmin' && branchId) {
@@ -531,10 +528,6 @@ export class StudentsService {
       student.documentNumber = this.keepIfEmpty(
         safeDocumentNumber,
         student.documentNumber,
-      );
-      student.direction = this.keepIfEmpty(
-        updateData.direction,
-        student.direction,
       );
 
       if (updateData.documentType?.trim())
@@ -715,7 +708,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 5. REMOVE
   // ─────────────────────────────────────────────
-  async remove(id: string, user: any) {
+  async remove(id: string, user: AuthenticatedUser) {
     const student = await this.studentRepo.findOne({
       where: { id },
       relations: ['branch'],
@@ -735,7 +728,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 6. FIND DELETED
   // ─────────────────────────────────────────────
-  async findAllDeleted(search?: string, page = 1, limit = 10, user?: any) {
+  async findAllDeleted(search?: string, page = 1, limit = 10, user?: AuthenticatedUser) {
     const query = this.studentRepo
       .createQueryBuilder('student')
       .withDeleted()
@@ -776,7 +769,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 7. RESTORE
   // ─────────────────────────────────────────────
-  async restore(id: string, user: any) {
+  async restore(id: string, user: AuthenticatedUser) {
     const student = await this.studentRepo.findOne({
       where: { id },
       withDeleted: true,
@@ -797,7 +790,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 8. HARD DELETE (permanent)
   // ─────────────────────────────────────────────
-  async hardDelete(id: string, user: any) {
+  async hardDelete(id: string, user: AuthenticatedUser) {
     const student = await this.studentRepo.findOne({
       where: { id },
       withDeleted: true,

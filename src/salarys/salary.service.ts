@@ -13,6 +13,7 @@ import {
 } from '../entities/salaryPayout.entity';
 import { Attendance } from '../entities/attendance.entity';
 import { PaySalaryDto } from './salary.dto';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 @Injectable()
 export class SalaryService {
@@ -31,7 +32,7 @@ export class SalaryService {
   async getEstimatedSalaries(
     startDate?: string,
     endDate?: string,
-    user?: any,
+    user?: AuthenticatedUser,
     page = 1,
     limit = 10,
   ) {
@@ -138,7 +139,7 @@ export class SalaryService {
     teacherId: string,
     startDate: string,
     endDate: string,
-    user?: any,
+    user?: AuthenticatedUser,
   ) {
     const query: any = { id: teacherId, role: UserRole.TEACHER };
     if (user && user.role !== UserRole.SUPERADMIN) {
@@ -369,7 +370,7 @@ export class SalaryService {
   }
 
   // 3. OYLIK TO'LASH
-  async paySalary(dto: PaySalaryDto, user?: any) {
+  async paySalary(dto: PaySalaryDto, user?: AuthenticatedUser) {
     const { teacherId, month, startDate, endDate } = dto;
     const start = new Date(startDate);
     const end = new Date(endDate);
@@ -465,7 +466,7 @@ export class SalaryService {
   }
 
   // 4. BARCHA TO'LANGAN OYLIKLAR
-  async findAll(searchMonth?: string, user?: any, page = 1, limit = 10) {
+  async findAll(searchMonth?: string, user?: AuthenticatedUser, page = 1, limit = 10) {
     const query = this.payoutRepo
       .createQueryBuilder('payout')
       // withDeleted() olib tashlandi — o'chirilgan yozuvlar ko'rsatilmasin

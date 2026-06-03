@@ -12,6 +12,7 @@ import { Student } from '../entities/students.entity';
 import { Invoice } from '../entities/invoice.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { Payment } from '../entities/payment.entity';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 @Injectable()
 export class GroupsService {
@@ -63,7 +64,7 @@ export class GroupsService {
     );
   }
 
-  async create(dto: CreateGroupDto, user: any) {
+  async create(dto: CreateGroupDto, user: AuthenticatedUser) {
     await this.checkTeacherAvailability(dto.teacherId, dto.days, dto.startTime);
 
     const group = this.groupRepo.create({
@@ -90,7 +91,7 @@ export class GroupsService {
     search?: string,
     page = 1,
     limit = 10,
-    user?: any,
+    user?: AuthenticatedUser,
     branchId?: string,
   ) {
     const query = this.groupRepo
@@ -232,7 +233,7 @@ export class GroupsService {
   // ─────────────────────────────────────────────
   // ARCHIVED GROUPS HANDLING (SENIOR APPROACH)
   // ─────────────────────────────────────────────
-  async findAllDeleted(search?: string, page = 1, limit = 10, user?: any) {
+  async findAllDeleted(search?: string, page = 1, limit = 10, user?: AuthenticatedUser) {
     const query = this.groupRepo
       .createQueryBuilder('group')
       .withDeleted()

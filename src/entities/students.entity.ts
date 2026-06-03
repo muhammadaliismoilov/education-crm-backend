@@ -59,9 +59,6 @@ export class Student {
   birthDate: Date; // Talabaning tug'ilgan sanasi
 
   @Column({ nullable: true })
-  direction: string; // Yo'nalish
-
-  @Column({ nullable: true })
   photoUrl: string;
 
   @Column({ type: 'jsonb', nullable: true })

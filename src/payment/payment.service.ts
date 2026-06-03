@@ -15,6 +15,7 @@ import { Group } from '../entities/group.entity';
 import { Invoice } from '../entities/invoice.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { RedisCacheService } from '../common/redis/redis.cache';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 @Injectable()
 export class PaymentService {
@@ -83,7 +84,7 @@ export class PaymentService {
     );
   }
 
-  async create(dto: CreatePaymentDto, user: any) {
+  async create(dto: CreatePaymentDto, user: AuthenticatedUser) {
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
     await queryRunner.startTransaction();
@@ -203,7 +204,7 @@ export class PaymentService {
     search?: string,
     page = 1,
     limit = 10,
-    user?: any,
+    user?: AuthenticatedUser,
     branchId?: string,
   ) {
     const query = this.paymentRepo
@@ -326,7 +327,7 @@ export class PaymentService {
     };
   }
 
-  async findOne(id: string, user: any) {
+  async findOne(id: string, user: AuthenticatedUser) {
     const payment = await this.paymentRepo.findOne({
       where: { id },
       relations: ['student', 'group', 'branch'],
@@ -372,7 +373,7 @@ export class PaymentService {
     };
   }
 
-  async getReceiptData(paymentId: string, user: any) {
+  async getReceiptData(paymentId: string, user: AuthenticatedUser) {
     const payment = await this.paymentRepo.findOne({
       where: { id: paymentId },
       relations: ['student', 'group', 'branch'],
@@ -438,7 +439,7 @@ export class PaymentService {
     };
   }
 
-  async update(id: string, dto: UpdatePaymentDto, user: any) {
+  async update(id: string, dto: UpdatePaymentDto, user: AuthenticatedUser) {
     const payment = await this.paymentRepo.findOne({
       where: { id },
       relations: ['student', 'group', 'branch'],
@@ -533,7 +534,7 @@ export class PaymentService {
     }
   }
 
-  async remove(id: string, user: any) {
+  async remove(id: string, user: AuthenticatedUser) {
     const payment = await this.paymentRepo.findOne({
       where: { id },
       relations: ['student', 'group', 'branch'],
