@@ -73,6 +73,7 @@ export class CreateStudentDto {
     pattern: '/^\\+998\\d{9}$/',
   })
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @Matches(/^\+998\d{9}$/)
   parentPhone?: string;
 
@@ -97,6 +98,7 @@ export class CreateStudentDto {
     required: false,
   })
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @IsString()
   documentNumber?: string;
 
@@ -109,6 +111,7 @@ export class CreateStudentDto {
     pattern: '/^\\d{14}$/',
   })
   @IsOptional()
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @Matches(/^\d{14}$/, { message: "PINFL 14 xonali raqam bo'lishi shart" })
   pinfl?: string;
 
@@ -120,6 +123,7 @@ export class CreateStudentDto {
   })
   @IsOptional()
   @IsString()
+  @Transform(({ value }) => (value === '' || value === null ? undefined : value))
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: "Tug'ilgan sana YYYY-MM-DD formatida bo'lishi kerak",
   })

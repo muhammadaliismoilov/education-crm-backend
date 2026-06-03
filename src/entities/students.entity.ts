@@ -23,6 +23,10 @@ export enum DocumentType {
 }
 
 @Entity('students')
+@Index('UQ_students_documentNumber_active', ['documentNumber'], {
+  unique: true,
+  where: '"deletedAt" IS NULL AND "documentNumber" IS NOT NULL',
+})
 export class Student {
   @PrimaryGeneratedColumn('uuid')
   id: string;
