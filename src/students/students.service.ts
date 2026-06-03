@@ -177,6 +177,18 @@ export class StudentsService {
       const safePinfl = pinfl?.trim() || null;
       const safeDocumentNumber = documentNumber?.trim() || null;
 
+      // ─── UNIQUE DOCUMENT NUMBER CHECK ───
+      if (safeDocumentNumber) {
+        const existingDoc = await queryRunner.manager.findOne(Student, {
+          where: { documentNumber: safeDocumentNumber },
+        });
+        if (existingDoc) {
+          throw new ConflictException(
+            `Hujjat raqami '${safeDocumentNumber}' bo'lgan talaba allaqachon ro'yxatdan o'tgan`,
+          );
+        }
+      }
+
       const groups = await queryRunner.manager.findBy(Group, {
         id: In(groupIds),
       });
@@ -327,8 +339,13 @@ export class StudentsService {
       }
       if (error.code === '23505') {
         this.logger.warn(
-          `DB takrorlanish xatosi [tel: ${dto.phone}]: ${error.detail}`,
+          `DB takrorlanish xatosi: ${error.detail}`,
         );
+        if (error.detail?.includes('documentNumber') || error.detail?.includes('document_number')) {
+          throw new ConflictException(
+            "Ushbu hujjat raqami (passport/birth certificate) bilan boshqa talaba ro'yxatdan o'tgan",
+          );
+        }
         throw new BadRequestException(
           "Ma'lumotlar bazasida kutilmagan takrorlanish yuz berdi.",
         );
@@ -489,6 +506,18 @@ export class StudentsService {
       // Bo'sh stringlarni null ga aylantirish
       const safePinfl = pinfl?.trim() || null;
       const safeDocumentNumber = documentNumber?.trim() || null;
+
+      // ─── UNIQUE DOCUMENT NUMBER CHECK ───
+      if (documentNumber !== undefined && safeDocumentNumber && safeDocumentNumber !== student.documentNumber) {
+        const existingDoc = await queryRunner.manager.findOne(Student, {
+          where: { documentNumber: safeDocumentNumber },
+        });
+        if (existingDoc && existingDoc.id !== student.id) {
+          throw new ConflictException(
+            `Hujjat raqami '${safeDocumentNumber}' bo'lgan talaba allaqachon ro'yxatdan o'tgan`,
+          );
+        }
+      }
 
       let newGroupsToCharge: Group[] = [];
       let needsBalanceRecalc = false;
@@ -693,6 +722,11 @@ export class StudentsService {
         this.logger.warn(
           `DB takrorlanish xatosi [id: ${id}]: ${error.detail}`,
         );
+        if (error.detail?.includes('documentNumber') || error.detail?.includes('document_number')) {
+          throw new ConflictException(
+            "Ushbu hujjat raqami (passport/birth certificate) bilan boshqa talaba ro'yxatdan o'tgan",
+          );
+        }
         throw new BadRequestException(
           "Ma'lumotlar bazasida kutilmagan takrorlanish yuz berdi.",
         );
@@ -779,6 +813,17 @@ export class StudentsService {
 
     if (user.role !== 'superadmin' && student.branch?.id !== user.branchId) {
       throw new NotFoundException("Student topilmadi (ruxsat yo'q)");
+    }
+
+    if (student.documentNumber) {
+      const conflictingStudent = await this.studentRepo.findOne({
+        where: { documentNumber: student.documentNumber },
+      });
+      if (conflictingStudent && conflictingStudent.id !== student.id) {
+        throw new ConflictException(
+          `Hujjat raqami '${student.documentNumber}' bo'lgan faol talaba mavjud. Uni tiklab bo'lmaydi.`,
+        );
+      }
     }
 
     await this.studentRepo.restore(id);
