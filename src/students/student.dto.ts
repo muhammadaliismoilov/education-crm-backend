@@ -126,15 +126,6 @@ export class CreateStudentDto {
   birthDate?: string;
 
   @ApiProperty({
-    example: 'Backend',
-    description: "O'qish yo'nalishi. Ixtiyoriy.",
-    required: false,
-  })
-  @IsOptional()
-  @IsString()
-  direction?: string;
-
-  @ApiProperty({
     type: [String],
     example: ['550e8400-e29b-41d4-a716-446655440000'],
     description: "Talaba qo'shiladigan guruhlar UUID lari. Kamida 1 ta.",

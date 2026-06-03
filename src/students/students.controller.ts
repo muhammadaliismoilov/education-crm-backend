@@ -49,7 +49,6 @@ const STUDENT_EXAMPLE = {
   documentNumber: 'AB1234567',
   pinfl: '12345678901234',
   birthDate: '2000-01-15T00:00:00.000Z',
-  direction: 'Backend',
   balance: 500000,
   photoUrl: '/uploads/students/student_1710000000000.jpg',
   faceDescriptor: null,
@@ -189,11 +188,6 @@ export class StudentsController {
           type: 'string',
           example: '2000-01-15',
           description: "Tug'ilgan sana (YYYY-MM-DD)",
-        },
-        direction: {
-          type: 'string',
-          example: 'Backend',
-          description: "O'qish yo'nalishi. Ixtiyoriy.",
         },
         groupIds: {
           type: 'array',
@@ -355,7 +349,6 @@ export class StudentsController {
             id: 'uuid',
             fullName: 'Zulfiya Rahimova',
             phone: '+998909876543',
-            direction: 'Frontend',
             balance: -200000,
             photoUrl: null,
             enrolledGroups: [],
@@ -441,7 +434,6 @@ export class StudentsController {
           example: '2000-01-15',
           description: 'YYYY-MM-DD',
         },
-        direction: { type: 'string', example: 'Frontend' },
         documentType: {
           type: 'string',
           enum: ['passport', 'birth_certificate'],

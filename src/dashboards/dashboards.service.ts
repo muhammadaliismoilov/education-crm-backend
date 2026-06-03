@@ -10,6 +10,7 @@ import { Attendance } from '../entities/attendance.entity';
 import { ExpensesService } from '../expenses/expenses.service';
 import { User, UserRole } from '../entities/user.entity';
 import { SalaryService } from '../salarys/salary.service';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 @Injectable()
 export class DashboardService {
@@ -30,7 +31,7 @@ export class DashboardService {
   async getSummary(
     startDate: Date,
     endDate: Date,
-    user?: any,
+    user?: AuthenticatedUser,
     branchIdFilter?: string,
   ) {
     const isManager = user?.role === UserRole.MANAGER;
