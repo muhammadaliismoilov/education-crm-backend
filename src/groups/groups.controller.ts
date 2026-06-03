@@ -281,7 +281,7 @@ export class GroupsController {
   // DELETE /groups/:id
   // ─────────────────────────────────────────────
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "Guruhni arxivga o'tkazish (Soft-delete)",
     description: "Guruh o'chirilmaydi, arxivlanadi.",
@@ -307,7 +307,7 @@ export class GroupsController {
   // PATCH /groups/:id/restore
   // ─────────────────────────────────────────────
   @Patch(':id/restore')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
   @ApiOperation({ summary: 'Arxivlangan guruhni qayta tiklash' })
   restore(@Param('id', ParseUUIDPipe) id: string) {
     return this.groupsService.restore(id);
@@ -317,7 +317,7 @@ export class GroupsController {
   // DELETE /groups/:id/permanent
   // ─────────────────────────────────────────────
   @Delete(':id/permanent')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "Arxivlangan guruhni butunlay o'chirish (Faqat Admin)",
   })
@@ -329,7 +329,7 @@ export class GroupsController {
   // POST /groups/:groupId/add-student/:studentId
   // ─────────────────────────────────────────────
   @Post(':groupId/add-student/:studentId')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "Talabani guruh a'zolari qatoriga qo'shish",
   })
@@ -373,7 +373,7 @@ export class GroupsController {
   // DELETE /groups/:groupId/remove-student/:studentId
   // ─────────────────────────────────────────────
   @Delete(':groupId/remove-student/:studentId')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: 'Talabani guruhdan chiqarish',
   })
