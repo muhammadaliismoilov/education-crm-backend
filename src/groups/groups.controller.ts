@@ -24,7 +24,11 @@ import {
 } from '@nestjs/swagger';
 import { GroupsService } from './groups.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CreateGroupDto, UpdateGroupDto, TransferStudentDto } from './group.dto';
+import {
+  CreateGroupDto,
+  UpdateGroupDto,
+  TransferStudentDto,
+} from './group.dto';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../entities/user.entity';
 import { Roles } from '../common/guards/roles.decarator';
@@ -329,6 +333,7 @@ export class GroupsController {
   // ─────────────────────────────────────────────
   // POST /groups/:groupId/add-student/:studentId
   // ─────────────────────────────────────────────
+
   @Post(':groupId/add-student/:studentId')
   @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
   @ApiOperation({
@@ -413,19 +418,19 @@ export class GroupsController {
   @Post('transfer')
   @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
   @ApiOperation({
-    summary: 'Talabani bir guruhdan boshqasiga ko\'chirish',
+    summary: "Talabani bir guruhdan boshqasiga ko'chirish",
     description:
-      'Eski guruhdan chiqariladi (invoice qoladi), yangi guruhga qo\'shiladi ' +
-      'va yangi guruh uchun bu oy invoice yaratiladi (agar mavjud bo\'lmasa). ' +
+      "Eski guruhdan chiqariladi (invoice qoladi), yangi guruhga qo'shiladi " +
+      "va yangi guruh uchun bu oy invoice yaratiladi (agar mavjud bo'lmasa). " +
       'Barchasi bitta transaction ichida.',
   })
   @ApiResponse({
     status: 201,
-    description: 'Talaba muvaffaqiyatli ko\'chirildi',
+    description: "Talaba muvaffaqiyatli ko'chirildi",
     schema: {
       example: WRAP(
         {
-          message: 'Talaba muvaffaqiyatli ko\'chirildi',
+          message: "Talaba muvaffaqiyatli ko'chirildi",
           fromGroup: 'uuid',
           toGroup: 'uuid',
         },
@@ -435,7 +440,7 @@ export class GroupsController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Noto\'g\'ri ma\'lumotlar',
+    description: "Noto'g'ri ma'lumotlar",
     schema: {
       example: {
         statusCode: 400,
