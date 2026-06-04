@@ -12,7 +12,7 @@ import { Payment } from '../entities/payment.entity';
 import { CreatePaymentDto, UpdatePaymentDto } from './payment.dto';
 import { Student } from '../entities/students.entity';
 import { Group } from '../entities/group.entity';
-import { Invoice } from '../entities/invoice.entity';
+import { Invoice, InvoiceStatus } from '../entities/invoice.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { RedisCacheService } from '../common/redis/redis.cache';
 import { AuthenticatedUser } from '../common/interfaces/auth.interface';
@@ -72,7 +72,8 @@ export class PaymentService {
     const allInvoicesQuery = queryRunner.manager
       .createQueryBuilder(Invoice, 'i')
       .select('SUM(CAST(i.amount AS DECIMAL))', 'totalInvoiced')
-      .where('i.studentId = :studentId', { studentId });
+      .where('i.studentId = :studentId', { studentId })
+      .andWhere('i.status = :status', { status: InvoiceStatus.ACTIVE });
 
     const allInvoicesResult = await allInvoicesQuery.getRawOne();
     const allTotalInvoiced = Number(allInvoicesResult?.totalInvoiced || 0);

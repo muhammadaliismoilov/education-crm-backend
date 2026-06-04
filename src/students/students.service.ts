@@ -6,12 +6,12 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, In } from 'typeorm';
+import { DataSource, QueryRunner, Repository, In } from 'typeorm';
 import { DocumentType, Student } from '../entities/students.entity';
 import { Group } from '../entities/group.entity';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 import { StudentDiscount } from '../entities/studentDiscount';
-import { Invoice } from '../entities/invoice.entity';
+import { Invoice, InvoiceStatus } from '../entities/invoice.entity';
 import { Payment } from '../entities/payment.entity';
 import { FaceService } from '../common/faceId/faceId.service';
 import { ContractsService } from '../contracts/contracts.service';
@@ -90,7 +90,7 @@ export class StudentsService {
   }
 
   private async recalculateStudentBalance(
-    queryRunner: any,
+    queryRunner: QueryRunner,
     studentId: string,
   ): Promise<void> {
     const paidRow = await queryRunner.manager
@@ -103,6 +103,7 @@ export class StudentsService {
       .createQueryBuilder(Invoice, 'i')
       .select('SUM(CAST(i.amount AS DECIMAL))', 'totalInvoiced')
       .where('i.studentId = :studentId', { studentId })
+      .andWhere('i.status = :status', { status: InvoiceStatus.ACTIVE })
       .getRawOne();
 
     const totalPaid = Number(paidRow?.totalPaid || 0);
@@ -520,7 +521,6 @@ export class StudentsService {
       }
 
       let newGroupsToCharge: Group[] = [];
-      let needsBalanceRecalc = false;
       if (groupIds && groupIds.length > 0) {
         const groups = await queryRunner.manager.findBy(Group, {
           id: In(groupIds),
@@ -622,50 +622,9 @@ export class StudentsService {
         }
       }
 
-      // Yangi qo'shilgan guruhlar uchun initial invoice
-      if (newGroupsToCharge.length > 0) {
-        const { billingMonth } = this.getCurrentMonthBounds();
-        const existingInvoices = await queryRunner.manager.find(Invoice, {
-          where: {
-            student: { id },
-            type: 'monthly_fee',
-            billingMonth,
-          },
-          relations: ['group'],
-        });
-
-        const invoicesToSave: Invoice[] = [];
-
-        for (const group of newGroupsToCharge) {
-          const discount = discounts?.find((d) => d.groupId === group.id);
-          const effectivePrice =
-            discount && Number(discount.customPrice) > 0
-              ? Number(discount.customPrice)
-              : Number(group.price || 0);
-
-          if (effectivePrice > 0) {
-            const hasExisting = existingInvoices.some(
-              (i) => i.group?.id === group.id,
-            );
-            if (!hasExisting) {
-              invoicesToSave.push(
-                queryRunner.manager.create(Invoice, {
-                  amount: effectivePrice,
-                  type: 'monthly_fee',
-                  billingMonth,
-                  student: { id },
-                  group: { id: group.id },
-                }),
-              );
-              needsBalanceRecalc = true;
-            }
-          }
-        }
-
-        if (invoicesToSave.length > 0) {
-          await queryRunner.manager.save(Invoice, invoicesToSave);
-        }
-      }
+      // ✅ MUHIM: Invoice yaratish logikasi BU YERDA YO'Q
+      // Guruhga qo'shish/chiqarish faqat groups.service.ts orqali invoice yaratadi
+      // students.service.ts faqat ManyToMany relation va shaxsiy ma'lumotlarni yangilaydi
 
       // SENIOR APPROACH: Photo & Biometric Integrity Safe replacement
       if (dto.removePhoto === true && student.photoUrl) {
@@ -687,7 +646,9 @@ export class StudentsService {
       }
 
       const saved = await queryRunner.manager.save(Student, student);
-      if (needsBalanceRecalc) {
+
+      // Guruhlar o'zgarganda yoki discount o'zgarganda balance har doim qayta hisoblanadi
+      if (newGroupsToCharge.length > 0 || (discounts && discounts.length > 0)) {
         await this.recalculateStudentBalance(queryRunner, saved.id);
       }
 

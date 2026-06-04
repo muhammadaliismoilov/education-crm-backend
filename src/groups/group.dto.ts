@@ -78,3 +78,33 @@ export class CreateGroupDto {
 }
 
 export class UpdateGroupDto extends PartialType(CreateGroupDto) {}
+
+export class TransferStudentDto {
+  @ApiProperty({
+    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'Talaba UUID si',
+    format: 'uuid',
+  })
+  @IsUUID(4, { message: "Talaba ID si to'g'ri UUID bo'lishi kerak" })
+  @IsNotEmpty({ message: "Talaba ID si bo'sh bo'lmasligi kerak" })
+  studentId: string;
+
+  @ApiProperty({
+    example: 'bb096922-6249-4911-9a8c-9a503bb3e7d9',
+    description: 'Joriy (chiqish) guruh UUID si',
+    format: 'uuid',
+  })
+  @IsUUID(4, { message: "Chiqish guruhi ID si to'g'ri UUID bo'lishi kerak" })
+  @IsNotEmpty({ message: "Chiqish guruhi ID si bo'sh bo'lmasligi kerak" })
+  fromGroupId: string;
+
+  @ApiProperty({
+    example: 'cc096922-6249-4911-9a8c-9a503bb3e7da',
+    description: 'Yangi (kirish) guruh UUID si',
+    format: 'uuid',
+  })
+  @IsUUID(4, { message: "Kirish guruhi ID si to'g'ri UUID bo'lishi kerak" })
+  @IsNotEmpty({ message: "Kirish guruhi ID si bo'sh bo'lmasligi kerak" })
+  toGroupId: string;
+}
+
