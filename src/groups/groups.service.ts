@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Group } from '../entities/group.entity';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, QueryRunner, Repository } from 'typeorm';
 import { CreateGroupDto, UpdateGroupDto } from './group.dto';
 import { Student } from '../entities/students.entity';
 import { Invoice, InvoiceStatus } from '../entities/invoice.entity';
@@ -39,7 +39,7 @@ export class GroupsService {
   }
 
   private async recalculateStudentBalance(
-    queryRunner: any,
+    queryRunner: QueryRunner,
     studentId: string,
   ): Promise<void> {
     const totalPaidRow = await queryRunner.manager

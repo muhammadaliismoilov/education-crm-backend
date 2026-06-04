@@ -28,6 +28,7 @@ import { CreateGroupDto, UpdateGroupDto, TransferStudentDto } from './group.dto'
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../entities/user.entity';
 import { Roles } from '../common/guards/roles.decarator';
+import { IAuthenticatedRequest } from '../common/interfaces/auth.interface';
 
 // ─── Reusable examples ───────────────────────────────────────────────────────
 
@@ -450,7 +451,7 @@ export class GroupsController {
   })
   transferStudent(
     @Body() dto: TransferStudentDto,
-    @Req() req: any,
+    @Req() req: IAuthenticatedRequest,
   ) {
     return this.groupsService.transferStudent(
       dto.studentId,
