@@ -9,7 +9,7 @@ import { Group } from '../entities/group.entity';
 import { DataSource, Repository } from 'typeorm';
 import { CreateGroupDto, UpdateGroupDto } from './group.dto';
 import { Student } from '../entities/students.entity';
-import { Invoice } from '../entities/invoice.entity';
+import { Invoice, InvoiceStatus } from '../entities/invoice.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { Payment } from '../entities/payment.entity';
 import { AuthenticatedUser } from '../common/interfaces/auth.interface';
@@ -52,6 +52,7 @@ export class GroupsService {
       .createQueryBuilder(Invoice, 'i')
       .select('SUM(CAST(i.amount AS DECIMAL))', 'totalInvoiced')
       .where('i.studentId = :studentId', { studentId })
+      .andWhere('i.status = :status', { status: InvoiceStatus.ACTIVE })
       .getRawOne();
 
     const totalPaid = Number(totalPaidRow?.totalPaid || 0);
@@ -233,7 +234,12 @@ export class GroupsService {
   // ─────────────────────────────────────────────
   // ARCHIVED GROUPS HANDLING (SENIOR APPROACH)
   // ─────────────────────────────────────────────
-  async findAllDeleted(search?: string, page = 1, limit = 10, user?: AuthenticatedUser) {
+  async findAllDeleted(
+    search?: string,
+    page = 1,
+    limit = 10,
+    user?: AuthenticatedUser,
+  ) {
     const query = this.groupRepo
       .createQueryBuilder('group')
       .withDeleted()
@@ -377,20 +383,223 @@ export class GroupsService {
   }
 
   async removeStudentFromGroup(groupId: string, studentId: string) {
-    const group = await this.getGroupDetails(groupId);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const studentIndex = group.students.findIndex((s) => s.id === studentId);
-    if (studentIndex === -1)
-      throw new NotFoundException('Bu talaba ushbu guruhda topilmadi');
+    try {
+      const group = await queryRunner.manager.findOne(Group, {
+        where: { id: groupId },
+        relations: ['students'],
+      });
+      if (!group) throw new NotFoundException('Guruh topilmadi');
 
-    group.students.splice(studentIndex, 1);
-    await this.groupRepo.save(group);
+      const studentIndex = group.students.findIndex((s) => s.id === studentId);
+      if (studentIndex === -1)
+        throw new NotFoundException('Bu talaba ushbu guruhda topilmadi');
 
-    this.logger.log(
-      `Talaba guruhdan chiqarildi [group: ${groupId}] [student: ${studentId}]`,
-    );
+      // Variant A: Invoice QOLADI — o'chirilmaydi, CANCELLED qilinmaydi
+      // Faqat ManyToMany relation o'chiriladi
+      group.students.splice(studentIndex, 1);
+      await queryRunner.manager.save(Group, group);
 
-    return { message: 'Talaba guruhdan muvaffaqiyatli chetlatildi' };
+      // Balance qayta hisoblanadi (yangi guruhlar ro'yxatiga mos)
+      await this.recalculateStudentBalance(queryRunner, studentId);
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(
+        `Talaba guruhdan chiqarildi [group: ${groupId}] [student: ${studentId}]`,
+      );
+
+      return { message: 'Talaba guruhdan muvaffaqiyatli chetlatildi' };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      if (
+        err instanceof NotFoundException ||
+        err instanceof BadRequestException
+      ) {
+        throw err;
+      }
+      this.logger.error('Guruhdan chiqarishda xatolik', err.stack);
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // TRANSFER — Talabani bir guruhdan boshqasiga o'tkazish
+  //
+  // Qoidalar:
+  //   200k→200k, to'lagan → eski CANCELLED, yangi 200k → balance 0
+  //   200k→250k, to'lagan → eski CANCELLED, yangi 250k → balance -50k (farq qarz)
+  //   200k→150k, to'lagan → eski CANCELLED, yangi 150k → balance +50k (overpayment)
+  //   To'lamagan           → eski CANCELLED, yangi to'liq → to'liq qarz
+  // ─────────────────────────────────────────────
+  async transferStudent(
+    studentId: string,
+    fromGroupId: string,
+    toGroupId: string,
+    user: AuthenticatedUser,
+  ) {
+    if (fromGroupId === toGroupId) {
+      throw new BadRequestException("Bir xil guruhga ko'chirish mumkin emas");
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Talaba va guruhlarni tekshirish
+      const student = await queryRunner.manager.findOne(Student, {
+        where: { id: studentId },
+        relations: ['enrolledGroups', 'branch'],
+      });
+      if (!student) throw new NotFoundException('Talaba topilmadi');
+
+      const fromGroup = await queryRunner.manager.findOne(Group, {
+        where: { id: fromGroupId },
+        relations: ['students', 'branch'],
+      });
+      if (!fromGroup) throw new NotFoundException('Chiqish guruhi topilmadi');
+
+      const toGroup = await queryRunner.manager.findOne(Group, {
+        where: { id: toGroupId },
+        relations: ['students', 'branch'],
+      });
+      if (!toGroup) throw new NotFoundException('Kirish guruhi topilmadi');
+
+      // Filial bo'yicha xavfsizlik tekshiruvi (superadmin bo'lmagan foydalanuvchilar uchun)
+      if (user && user.role !== 'superadmin') {
+        if (student.branch?.id !== user.branchId) {
+          throw new NotFoundException(
+            'Talaba topilmadi yoki ushbu filialga tegishli emas',
+          );
+        }
+        if (fromGroup.branch?.id !== user.branchId) {
+          throw new NotFoundException(
+            'Chiqish guruhi topilmadi yoki ushbu filialga tegishli emas',
+          );
+        }
+        if (toGroup.branch?.id !== user.branchId) {
+          throw new NotFoundException(
+            'Kirish guruhi topilmadi yoki ushbu filialga tegishli emas',
+          );
+        }
+      }
+
+      // Talaba eski guruhda bormi?
+      const isInFromGroup = fromGroup.students.some((s) => s.id === studentId);
+      if (!isInFromGroup)
+        throw new BadRequestException('Talaba chiqish guruhida topilmadi');
+
+      // Talaba allaqachon yangi guruhda bormi?
+      const isInToGroup = toGroup.students.some((s) => s.id === studentId);
+      if (isInToGroup)
+        throw new BadRequestException('Talaba allaqachon kirish guruhida bor');
+
+      // 2. Eski guruhdan chiqarish
+      fromGroup.students = fromGroup.students.filter((s) => s.id !== studentId);
+      await queryRunner.manager.save(Group, fromGroup);
+
+      // 3. Yangi guruhga qo'shish
+      await queryRunner.manager
+        .createQueryBuilder()
+        .relation(Group, 'students')
+        .of(toGroupId)
+        .add(studentId);
+
+      // 4. Invoice almashtiruvi: eski → CANCELLED, yangi → ACTIVE
+      const { billingMonth } = this.getCurrentMonthBounds();
+
+      // 4a. Eski guruhning bu oydagi ACTIVE invoicesini CANCELLED qilish
+      const oldInvoice = await queryRunner.manager.findOne(Invoice, {
+        where: {
+          student: { id: studentId },
+          group: { id: fromGroupId },
+          type: 'monthly_fee',
+          billingMonth,
+          status: InvoiceStatus.ACTIVE,
+        },
+      });
+
+      if (oldInvoice) {
+        oldInvoice.status = InvoiceStatus.CANCELLED;
+        await queryRunner.manager.save(Invoice, oldInvoice);
+        this.logger.log(
+          `Transfer: eski invoice CANCELLED [invoice: ${oldInvoice.id}] [amount: ${oldInvoice.amount}]`,
+        );
+      }
+
+      // 4b. Yangi guruh uchun invoice yaratish (toGroup narxida)
+      const toDiscount = await queryRunner.manager.findOne(StudentDiscount, {
+        where: { student: { id: studentId }, group: { id: toGroupId } },
+      });
+      const toEffectivePrice =
+        toDiscount && Number(toDiscount.customPrice) > 0
+          ? Number(toDiscount.customPrice)
+          : Number(toGroup.price || 0);
+
+      if (toEffectivePrice > 0) {
+        // Yangi guruhda allaqachon ACTIVE invoice bormi tekshirish
+        const existingToInvoice = await queryRunner.manager.findOne(Invoice, {
+          where: {
+            student: { id: studentId },
+            group: { id: toGroupId },
+            type: 'monthly_fee',
+            billingMonth,
+            status: InvoiceStatus.ACTIVE,
+          },
+        });
+
+        if (!existingToInvoice) {
+          const newInvoice = queryRunner.manager.create(Invoice, {
+            amount: toEffectivePrice,
+            type: 'monthly_fee',
+            billingMonth,
+            student: { id: studentId },
+            group: { id: toGroupId },
+            branch: toGroup.branch ? { id: toGroup.branch.id } : null,
+          });
+          await queryRunner.manager.save(Invoice, newInvoice);
+          this.logger.log(
+            `Transfer: yangi invoice yaratildi [group: ${toGroupId}] [amount: ${toEffectivePrice}]`,
+          );
+        }
+      }
+
+      // 5. Balance qayta hisoblash
+      await this.recalculateStudentBalance(queryRunner, studentId);
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(
+        `Talaba ko'chirildi [student: ${studentId}] [from: ${fromGroupId}] [to: ${toGroupId}]`,
+      );
+
+      return {
+        message: "Talaba muvaffaqiyatli ko'chirildi",
+        fromGroup: fromGroupId,
+        toGroup: toGroupId,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      if (
+        err instanceof NotFoundException ||
+        err instanceof BadRequestException
+      ) {
+        throw err;
+      }
+      this.logger.error(
+        `Talaba ko'chirishda xatolik [student: ${studentId}]`,
+        err.stack,
+      );
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   private async checkTeacherAvailability(

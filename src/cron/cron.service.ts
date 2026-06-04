@@ -335,6 +335,7 @@ export class CronService {
           SELECT i."studentId" AS id, SUM(CAST(i."amount" AS DECIMAL)) AS total_invoiced
           FROM "invoices" i
           WHERE i."studentId" IN (SELECT id FROM target_students)
+            AND i."status" = 'ACTIVE'
           GROUP BY i."studentId"
         )
         UPDATE "students" s

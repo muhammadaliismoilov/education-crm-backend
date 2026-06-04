@@ -24,7 +24,7 @@ import {
 } from '@nestjs/swagger';
 import { GroupsService } from './groups.service';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
-import { CreateGroupDto, UpdateGroupDto } from './group.dto';
+import { CreateGroupDto, UpdateGroupDto, TransferStudentDto } from './group.dto';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { UserRole } from '../entities/user.entity';
 import { Roles } from '../common/guards/roles.decarator';
@@ -404,5 +404,59 @@ export class GroupsController {
     @Param('studentId', ParseUUIDPipe) sId: string,
   ) {
     return this.groupsService.removeStudentFromGroup(gId, sId);
+  }
+
+  // ─────────────────────────────────────────────
+  // POST /groups/transfer
+  // ─────────────────────────────────────────────
+  @Post('transfer')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
+  @ApiOperation({
+    summary: 'Talabani bir guruhdan boshqasiga ko\'chirish',
+    description:
+      'Eski guruhdan chiqariladi (invoice qoladi), yangi guruhga qo\'shiladi ' +
+      'va yangi guruh uchun bu oy invoice yaratiladi (agar mavjud bo\'lmasa). ' +
+      'Barchasi bitta transaction ichida.',
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Talaba muvaffaqiyatli ko\'chirildi',
+    schema: {
+      example: WRAP(
+        {
+          message: 'Talaba muvaffaqiyatli ko\'chirildi',
+          fromGroup: 'uuid',
+          toGroup: 'uuid',
+        },
+        201,
+      ),
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Noto\'g\'ri ma\'lumotlar',
+    schema: {
+      example: {
+        statusCode: 400,
+        message: 'Talaba chiqish guruhida topilmadi',
+        error: 'Bad Request',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Talaba yoki guruh topilmadi',
+    schema: { example: NOT_FOUND('Talaba topilmadi') },
+  })
+  transferStudent(
+    @Body() dto: TransferStudentDto,
+    @Req() req: any,
+  ) {
+    return this.groupsService.transferStudent(
+      dto.studentId,
+      dto.fromGroupId,
+      dto.toGroupId,
+      req.user,
+    );
   }
 }
