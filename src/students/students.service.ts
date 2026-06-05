@@ -190,8 +190,9 @@ export class StudentsService {
         }
       }
 
-      const groups = await queryRunner.manager.findBy(Group, {
-        id: In(groupIds),
+      const groups = await queryRunner.manager.find(Group, {
+        where: { id: In(groupIds) },
+        relations: ['branch'],
       });
       if (groups.length !== groupIds.length) {
         throw new NotFoundException(
@@ -269,6 +270,8 @@ export class StudentsService {
             : Number(group.price || 0);
 
         if (effectivePrice > 0) {
+          // Guruh branch'ini, yo'q bo'lsa student branch'ini olish (cron.service bilan bir xil logika)
+          const invoiceBranchId = group.branch?.id ?? saved.branch?.id ?? null;
           invoicesToSave.push(
             queryRunner.manager.create(Invoice, {
               amount: effectivePrice,
@@ -276,6 +279,7 @@ export class StudentsService {
               billingMonth,
               student: { id: saved.id },
               group: { id: group.id },
+              branch: invoiceBranchId ? { id: invoiceBranchId } : null,
             }),
           );
           initialBalanceDebt += effectivePrice;

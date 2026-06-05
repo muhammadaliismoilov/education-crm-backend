@@ -17,7 +17,7 @@ export enum SalaryPayoutStatus {
 }
 
 @Index(['teacher', 'branch', 'startDate', 'endDate'])
-@Entity('salaryPayouts')
+@Entity('salary_payouts')
 export class SalaryPayout {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -50,8 +50,12 @@ export class SalaryPayout {
   @ManyToOne(() => User, { nullable: true })
   paidBy: User;
 
-  @CreateDateColumn()
-  paidAt: Date;
+  /**
+   * To'lov amalga oshirilgan vaqt — service tomonidan yoziladi (auto emas).
+   * Masalan: new Date() yoki foydalanuvchi ko'rsatgan sana.
+   */
+  @Column({ type: 'timestamptz', nullable: true })
+  paidAt: Date | null;
 
   @CreateDateColumn({ name: 'createdAt' })
   createdAt: Date;

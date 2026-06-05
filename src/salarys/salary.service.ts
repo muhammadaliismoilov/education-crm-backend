@@ -441,6 +441,7 @@ export class SalaryService {
         teacher: { id: teacherId },
         paidBy: user?.id ? { id: user.id } : null,
         branch: teacher.branch ? { id: teacher.branch.id } : null,
+        paidAt: new Date(), // To'lov amalga oshirilgan aniq vaqt (audit uchun)
       });
 
       const saved = await queryRunner.manager.save(payout);
