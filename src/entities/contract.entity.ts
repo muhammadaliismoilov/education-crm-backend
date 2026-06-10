@@ -65,6 +65,9 @@ export class Contract {
   branch: Branch;
 
   @Column({ type: 'timestamp', nullable: true })
+  approvedAt: Date;
+
+  @Column({ type: 'timestamp', nullable: true })
   signedAt: Date;
 
   @CreateDateColumn()

@@ -160,6 +160,11 @@ export class StudentsService {
     user: AuthenticatedUser,
     file?: Express.Multer.File,
   ) {
+    const branchId =
+      user.role === 'superadmin' && dto.branchId
+        ? dto.branchId
+        : user.branchId;
+
     let faceDescriptor: number[] | undefined;
     if (file) {
       faceDescriptor = await this.verifyFace(file);
@@ -212,10 +217,7 @@ export class StudentsService {
           : undefined,
         documentType: studentData.documentType as DocumentType,
         enrolledGroups: groups,
-        branch:
-          user.role === 'superadmin' && dto.branchId
-            ? { id: dto.branchId }
-            : { id: user.branchId },
+        branch: branchId ? { id: branchId } : undefined,
       });
 
       let saved = await queryRunner.manager.save(Student, student);
@@ -307,27 +309,43 @@ export class StudentsService {
 
       await queryRunner.commitTransaction();
 
-      // ✅ Avtomatik shartnoma yaratish (student transaction commit bo'lgandan keyin)
-      const branchId =
-        user.role === 'superadmin' && dto.branchId
-          ? dto.branchId
-          : user.branchId;
+      // Transaction tashqarisida findOne chaqiramiz (o'qish xavfsiz)
+      const result = await this.findOne(saved.id);
+
+      // ✅ FIX: autoGenerateContract 3 ta sababga ko'ra tashqarida va setImmediate bilan:
+      //
+      // 1. try/catch TASHQARISIDA — commit bo'lgandan keyin xato bo'lsa
+      //    catch bloki rollbackTransaction() ga urinadi → AlreadyCommittedError
+      //
+      // 2. setImmediate (fire-and-forget) — HTTP response kechikmasdan qaytadi.
+      //    Shartnoma yaratish serializable transaction + 3x retry bo'lgani uchun sekin bo'lishi mumkin.
+      //
+      // 3. O'z try/catch bilan — unhandled exception server ni yiqitmaydi.
       if (branchId) {
-        const generatedContract =
-          await this.contractsService.autoGenerateContract(
-            saved.id,
-            branchId,
-            user.id,
-          );
-        if (!generatedContract) {
-          this.logger.warn(
-            `Talaba yaratildi, lekin avtomatik shartnoma yozilmadi [student: ${saved.id}]`,
-          );
-        }
+        setImmediate(async () => {
+          try {
+            const generatedContract =
+              await this.contractsService.autoGenerateContract(
+                saved.id,
+                branchId,
+                user.id,
+              );
+            if (!generatedContract) {
+              this.logger.warn(
+                `Talaba yaratildi, lekin avtomatik shartnoma yozilmadi [student: ${saved.id}]`,
+              );
+            }
+          } catch (contractErr) {
+            // Shartnoma yaratilmasa ham talaba saqlangan — kritik emas, faqat log
+            this.logger.error(
+              `autoGenerateContract xatosi [student: ${saved.id}]: ${contractErr?.message}`,
+              contractErr?.stack,
+            );
+          }
+        });
       }
 
-      // Transaction tashqarisida findOne chaqiramiz (o'qish xavfsiz)
-      return await this.findOne(saved.id);
+      return result;
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.deleteFileIfExists(file?.path); // Temp faylni o'chirish
@@ -365,6 +383,7 @@ export class StudentsService {
       await queryRunner.release();
     }
   }
+
 
   // ─────────────────────────────────────────────
   // 2. FIND ALL

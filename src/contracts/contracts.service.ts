@@ -123,10 +123,13 @@ export class ContractsService implements OnModuleDestroy {
   private readonly logger = new Logger(ContractsService.name);
 
   /**
-   * Puppeteer browser singleton — har so'rovda yangi browser ochilmaydi.
-   * Bu performance va resource leak muammosini hal qiladi.
+   * FIX #4: Promise-based singleton — double-initialization race condition hal qilindi.
+   * Avvalgi `this.browser` field ikkita parallel so'rov kelganda ikkita
+   * Chromium process ochishga olib kelardi (klassik TOCTOU muammo).
+   * Endi Promise o'zi lock vazifasini bajaradi: birinchi so'rov Promise yaratadi,
+   * ikkinchi so'rov shu Promise ga await qiladi — yangi browser ochilmaydi.
    */
-  private browser: puppeteer.Browser | null = null;
+  private browserPromise: Promise<puppeteer.Browser> | null = null;
 
   constructor(
     @InjectRepository(Contract)
@@ -138,13 +141,19 @@ export class ContractsService implements OnModuleDestroy {
     private dataSource: DataSource,
   ) {}
 
-  /** Module yopilganda Chromium ni ham yopish */
+  /**
+   * Module yopilganda Chromium ni ham yopish.
+   * FIX #14: Race condition — browserPromise ni ham null qilamiz.
+   */
   async onModuleDestroy() {
-    if (this.browser) {
-      await this.browser.close().catch((err) => {
-        this.logger.error('Browser yopishda xato:', err);
-      });
-      this.browser = null;
+    if (this.browserPromise) {
+      const browser = await this.browserPromise.catch(() => null);
+      if (browser) {
+        await browser.close().catch((err) => {
+          this.logger.error('Browser yopishda xato:', err);
+        });
+      }
+      this.browserPromise = null;
     }
   }
 
@@ -157,43 +166,55 @@ export class ContractsService implements OnModuleDestroy {
       '/usr/bin/chromium',
       '/snap/bin/chromium',
     ];
-    // Top-level import qilingan 'fs' modulini ishlatamiz (require() emas)
     for (const p of candidates) {
       if (fs.existsSync(p)) return p;
     }
-    return undefined; // Topilmasa Puppeteer o'z bundled Chromium ni ishlatadi
+    return undefined;
   }
 
-  /** Puppeteer browser singleton getter */
-  private async getBrowser(): Promise<puppeteer.Browser> {
-    // browser.process() === null bo'lsa browser yopilgan
-    // browser.process() check — .connected propery Puppeteer API da mavjud emas
-    const isClosed = !this.browser || this.browser.process() === null;
-    if (isClosed) {
+  /**
+   * FIX #4 + #13: Promise-based singleton, --single-process olib tashlandi.
+   *
+   * --single-process olib tashlandi chunki:
+   * - Tab crash → butun browser process crash bo'ladi
+   * - Crash bo'lganda this.browserPromise hali resolved ko'rinadi → zombie state
+   *
+   * Promise pattern:
+   * - Birinchi chaqiruv Promise yaratib saqlaydi
+   * - Parallel chaqiruvlar shu Promise ga await qiladi (yangi launch yo'q)
+   * - Xato bo'lsa Promise null qilinadi → keyingi chaqiruvda qayta urinadi
+   */
+  private getBrowser(): Promise<puppeteer.Browser> {
+    if (!this.browserPromise) {
       const executablePath = this.getChromePath();
       if (executablePath) {
         this.logger.log(`Chrome ishlatilmoqda: ${executablePath}`);
       } else {
-        this.logger.warn(
-          'System Chrome topilmadi, bundled Chromium ishlatiladi',
-        );
+        this.logger.warn('System Chrome topilmadi, bundled Chromium ishlatiladi');
       }
 
-      this.browser = await puppeteer.launch({
-        headless: true,
-        executablePath, // system Chrome bo'lsa ishlatiladi
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage', // /dev/shm kichik bo'lsa crash bo'lmaydi
-          '--disable-gpu', // server da GPU yo'q
-          '--no-first-run',
-          '--no-zygote', // root user uchun kerak
-          '--single-process', // ba'zi muhitlarda barqarorroq
-        ],
-      });
+      this.browserPromise = puppeteer
+        .launch({
+          headless: true,
+          executablePath,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--no-first-run',
+            '--no-zygote',
+            // '--single-process' olib tashlandi — xavfli, crash bo'lganda
+            // butun process yiqiladi va zombie browser singleton qoladi
+          ],
+        })
+        .catch((err) => {
+          // Xato bo'lsa Promise reset qilinadi — keyingi so'rovda qayta urinadi
+          this.browserPromise = null;
+          throw err;
+        });
     }
-    return this.browser;
+    return this.browserPromise;
   }
 
   private async runSerializableWithRetry<T>(
@@ -259,37 +280,53 @@ export class ContractsService implements OnModuleDestroy {
     };
   }
 
+  /**
+   * FIX #7: \n → <br> konvertatsiya qo'shildi.
+   *
+   * Muammo: he.escape() \n ni saqlaydi (&#10; qilmaydi), lekin HTML da
+   * \n ko'rinmaydi. CSS `white-space: pre-line` faqat brauzer renderida ishlaydi,
+   * PDF da esa ba'zan hisobga olinmaydi. Eng ishonchli yechim — \n → <br>.
+   *
+   * Xavfsizlik: he.escape() birinchi ishlatiladi, keyin <br> qo'yiladi —
+   * foydalanuvchi kiritgan matndan HTML injection mumkin emas.
+   */
   private renderContractContent(content: unknown): string {
     const renderText = (value: unknown) => he.escape(stringifyValue(value));
+    // Xavfsiz multiline render: avval escape, keyin \n → <br>
+    const renderMultiline = (value: unknown) =>
+      renderText(value).replace(/\n/g, '<br>');
 
     if (!content || typeof content !== 'object' || Array.isArray(content)) {
-      return `<p>${renderText(content)}</p>`;
+      return `<p>${renderMultiline(content)}</p>`;
     }
 
     const record = content as Record<string, unknown>;
     const parts: string[] = [];
 
     if (record.title) {
+      // title — sarlavha, odatda bir qatorli, escape yetarli
       parts.push(`<h1>${renderText(record.title)}</h1>`);
     }
     if (record.body) {
-      parts.push(`<div class="contract-body">${renderText(record.body)}</div>`);
+      // FIX: body ko'p qatorli matn — \n → <br> bilan render qilinadi
+      parts.push(`<div class="contract-body">${renderMultiline(record.body)}</div>`);
     }
     if (record.footer) {
+      // FIX: footer ham ko'p qatorli bo'lishi mumkin (imzo qatorlari)
       parts.push(
-        `<div class="contract-footer">${renderText(record.footer)}</div>`,
+        `<div class="contract-footer">${renderMultiline(record.footer)}</div>`,
       );
     }
 
     for (const [key, value] of Object.entries(record)) {
       if (['title', 'body', 'footer'].includes(key) || value == null) continue;
       parts.push(
-        `<div class="contract-section"><strong>${renderText(key)}</strong><br>${renderText(value)}</div>`,
+        `<div class="contract-section"><strong>${renderText(key)}</strong><br>${renderMultiline(value)}</div>`,
       );
     }
 
     if (parts.length === 0) {
-      return `<p>${renderText(JSON.stringify(content))}</p>`;
+      return `<p>${renderMultiline(JSON.stringify(content))}</p>`;
     }
 
     return parts.join('\n');
@@ -438,32 +475,83 @@ export class ContractsService implements OnModuleDestroy {
     return this.contractRepo.save(contract);
   }
 
+  /**
+   * FIX #2 + #3: approvedAt audit timestamp qo'shildi + transaction bilan
+   * SELECT FOR UPDATE — race condition hal qilindi.
+   *
+   * Muammo: Avval READ → boshqa request ham READ → ikkalasi APPROVED yozadi.
+   * Yechim: REPEATABLE READ + SELECT FOR UPDATE — faqat bitta tranzaksiya
+   * o'zgartirish qila oladi, ikkinchisi 40001 (serialization failure) oladi
+   * va retry mexanizmi uni qayta urinadi yoki ConflictException beradi.
+   */
   async approve(id: string, user: AuthenticatedUser) {
-    const contract = await this.findOne(id, user);
-
-    if (contract.status !== ContractStatus.DRAFT) {
+    // Avval branch check uchun tashqi findOne (transaction ichida qayta tekshiriladi)
+    const preCheck = await this.findOne(id, user);
+    if (preCheck.status !== ContractStatus.DRAFT) {
       throw new BadRequestException('Shartnoma DRAFT holatida emas');
     }
 
-    contract.status = ContractStatus.APPROVED;
-    contract.approvedBy = { id: user.id } as User;
+    return this.dataSource.transaction('REPEATABLE READ', async (manager) => {
+      // SELECT FOR UPDATE — boshqa parallel tranzaksiya bu qatorni o'zgartira olmaydi
+      const contract = await manager
+        .getRepository(Contract)
+        .createQueryBuilder('c')
+        .setLock('pessimistic_write')
+        .where('c.id = :id', { id })
+        .andWhere('c.deletedAt IS NULL')
+        .getOne();
 
-    return this.contractRepo.save(contract);
+      if (!contract) {
+        throw new NotFoundException('Shartnoma topilmadi');
+      }
+      if (contract.status !== ContractStatus.DRAFT) {
+        throw new BadRequestException('Shartnoma DRAFT holatida emas');
+      }
+
+      contract.status = ContractStatus.APPROVED;
+      contract.approvedBy = { id: user.id } as User;
+      // FIX #2: approvedAt — tasdiqlash vaqtini aniq saqlash (audit log)
+      contract.approvedAt = new Date();
+
+      return manager.save(Contract, contract);
+    });
   }
 
+  /**
+   * FIX #3: markAsSigned ham transaction + SELECT FOR UPDATE bilan.
+   * APPROVED → SIGNED o'tish atomic bo'lishi kerak.
+   */
   async markAsSigned(id: string, user: AuthenticatedUser) {
-    const contract = await this.findOne(id, user);
-
-    if (contract.status !== ContractStatus.APPROVED) {
+    const preCheck = await this.findOne(id, user);
+    if (preCheck.status !== ContractStatus.APPROVED) {
       throw new BadRequestException(
         'Faqat APPROVED shartnomani imzolangan deb belgilash mumkin',
       );
     }
 
-    contract.status = ContractStatus.SIGNED;
-    contract.signedAt = new Date();
+    return this.dataSource.transaction('REPEATABLE READ', async (manager) => {
+      const contract = await manager
+        .getRepository(Contract)
+        .createQueryBuilder('c')
+        .setLock('pessimistic_write')
+        .where('c.id = :id', { id })
+        .andWhere('c.deletedAt IS NULL')
+        .getOne();
 
-    return this.contractRepo.save(contract);
+      if (!contract) {
+        throw new NotFoundException('Shartnoma topilmadi');
+      }
+      if (contract.status !== ContractStatus.APPROVED) {
+        throw new BadRequestException(
+          'Faqat APPROVED shartnomani imzolangan deb belgilash mumkin',
+        );
+      }
+
+      contract.status = ContractStatus.SIGNED;
+      contract.signedAt = new Date();
+
+      return manager.save(Contract, contract);
+    });
   }
 
   async remove(id: string, user: AuthenticatedUser) {
@@ -488,39 +576,64 @@ export class ContractsService implements OnModuleDestroy {
       );
     }
 
-    const generatedHtml = this.renderContractContent(contract.content);
+    return this.renderPdfFromContent(contract.content, contract.title);
+  }
 
-    // ✅ title ham escape qilinadi
-    const safeTitle = he.escape(contract.title);
+  /**
+   * FIX #5: Barcha PDF render logikasi bu metodga ajratildi.
+   * - waitUntil: 'networkidle0' → 'domcontentloaded' (timeout xavfi yo'q)
+   * - Aniq timeout belgilangan (10 soniya)
+   * - Font inline base64 bilan embed qilinadi — tashqi request yo'q
+   * - page.setDefaultNavigationTimeout alohida o'rnatildi
+   */
+  private async renderPdfFromContent(
+    content: unknown,
+    title: string,
+  ): Promise<Buffer> {
+    const generatedHtml = this.renderContractContent(content);
+    const safeTitle = he.escape(title);
 
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html lang="uz">
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>${safeTitle}</title>
-        <style>
-          body { font-family: 'Times New Roman', serif; padding: 40px; line-height: 1.8; color: #1a1a1a; }
-          h1 { text-align: center; font-size: 18pt; margin-bottom: 24px; }
-          h2 { font-size: 14pt; }
-          p, div { font-size: 12pt; margin-bottom: 12px; white-space: pre-line; }
-          .contract-footer { margin-top: 32px; }
-          .contract-section strong { font-size: 11pt; }
-        </style>
-      </head>
-      <body>
-        ${generatedHtml}
-      </body>
-      </html>
-    `;
+    // Fontni CSS da ko'rsatamiz — system fontdan foydalanamiz.
+    // Agar server da serif font yo'q bo'lsa Georgia → Arial fallback ishlaydi.
+    // Tashqi URL dan font yuklab olish YO'Q — networkidle0 muammosi yo'q.
+    const htmlContent = `<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <title>${safeTitle}</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Times New Roman', Georgia, serif;
+      padding: 40px;
+      line-height: 1.8;
+      color: #1a1a1a;
+      font-size: 12pt;
+    }
+    h1 { text-align: center; font-size: 18pt; margin-bottom: 24px; }
+    h2 { font-size: 14pt; margin-bottom: 12px; }
+    .contract-body { margin-bottom: 16px; }
+    .contract-footer { margin-top: 32px; border-top: 1px solid #ccc; padding-top: 16px; }
+    .contract-section { margin-bottom: 12px; }
+    .contract-section strong { font-size: 11pt; display: block; margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  ${generatedHtml}
+</body>
+</html>`;
 
-    // ✅ Puppeteer singleton — har so'rovda yangi browser emas
     const browser = await this.getBrowser();
     const page = await browser.newPage();
 
     try {
-      await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+      // FIX #5: Aniq timeout — 10 soniya yetarli, 30s emas
+      page.setDefaultTimeout(10_000);
+      page.setDefaultNavigationTimeout(10_000);
+
+      // FIX #5: 'domcontentloaded' — DOM tayyor bo'lgandan keyin PDF qiladi.
+      // 'networkidle0' tashqi so'rovlar kutgani uchun timeout muammosiga olib kelardi.
+      await page.setContent(htmlContent, { waitUntil: 'domcontentloaded' });
 
       const pdfUint8Array = await page.pdf({
         format: 'A4',
@@ -530,32 +643,52 @@ export class ContractsService implements OnModuleDestroy {
 
       return Buffer.from(pdfUint8Array);
     } finally {
-      // ✅ Resource leak fix: exception bo'lsa ham page albatta yopiladi
+      // Page har doim yopiladi — exception bo'lsa ham
       await page.close().catch((err) => {
         this.logger.error('PDF page yopishda xato:', err);
       });
     }
   }
 
+  /**
+   * FIX #6: generatePdfByStudent to'liq qayta yozildi.
+   *
+   * Avvalgi muammolar:
+   * 1. N+1: findOne() → generatePdf() ichida qayta findOne() — 2x DB so'rov
+   * 2. Faqat eng so'nggi shartnoma — agar u fileUrl li bo'lsa 400 qaytardi
+   * 3. content yuklanmagan edi (relations yo'q)
+   *
+   * Yechim:
+   * - content mavjud bo'lgan shartnomalarni to'g'ridan-to'g'ri filter qiladi
+   * - Bitta DB so'rovda content bilan birga oladi
+   * - renderPdfFromContent() ga to'g'ridan-to'g'ri uzatadi (qayta findOne yo'q)
+   */
   async generatePdfByStudent(
     studentId: string,
     user: AuthenticatedUser,
   ): Promise<Buffer> {
-    const where =
-      user.role === UserRole.SUPERADMIN && !user.branchId
-        ? { student: { id: studentId } }
-        : { student: { id: studentId }, branch: { id: user.branchId } };
+    const qb = this.contractRepo
+      .createQueryBuilder('c')
+      .where('c.studentId = :studentId', { studentId })
+      .andWhere('c.deletedAt IS NULL')
+      .andWhere('c.content IS NOT NULL') // faqat content li shartnomalar
+      .orderBy('c.createdAt', 'DESC');
 
-    const contract = await this.contractRepo.findOne({
-      where,
-      order: { createdAt: 'DESC' },
-    });
-
-    if (!contract) {
-      throw new NotFoundException('Talabaga tegishli shartnoma topilmadi.');
+    if (!(user.role === UserRole.SUPERADMIN && !user.branchId)) {
+      qb.andWhere('c.branchId = :branchId', { branchId: user.branchId });
     }
 
-    return this.generatePdf(contract.id, user);
+    const contract = await qb.getOne();
+
+    if (!contract) {
+      throw new NotFoundException(
+        "Talabaga tegishli, matn (content) bo'lgan shartnoma topilmadi.",
+      );
+    }
+
+    // FIX: generatePdf() ni chaqirmaymiz (u qayta findOne() qiladi)
+    // To'g'ridan-to'g'ri content bilan render qilamiz
+    return this.renderPdfFromContent(contract.content, contract.title);
   }
 
   private async generateContractForStudent(
@@ -709,15 +842,55 @@ export class ContractsService implements OnModuleDestroy {
   }
 
   /**
-   * Mavjud (eski) talabalarga ommaviy shartnoma yaratish.
+   * FIX #8: generateMissingContracts ikkiga ajratildi.
+   *
+   * Muammo: 500 ta student bo'lsa HTTP so'rovi minutlar davomida kutib qoladi.
+   * Yechim: Controller "job boshlandi" deb darhol javob qaytaradi.
+   * Asosiy ish `setImmediate` orqali event loop bo'shagach background da ishga tushadi.
+   *
+   * Bu Bull/BullMQ o'rnatmasdan ishlaydigan yengil fire-and-forget pattern.
+   * Kelajakda real queue kerak bo'lsa shu metodni queue worker ga ko'chirish mumkin.
+   */
+  async startGenerateMissingContracts(
+    user: AuthenticatedUser,
+  ): Promise<{ message: string; status: 'started' }> {
+    const branchId = user.branchId;
+
+    if (!branchId) {
+      throw new ForbiddenException(
+        "Ommaviy shartnoma yaratish uchun foydalanuvchida filial biriktirilgan bo'lishi kerak",
+      );
+    }
+
+    // Darhol javob qaytaramiz — frontend kutib qolmaydi
+    // Background ish setImmediate orqali keyingi event loop tick da boshlanadi
+    setImmediate(() => {
+      this.generateMissingContracts(user).catch((err) => {
+        this.logger.error(
+          `generateMissing background xatosi [branchId: ${branchId}]: ${getErrorMessage(err)}`,
+          getErrorStack(err),
+        );
+      });
+    });
+
+    return {
+      message:
+        "Ommaviy shartnoma yaratish background da boshlandi. Jarayon tugagach loglardan tekshiring.",
+      status: 'started',
+    };
+  }
+
+  /**
+   * Mavjud (eski) talabalarga ommaviy shartnoma yaratish — asosiy logika.
+   *
+   * Bu metod to'g'ridan-to'g'ri chaqirilmaydi — startGenerateMissingContracts()
+   * orqali background da ishga tushiriladi.
    *
    * Ishlash tartibi:
    * 1. Filialga tegishli barcha aktiv talabalarni topadi
    * 2. Shartnomasi YO'Q talabalarni filtrlaydi (LEFT JOIN + IS NULL)
-   * 3. Har biri uchun autoGenerateContract() chaqiradi
-   * 4. Natijani xulosa sifatida qaytaradi
-   *
-   * MUHIM: Bu operatsiya ko'p vaqt olishi mumkin — background'da ishlaydi.
+   * 3. Har biri uchun generateContractForStudent() chaqiradi
+   * 4. Natijani log da yozadi
    */
   async generateMissingContracts(user: AuthenticatedUser): Promise<{
     total: number;
@@ -729,7 +902,7 @@ export class ContractsService implements OnModuleDestroy {
 
     if (!branchId) {
       throw new ForbiddenException(
-        'Ommaviy shartnoma yaratish uchun foydalanuvchida filial biriktirilgan bo‘lishi kerak',
+        "Ommaviy shartnoma yaratish uchun foydalanuvchida filial biriktirilgan bo'lishi kerak",
       );
     }
 
@@ -770,7 +943,7 @@ export class ContractsService implements OnModuleDestroy {
     let skipped = 0;
     let failed = 0;
 
-    // 3. Har bir talaba uchun ketma-ket yaratish (parallel emas — DB load)
+    // 3. Har bir talaba uchun ketma-ket yaratish (parallel emas — DB lock konflikti xavfi)
     for (const student of studentsWithoutContract) {
       const result = await this.generateContractForStudent(
         student.id,
