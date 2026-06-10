@@ -8,7 +8,9 @@ import { Payment } from '../entities/payment.entity';
 import { Group } from '../entities/group.entity';
 import { Attendance } from '../entities/attendance.entity';
 import { ExpensesService } from '../expenses/expenses.service';
-import { UserRole } from '../entities/user.entity';
+import { User, UserRole } from '../entities/user.entity';
+import { SalaryService } from '../salarys/salary.service';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 @Injectable()
 export class DashboardService {
@@ -20,14 +22,16 @@ export class DashboardService {
     @InjectRepository(Group) private groupRepo: Repository<Group>,
     @InjectRepository(Attendance)
     private attendanceRepo: Repository<Attendance>,
+    @InjectRepository(User) private userRepo: Repository<User>,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly expensesService: ExpensesService,
+    private readonly salaryService: SalaryService,
   ) {}
 
   async getSummary(
     startDate: Date,
     endDate: Date,
-    user?: any,
+    user?: AuthenticatedUser,
     branchIdFilter?: string,
   ) {
     const isManager = user?.role === UserRole.MANAGER;
@@ -121,20 +125,48 @@ export class DashboardService {
       incomePromise = paymentQuery.getRawOne();
     }
 
-    const [debtRes, activeStudents, newStudents, attendance, activeGroups, totalExpenses] =
-      await Promise.all(promises);
+    const [
+      debtRes,
+      activeStudents,
+      newStudents,
+      attendance,
+      activeGroups,
+      totalExpenses,
+    ] = await Promise.all(promises);
 
     const incomeRes = incomePromise ? await incomePromise : null;
     const totalIncome = Number(incomeRes?.total) || 0;
     const totalDebt = Math.abs(Number(debtRes?.totalDebt) || 0);
-    const profit = isManager ? null : totalIncome - totalExpenses;
+
+    // O'qituvchilar oyligini hisoblash
+    let totalTeacherSalaries = 0;
+    if (!isManager) {
+      const teacherQuery: any = { role: UserRole.TEACHER };
+      if (branchId) teacherQuery.branch = { id: branchId };
+      const teachers = await this.userRepo.find({ where: teacherQuery });
+      const startStr = startDate.toISOString().split('T')[0];
+      const endStr = endDate.toISOString().split('T')[0];
+      
+      const salaryResults = await Promise.all(
+        teachers.map((t) =>
+          this.salaryService
+            .calculateTeacherSalary(t.id, startStr, endStr)
+            .catch(() => ({ totalSalary: 0 }))
+        )
+      );
+      totalTeacherSalaries = salaryResults.reduce(
+        (sum, res) => sum + (res?.totalSalary || 0),
+        0
+      );
+    }
+
+    const profit = isManager ? null : totalIncome - totalExpenses - totalTeacherSalaries;
 
     // MANAGER uchun kirim ma'lumotlari yashiriladi
     const result = {
-      ...(isManager
-        ? {}
-        : { totalIncome, profit }),
+      ...(isManager ? {} : { totalIncome, profit }),
       totalExpenses,
+      totalTeacherSalaries,
       totalPending: totalDebt,
       activeStudents,
       newStudents,

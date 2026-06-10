@@ -124,7 +124,12 @@ export class UsersController {
   }
 
   @Get()
-  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(
+    UserRole.SUPERADMIN,
+    UserRole.ADMIN,
+    UserRole.TEACHER,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
     summary: "Foydalanuvchilar ro'yxati",
     description: "Role, ism yoki login bo'yicha qidirish va sahifalash.",
@@ -173,7 +178,7 @@ export class UsersController {
   }
 
   @Get('all/deleted')
-  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "O'chirilgan foydalanuvchilar ro'yxati",
     description:
@@ -220,7 +225,7 @@ export class UsersController {
   }
 
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
   @ApiOperation({
     summary: "ID bo'yicha foydalanuvchi olish",
     description: 'teachingGroups relation bilan birga qaytariladi.',
@@ -246,7 +251,7 @@ export class UsersController {
   }
 
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Foydalanuvchini qisman tahrirlash',
     description:
@@ -281,7 +286,7 @@ export class UsersController {
   }
 
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Foydalanuvchini arxivlash (soft-delete)',
     description:
@@ -316,7 +321,7 @@ export class UsersController {
   }
 
   @Post(':id/restore')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Arxivlangan foydalanuvchini tiklash',
     description: 'Soft-delete qilingan foydalanuvchini faol holatga qaytaradi.',
@@ -344,7 +349,7 @@ export class UsersController {
   }
 
   @Delete(':id/permanent')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Arxivlangan foydalanuvchini butunlay o'chirish",
     description:

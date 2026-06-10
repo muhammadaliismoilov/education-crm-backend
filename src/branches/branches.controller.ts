@@ -9,6 +9,7 @@ import {
   Delete,
   UseGuards,
   ParseUUIDPipe,
+  ForbiddenException,
   Req,
   Query,
 } from '@nestjs/common';
@@ -137,13 +138,13 @@ export class BranchesController {
 
   // ─── ADMIN — O'z filialining lokatsiyasini tahrirlash ─────────────────────
   @Patch('my-location')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
-    summary: 'O\'z filiali lokatsiyasini tahrirlash (faqat Admin)',
+    summary: "O'z filiali lokatsiyasini tahrirlash (faqat Admin)",
     description:
-      'Admin FAQAT o\'z filialining latitude va longitude koordinatalarini ' +
-      'yangilashi mumkin. Boshqa ma\'lumotlar (nom, telefon, subdomen va h.k.) ' +
-      'o\'zgartirilmaydi. Branch ID JWT tokendan avtomatik olinadi.',
+      "Admin FAQAT o'z filialining latitude va longitude koordinatalarini " +
+      "yangilashi mumkin. Boshqa ma'lumotlar (nom, telefon, subdomen va h.k.) " +
+      "o'zgartirilmaydi. Branch ID JWT tokendan avtomatik olinadi.",
   })
   @ApiResponse({
     status: 200,
@@ -158,7 +159,7 @@ export class BranchesController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Ruxsat yo\'q — admin boshqa filialga biriktirilmagan',
+    description: "Ruxsat yo'q — admin boshqa filialga biriktirilmagan",
     schema: {
       example: {
         statusCode: 403,
@@ -168,23 +169,20 @@ export class BranchesController {
       },
     },
   })
-  updateMyLocation(
-    @Body() dto: UpdateBranchLocationDto,
-    @Req() req: any,
-  ) {
+  updateMyLocation(@Body() dto: UpdateBranchLocationDto, @Req() req: any) {
     return this.branchesService.updateLocation(dto, req.user);
   }
 
   // ─── ADMIN — O'qituvchining qo'lda davomat sozlamasini o'zgartirish ─────────
   @Patch('teacher-manual-attendance')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPERADMIN)
   @ApiOperation({
     summary: "O'qituvchi qo'lda davomat sozlamasini o'zgartirish (faqat Admin)",
     description:
       "Admin o'z filiali uchun o'qituvchiga qo'lda davomat qilish huquqini " +
-      'yoqadi yoki o\'chiradi. ' +
-      'true → O\'qituvchi qo\'lda ham davomat qila oladi. ' +
-      'false → O\'qituvchi faqat FaceID orqali davomat qila oladi.',
+      "yoqadi yoki o'chiradi. " +
+      "true → O'qituvchi qo'lda ham davomat qila oladi. " +
+      "false → O'qituvchi faqat FaceID orqali davomat qila oladi.",
   })
   @ApiResponse({
     status: 200,
@@ -215,6 +213,31 @@ export class BranchesController {
     return this.branchesService.toggleTeacherManualAttendance(dto, req.user);
   }
 
+  // ─── TEACHER/MANAGER/ADMIN — O'qituvchining qo'lda davomat holatini olish ─────────
+  @Get('teacher-manual-attendance/status')
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.TEACHER,
+    UserRole.MANAGER,
+    UserRole.SUPERADMIN,
+  )
+  @ApiOperation({
+    summary: "O'qituvchi qo'lda davomat qila olish holatini olish",
+    description: 'Filialning allowTeacherManualAttendance holatini qaytaradi.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Holat muvaffaqiyatli olindi',
+    schema: {
+      example: WRAP({
+        allowTeacherManualAttendance: true,
+      }),
+    },
+  })
+  getTeacherManualAttendanceStatus(@Req() req: any) {
+    return this.branchesService.getTeacherManualAttendanceStatus(req.user);
+  }
+
   @Get()
   @ApiOperation({
     summary: 'Barcha filiallarni olish',
@@ -231,11 +254,18 @@ export class BranchesController {
     return this.branchesService.findAll(page, limit);
   }
 
-  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
+  @Roles(
+    UserRole.SUPERADMIN,
+    UserRole.ADMIN,
+    UserRole.TEACHER,
+    UserRole.MANAGER,
+  )
   @Get(':id')
   @ApiOperation({
     summary: "Filial ma'lumotlarini olish",
-    description: "ID bo'yicha filial to'liq ma'lumotlari qaytariladi.",
+    description:
+      "ID bo'yicha filial to'liq ma'lumotlari qaytariladi. " +
+      "Teacher faqat o'z filiallini ko'ra oladi (allowTeacherManualAttendance sozlamasini bilish uchun).",
   })
   @ApiParam({ name: 'id', description: 'Filial UUID si', format: 'uuid' })
   @ApiResponse({
@@ -244,11 +274,33 @@ export class BranchesController {
     schema: { example: WRAP(BRANCH_EXAMPLE) },
   })
   @ApiResponse({
+    status: 403,
+    description: "Teacher o'z filialidan boshqa filialni ko'ra olmaydi",
+    schema: {
+      example: {
+        statusCode: 403,
+        message: "Siz faqat o'z filialingizni ko'ra olasiz",
+        error: 'Forbidden',
+      },
+    },
+  })
+  @ApiResponse({
     status: 404,
     description: 'Filial topilmadi',
     schema: { example: NOT_FOUND() },
   })
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+    // Teacher va Manager faqat o'z filialini ko'ra oladi
+    if (
+      req.user?.role === UserRole.TEACHER ||
+      req.user?.role === UserRole.MANAGER
+    ) {
+      if (req.user.branchId !== id) {
+        throw new ForbiddenException(
+          "Siz faqat o'z filialingizni ko'ra olasiz",
+        );
+      }
+    }
     return this.branchesService.findOne(id);
   }
 

@@ -6,14 +6,16 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, In, Between } from 'typeorm';
+import { DataSource, QueryRunner, Repository, In } from 'typeorm';
 import { DocumentType, Student } from '../entities/students.entity';
 import { Group } from '../entities/group.entity';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 import { StudentDiscount } from '../entities/studentDiscount';
-import { Invoice } from '../entities/invoice.entity';
+import { Invoice, InvoiceStatus } from '../entities/invoice.entity';
 import { Payment } from '../entities/payment.entity';
 import { FaceService } from '../common/faceId/faceId.service';
+import { ContractsService } from '../contracts/contracts.service';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -28,6 +30,7 @@ export class StudentsService {
     private discountRepo: Repository<StudentDiscount>,
     private dataSource: DataSource,
     private faceService: FaceService,
+    private contractsService: ContractsService,
   ) {}
 
   // ─────────────────────────────────────────────
@@ -72,23 +75,22 @@ export class StudentsService {
     };
   }
 
-  private getCurrentMonthBounds(): { start: Date; end: Date } {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const end = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
-    );
-    return { start, end };
+  private getCurrentMonthBounds(): { billingMonth: string } {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Tashkent',
+      year: 'numeric',
+      month: '2-digit',
+    }).formatToParts(new Date());
+    const year = Number(parts.find((part) => part.type === 'year')?.value);
+    const month = Number(parts.find((part) => part.type === 'month')?.value);
+
+    return {
+      billingMonth: `${year}-${String(month).padStart(2, '0')}-01`,
+    };
   }
 
   private async recalculateStudentBalance(
-    queryRunner: any,
+    queryRunner: QueryRunner,
     studentId: string,
   ): Promise<void> {
     const paidRow = await queryRunner.manager
@@ -101,6 +103,7 @@ export class StudentsService {
       .createQueryBuilder(Invoice, 'i')
       .select('SUM(CAST(i.amount AS DECIMAL))', 'totalInvoiced')
       .where('i.studentId = :studentId', { studentId })
+      .andWhere('i.status = :status', { status: InvoiceStatus.ACTIVE })
       .getRawOne();
 
     const totalPaid = Number(paidRow?.totalPaid || 0);
@@ -152,7 +155,16 @@ export class StudentsService {
   // 1. CREATE
   // ─────────────────────────────────────────────
 
-  async create(dto: CreateStudentDto, user: any, file?: Express.Multer.File) {
+  async create(
+    dto: CreateStudentDto,
+    user: AuthenticatedUser,
+    file?: Express.Multer.File,
+  ) {
+    const branchId =
+      user.role === 'superadmin' && dto.branchId
+        ? dto.branchId
+        : user.branchId;
+
     let faceDescriptor: number[] | undefined;
     if (file) {
       faceDescriptor = await this.verifyFace(file);
@@ -167,31 +179,25 @@ export class StudentsService {
       const { groupIds, pinfl, documentNumber, discounts, ...studentData } =
         dto;
 
-      const existing = await queryRunner.manager.findOne(Student, {
-        where: [
-          { phone: dto.phone },
-          ...(pinfl ? [{ pinfl }] : []),
-          ...(documentNumber ? [{ documentNumber }] : []),
-        ],
-      });
+      // Bo'sh stringlarni null ga aylantirish (data tozaligi uchun)
+      const safePinfl = pinfl?.trim() || null;
+      const safeDocumentNumber = documentNumber?.trim() || null;
 
-      if (existing) {
-        if (existing.phone === dto.phone)
+      // ─── UNIQUE DOCUMENT NUMBER CHECK ───
+      if (safeDocumentNumber) {
+        const existingDoc = await queryRunner.manager.findOne(Student, {
+          where: { documentNumber: safeDocumentNumber },
+        });
+        if (existingDoc) {
           throw new ConflictException(
-            "Ushbu telefon raqamli o'quvchi allaqachon mavjud",
+            `Hujjat raqami '${safeDocumentNumber}' bo'lgan talaba allaqachon ro'yxatdan o'tgan`,
           );
-        if (pinfl && existing.pinfl === pinfl)
-          throw new ConflictException(
-            "Ushbu JSHSHIR (PINFL) raqamli o'quvchi allaqachon mavjud",
-          );
-        if (documentNumber && existing.documentNumber === documentNumber)
-          throw new ConflictException(
-            "Ushbu seria raqamli o'quvchi allaqachon mavjud",
-          );
+        }
       }
 
-      const groups = await queryRunner.manager.findBy(Group, {
-        id: In(groupIds),
+      const groups = await queryRunner.manager.find(Group, {
+        where: { id: In(groupIds) },
+        relations: ['branch'],
       });
       if (groups.length !== groupIds.length) {
         throw new NotFoundException(
@@ -204,19 +210,14 @@ export class StudentsService {
         phone: studentData.phone,
         parentName: studentData.parentName,
         parentPhone: studentData.parentPhone,
-        documentNumber,
-        pinfl,
+        documentNumber: safeDocumentNumber,
+        pinfl: safePinfl,
         birthDate: studentData.birthDate
           ? new Date(studentData.birthDate)
           : undefined,
         documentType: studentData.documentType as DocumentType,
-        direction:
-          dto.direction || (groups.length > 0 ? groups[0].name : undefined),
         enrolledGroups: groups,
-        branch:
-          user.role === 'superadmin' && dto.branchId
-            ? { id: dto.branchId }
-            : { id: user.branchId },
+        branch: branchId ? { id: branchId } : undefined,
       });
 
       let saved = await queryRunner.manager.save(Student, student);
@@ -261,6 +262,7 @@ export class StudentsService {
 
       // SENIOR: Batch Insert for Invoices
       let initialBalanceDebt = 0;
+      const { billingMonth } = this.getCurrentMonthBounds();
       const invoicesToSave: Invoice[] = [];
       for (const group of groups) {
         const discount = discounts?.find((d) => d.groupId === group.id);
@@ -270,12 +272,16 @@ export class StudentsService {
             : Number(group.price || 0);
 
         if (effectivePrice > 0) {
+          // Guruh branch'ini, yo'q bo'lsa student branch'ini olish (cron.service bilan bir xil logika)
+          const invoiceBranchId = group.branch?.id ?? saved.branch?.id ?? null;
           invoicesToSave.push(
             queryRunner.manager.create(Invoice, {
               amount: effectivePrice,
               type: 'monthly_fee',
+              billingMonth,
               student: { id: saved.id },
               group: { id: group.id },
+              branch: invoiceBranchId ? { id: invoiceBranchId } : null,
             }),
           );
           initialBalanceDebt += effectivePrice;
@@ -304,7 +310,42 @@ export class StudentsService {
       await queryRunner.commitTransaction();
 
       // Transaction tashqarisida findOne chaqiramiz (o'qish xavfsiz)
-      return await this.findOne(saved.id);
+      const result = await this.findOne(saved.id);
+
+      // ✅ FIX: autoGenerateContract 3 ta sababga ko'ra tashqarida va setImmediate bilan:
+      //
+      // 1. try/catch TASHQARISIDA — commit bo'lgandan keyin xato bo'lsa
+      //    catch bloki rollbackTransaction() ga urinadi → AlreadyCommittedError
+      //
+      // 2. setImmediate (fire-and-forget) — HTTP response kechikmasdan qaytadi.
+      //    Shartnoma yaratish serializable transaction + 3x retry bo'lgani uchun sekin bo'lishi mumkin.
+      //
+      // 3. O'z try/catch bilan — unhandled exception server ni yiqitmaydi.
+      if (branchId) {
+        setImmediate(async () => {
+          try {
+            const generatedContract =
+              await this.contractsService.autoGenerateContract(
+                saved.id,
+                branchId,
+                user.id,
+              );
+            if (!generatedContract) {
+              this.logger.warn(
+                `Talaba yaratildi, lekin avtomatik shartnoma yozilmadi [student: ${saved.id}]`,
+              );
+            }
+          } catch (contractErr) {
+            // Shartnoma yaratilmasa ham talaba saqlangan — kritik emas, faqat log
+            this.logger.error(
+              `autoGenerateContract xatosi [student: ${saved.id}]: ${contractErr?.message}`,
+              contractErr?.stack,
+            );
+          }
+        });
+      }
+
+      return result;
     } catch (error) {
       await queryRunner.rollbackTransaction();
       this.deleteFileIfExists(file?.path); // Temp faylni o'chirish
@@ -319,10 +360,19 @@ export class StudentsService {
       ) {
         throw error;
       }
-      if (error.code === '23505')
-        throw new ConflictException(
-          "Ma'lumotlar bazasida takrorlanish yuz berdi.",
+      if (error.code === '23505') {
+        this.logger.warn(
+          `DB takrorlanish xatosi: ${error.detail}`,
         );
+        if (error.detail?.includes('documentNumber') || error.detail?.includes('document_number')) {
+          throw new ConflictException(
+            "Ushbu hujjat raqami (passport/birth certificate) bilan boshqa talaba ro'yxatdan o'tgan",
+          );
+        }
+        throw new BadRequestException(
+          "Ma'lumotlar bazasida kutilmagan takrorlanish yuz berdi.",
+        );
+      }
 
       this.logger.error(
         `Talaba yaratishda xatolik [tel: ${dto.phone}]`,
@@ -334,6 +384,7 @@ export class StudentsService {
     }
   }
 
+
   // ─────────────────────────────────────────────
   // 2. FIND ALL
   // ─────────────────────────────────────────────
@@ -342,7 +393,7 @@ export class StudentsService {
     groupName?: string,
     page = 1,
     limit = 10,
-    user?: any,
+    user?: AuthenticatedUser,
     branchId?: string,
   ) {
     const query = this.studentRepo
@@ -363,13 +414,13 @@ export class StudentsService {
     if (search) {
       const cleanSearch = search.replace(/[\s\-\(\)]/g, '');
       query.andWhere(
-        '(student.fullName ILike :search OR student.phone ILike :cleanSearch)',
+        '(student.fullName ILike :search OR student.phone ILike :cleanSearch OR group.name ILike :search)',
         { search: `%${search}%`, cleanSearch: `%${cleanSearch}%` },
       );
     }
 
     if (groupName) {
-      query.andWhere('student.direction = :groupName', { groupName });
+      query.andWhere('group.name = :groupName', { groupName });
     }
 
     const [items, total] = await query
@@ -392,7 +443,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 3. FIND ONE
   // ─────────────────────────────────────────────
-  async findOne(id: string, user?: any) {
+  async findOne(id: string, user?: AuthenticatedUser) {
     const student = await this.studentRepo.findOne({
       where: { id },
       relations: [
@@ -427,7 +478,7 @@ export class StudentsService {
   async update(
     id: string,
     dto: UpdateStudentDto,
-    user: any,
+    user: AuthenticatedUser,
     file?: Express.Multer.File,
   ) {
     let faceDescriptor: number[] | undefined;
@@ -476,33 +527,23 @@ export class StudentsService {
         );
       }
 
-      if (phone?.trim() || pinfl?.trim() || documentNumber?.trim()) {
-        const conflictCheck = await queryRunner.manager.findOne(Student, {
-          where: [
-            ...(phone?.trim() ? [{ phone }] : []),
-            ...(pinfl?.trim() ? [{ pinfl }] : []),
-            ...(documentNumber?.trim() ? [{ documentNumber }] : []),
-          ],
+      // Bo'sh stringlarni null ga aylantirish
+      const safePinfl = pinfl?.trim() || null;
+      const safeDocumentNumber = documentNumber?.trim() || null;
+
+      // ─── UNIQUE DOCUMENT NUMBER CHECK ───
+      if (documentNumber !== undefined && safeDocumentNumber && safeDocumentNumber !== student.documentNumber) {
+        const existingDoc = await queryRunner.manager.findOne(Student, {
+          where: { documentNumber: safeDocumentNumber },
         });
-        if (conflictCheck && conflictCheck.id !== id) {
-          if (phone?.trim() && conflictCheck.phone === phone)
-            throw new ConflictException(
-              "Ushbu telefon raqami boshqa o'quvchida band",
-            );
-          if (pinfl?.trim() && conflictCheck.pinfl === pinfl)
-            throw new ConflictException("Ushbu PINFL boshqa o'quvchida band");
-          if (
-            documentNumber?.trim() &&
-            conflictCheck.documentNumber === documentNumber
-          )
-            throw new ConflictException(
-              "Ushbu hujjat raqami boshqa o'quvchida band",
-            );
+        if (existingDoc && existingDoc.id !== student.id) {
+          throw new ConflictException(
+            `Hujjat raqami '${safeDocumentNumber}' bo'lgan talaba allaqachon ro'yxatdan o'tgan`,
+          );
         }
       }
 
       let newGroupsToCharge: Group[] = [];
-      let needsBalanceRecalc = false;
       if (groupIds && groupIds.length > 0) {
         const groups = await queryRunner.manager.findBy(Group, {
           id: In(groupIds),
@@ -516,7 +557,6 @@ export class StudentsService {
         newGroupsToCharge = groups.filter((g) => !oldGroupIds.has(g.id));
 
         student.enrolledGroups = groups;
-        if (!dto.direction?.trim()) student.direction = groups[0].name;
       }
 
       if (user.role === 'superadmin' && branchId) {
@@ -536,14 +576,10 @@ export class StudentsService {
         updateData.parentPhone,
         student.parentPhone,
       );
-      student.pinfl = this.keepIfEmpty(pinfl, student.pinfl);
+      student.pinfl = this.keepIfEmpty(safePinfl, student.pinfl);
       student.documentNumber = this.keepIfEmpty(
-        documentNumber,
+        safeDocumentNumber,
         student.documentNumber,
-      );
-      student.direction = this.keepIfEmpty(
-        updateData.direction,
-        student.direction,
       );
 
       if (updateData.documentType?.trim())
@@ -609,49 +645,9 @@ export class StudentsService {
         }
       }
 
-      // Yangi qo'shilgan guruhlar uchun initial invoice
-      if (newGroupsToCharge.length > 0) {
-        const { start, end } = this.getCurrentMonthBounds();
-        const existingInvoices = await queryRunner.manager.find(Invoice, {
-          where: {
-            student: { id },
-            type: 'monthly_fee',
-            createdAt: Between(start, end),
-          },
-          relations: ['group'],
-        });
-
-        const invoicesToSave: Invoice[] = [];
-
-        for (const group of newGroupsToCharge) {
-          const discount = discounts?.find((d) => d.groupId === group.id);
-          const effectivePrice =
-            discount && Number(discount.customPrice) > 0
-              ? Number(discount.customPrice)
-              : Number(group.price || 0);
-
-          if (effectivePrice > 0) {
-            const hasExisting = existingInvoices.some(
-              (i) => i.group?.id === group.id,
-            );
-            if (!hasExisting) {
-              invoicesToSave.push(
-                queryRunner.manager.create(Invoice, {
-                  amount: effectivePrice,
-                  type: 'monthly_fee',
-                  student: { id },
-                  group: { id: group.id },
-                }),
-              );
-              needsBalanceRecalc = true;
-            }
-          }
-        }
-
-        if (invoicesToSave.length > 0) {
-          await queryRunner.manager.save(Invoice, invoicesToSave);
-        }
-      }
+      // ✅ MUHIM: Invoice yaratish logikasi BU YERDA YO'Q
+      // Guruhga qo'shish/chiqarish faqat groups.service.ts orqali invoice yaratadi
+      // students.service.ts faqat ManyToMany relation va shaxsiy ma'lumotlarni yangilaydi
 
       // SENIOR APPROACH: Photo & Biometric Integrity Safe replacement
       if (dto.removePhoto === true && student.photoUrl) {
@@ -673,7 +669,9 @@ export class StudentsService {
       }
 
       const saved = await queryRunner.manager.save(Student, student);
-      if (needsBalanceRecalc) {
+
+      // Guruhlar o'zgarganda yoki discount o'zgarganda balance har doim qayta hisoblanadi
+      if (newGroupsToCharge.length > 0 || (discounts && discounts.length > 0)) {
         await this.recalculateStudentBalance(queryRunner, saved.id);
       }
 
@@ -704,10 +702,19 @@ export class StudentsService {
       ) {
         throw error;
       }
-      if (error.code === '23505')
-        throw new ConflictException(
-          "Ma'lumotlar bazasida takrorlanish yuz berdi",
+      if (error.code === '23505') {
+        this.logger.warn(
+          `DB takrorlanish xatosi [id: ${id}]: ${error.detail}`,
         );
+        if (error.detail?.includes('documentNumber') || error.detail?.includes('document_number')) {
+          throw new ConflictException(
+            "Ushbu hujjat raqami (passport/birth certificate) bilan boshqa talaba ro'yxatdan o'tgan",
+          );
+        }
+        throw new BadRequestException(
+          "Ma'lumotlar bazasida kutilmagan takrorlanish yuz berdi.",
+        );
+      }
 
       this.logger.error(`Talaba yangilashda xatolik [id: ${id}]`, error.stack);
       throw error;
@@ -719,7 +726,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 5. REMOVE
   // ─────────────────────────────────────────────
-  async remove(id: string, user: any) {
+  async remove(id: string, user: AuthenticatedUser) {
     const student = await this.studentRepo.findOne({
       where: { id },
       relations: ['branch'],
@@ -739,7 +746,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 6. FIND DELETED
   // ─────────────────────────────────────────────
-  async findAllDeleted(search?: string, page = 1, limit = 10, user?: any) {
+  async findAllDeleted(search?: string, page = 1, limit = 10, user?: AuthenticatedUser) {
     const query = this.studentRepo
       .createQueryBuilder('student')
       .withDeleted()
@@ -780,7 +787,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 7. RESTORE
   // ─────────────────────────────────────────────
-  async restore(id: string, user: any) {
+  async restore(id: string, user: AuthenticatedUser) {
     const student = await this.studentRepo.findOne({
       where: { id },
       withDeleted: true,
@@ -792,6 +799,17 @@ export class StudentsService {
       throw new NotFoundException("Student topilmadi (ruxsat yo'q)");
     }
 
+    if (student.documentNumber) {
+      const conflictingStudent = await this.studentRepo.findOne({
+        where: { documentNumber: student.documentNumber },
+      });
+      if (conflictingStudent && conflictingStudent.id !== student.id) {
+        throw new ConflictException(
+          `Hujjat raqami '${student.documentNumber}' bo'lgan faol talaba mavjud. Uni tiklab bo'lmaydi.`,
+        );
+      }
+    }
+
     await this.studentRepo.restore(id);
     // SABABI: Qayta tiklash ham audit uchun muhim harakat
     this.logger.log(`Talaba qayta tiklandi [id: ${id}]`);
@@ -801,7 +819,7 @@ export class StudentsService {
   // ─────────────────────────────────────────────
   // 8. HARD DELETE (permanent)
   // ─────────────────────────────────────────────
-  async hardDelete(id: string, user: any) {
+  async hardDelete(id: string, user: AuthenticatedUser) {
     const student = await this.studentRepo.findOne({
       where: { id },
       withDeleted: true,

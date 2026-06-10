@@ -5,11 +5,31 @@ import {
   CreateDateColumn,
   ManyToOne,
   JoinColumn,
+  Index,
 } from 'typeorm';
 import { Student } from './students.entity';
 import { Group } from './group.entity';
 import { Branch } from './branch.entity';
 
+/**
+ * Invoice holatlari:
+ * - ACTIVE:    Haqiqiy qarz — balance hisobida ishtirok etadi
+ * - CANCELLED: Bekor qilingan — balance hisobida QATNASHMAYDI, faqat tarix uchun
+ */
+export enum InvoiceStatus {
+  ACTIVE = 'ACTIVE',
+  CANCELLED = 'CANCELLED',
+}
+
+@Index(
+  'IDX_invoices_monthly_student_group_month_unique',
+  ['student', 'group', 'billingMonth'],
+  {
+    unique: true,
+    where:
+      `"type" = 'monthly_fee' AND "groupId" IS NOT NULL AND "billingMonth" IS NOT NULL AND "status" = 'ACTIVE'`,
+  },
+)
 @Entity('invoices')
 export class Invoice {
   @PrimaryGeneratedColumn('uuid')
@@ -20,6 +40,16 @@ export class Invoice {
 
   @Column({ type: 'varchar', length: 50, default: 'monthly_fee' })
   type: string; // 'monthly_fee', 'joining_fee', 'penalty', etc.
+
+  @Column({
+    type: 'enum',
+    enum: InvoiceStatus,
+    default: InvoiceStatus.ACTIVE,
+  })
+  status: InvoiceStatus;
+
+  @Column({ type: 'date', nullable: true })
+  billingMonth: string | null;
 
   @CreateDateColumn()
   createdAt: Date;

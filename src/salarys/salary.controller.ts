@@ -68,7 +68,7 @@ export class SalaryController {
   // GET /salary/estimated-all
   // ─────────────────────────────────────────────
   @Get('estimated-all')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Barcha o'qituvchilarning hisoblanayotgan oyliklari",
     description:
@@ -101,7 +101,12 @@ export class SalaryController {
             ],
           },
         ],
-        meta: { totalItems: 2, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+        meta: {
+          totalItems: 2,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
         timestamp: '2026-03-13T10:00:00.000Z',
         startDate: '2026-03-01',
         endDate: '2026-03-31',
@@ -128,7 +133,7 @@ export class SalaryController {
   // GET /salary/calculate
   // ─────────────────────────────────────────────
   @Get('calculate')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "O'qituvchi oyligini guruhlar kesimida hisoblash",
     description:
@@ -162,6 +167,9 @@ export class SalaryController {
         teacherName: 'Jasur Toshmatov',
         startDate: '2026-03-01',
         endDate: '2026-03-31',
+        daysCount: 31,
+        totalLessons: 60,
+        averageHourlyRate: 40000,
         totalSalary: 2400000,
         details: [
           {
@@ -218,7 +226,7 @@ export class SalaryController {
   // POST /salary/pay
   // ─────────────────────────────────────────────
   @Post('pay')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Hisoblangan oylikni bazaga saqlash (to'lash)",
     description:
@@ -263,7 +271,7 @@ export class SalaryController {
   // GET /salary/all
   // ─────────────────────────────────────────────
   @Get('all')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Barcha to'langan oyliklar ro'yxati",
     description:
@@ -277,7 +285,12 @@ export class SalaryController {
     schema: {
       example: WRAP({
         data: [PAYOUT_EXAMPLE],
-        meta: { totalItems: 1, totalPages: 1, currentPage: 1, itemsPerPage: 10 },
+        meta: {
+          totalItems: 1,
+          totalPages: 1,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
       }),
     },
   })
@@ -294,7 +307,7 @@ export class SalaryController {
   // GET /salary/:id
   // ─────────────────────────────────────────────
   @Get(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Bitta oylik to'lovi tafsilotlari",
     description: 'teacher relation bilan birga qaytariladi.',
@@ -318,7 +331,7 @@ export class SalaryController {
   // PATCH /salary/:id
   // ─────────────────────────────────────────────
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "To'lov miqdorini tahrirlash",
     description: "Faqat amount o'zgaradi. Teacher va oy o'zgarmaydi.",
@@ -363,7 +376,7 @@ export class SalaryController {
   // DELETE /salary/:id
   // ─────────────────────────────────────────────
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "To'lovni o'chirish (bekor qilish)",
     description: "To'lov bazadan butunlay o'chiriladi (hard delete).",

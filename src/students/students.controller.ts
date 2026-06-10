@@ -35,6 +35,7 @@ import { Roles } from '../common/guards/roles.decarator';
 import { CreateStudentDto, UpdateStudentDto } from './student.dto';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { IAuthenticatedRequest } from '../common/interfaces/auth.interface';
 
 // ─── Reusable example lar ───────────────────────────────────────────────────
 
@@ -48,7 +49,6 @@ const STUDENT_EXAMPLE = {
   documentNumber: 'AB1234567',
   pinfl: '12345678901234',
   birthDate: '2000-01-15T00:00:00.000Z',
-  direction: 'Backend',
   balance: 500000,
   photoUrl: '/uploads/students/student_1710000000000.jpg',
   faceDescriptor: null,
@@ -78,7 +78,7 @@ const STUDENT_EXAMPLE = {
   deletedAt: null,
 };
 
-const WRAP = (data: any, statusCode = 200) => ({
+const WRAP = (data: unknown, statusCode = 200) => ({
   data,
   statusCode,
   timestamp: '2026-03-13 10:00:00',
@@ -88,12 +88,6 @@ const NOT_FOUND = {
   statusCode: 404,
   message: 'Talaba topilmadi',
   error: 'Not Found',
-};
-
-const CONFLICT = {
-  statusCode: 409,
-  message: "Bu telefon raqam allaqachon ro'yxatda bor",
-  error: 'Conflict',
 };
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -109,7 +103,7 @@ export class StudentsController {
   // POST /students
   // ─────────────────────────────────────────────
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @UseInterceptors(
     FileInterceptor('photo', {
       storage: diskStorage({
@@ -119,6 +113,7 @@ export class StudentsController {
           cb(null, `temp_${unique}${extname(file.originalname)}`);
         },
       }),
+      limits: { fileSize: 5 * 1024 * 1024 },
       fileFilter: (req, file, cb) => {
         if (!file.mimetype.match(/\/(jpg|jpeg|png|webp)$/)) {
           return cb(
@@ -135,7 +130,13 @@ export class StudentsController {
     description:
       'Yangi talaba yaratadi. Rasm ixtiyoriy — JPG, PNG, WEBP, max 5MB. ' +
       "Bir nechta guruhga bir vaqtda qo'shish mumkin. " +
-      'Rasm yuborilsa yuz avtomatik taniladi va faceDescriptor saqlanadi.',
+      'Rasm yuborilsa yuz avtomatik taniladi va faceDescriptor saqlanadi.\n\n' +
+      '### Shartnoma avtomatik yaratish\n' +
+      "Talaba muvaffaqiyatli yaratilgandan keyin backend shu filialning eng so'nggi shartnoma shabloni orqali DRAFT shartnoma yaratishga urinadi.\n" +
+      "- Filialda shablon bo'lsa: shartnoma avtomatik yaratiladi\n" +
+      "- Shablon bo'lmasa: talaba baribir yaratiladi, shartnoma yozilmaydi va backend logda ogohlantiradi\n" +
+      "- Response student ma'lumotlarini qaytaradi; contract obyekt response ichiga qo'shilmaydi\n" +
+      "- Frontend contract bor-yo'qligini contract API orqali tekshiradi: GET /contracts yoki GET /contracts/student/{studentId}/print",
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
@@ -188,11 +189,6 @@ export class StudentsController {
           example: '2000-01-15',
           description: "Tug'ilgan sana (YYYY-MM-DD)",
         },
-        direction: {
-          type: 'string',
-          example: 'Backend',
-          description: "O'qish yo'nalishi. Ixtiyoriy.",
-        },
         groupIds: {
           type: 'array',
           items: { type: 'string', format: 'uuid' },
@@ -210,7 +206,8 @@ export class StudentsController {
   })
   @ApiResponse({
     status: 201,
-    description: 'Talaba muvaffaqiyatli yaratildi',
+    description:
+      "Talaba muvaffaqiyatli yaratildi. Agar filialda shartnoma shabloni mavjud bo'lsa, backend shu student uchun DRAFT contract ham yaratadi. Response faqat student obyektini qaytaradi.",
     schema: { example: WRAP(STUDENT_EXAMPLE, 201) },
   })
   @ApiResponse({
@@ -236,14 +233,9 @@ export class StudentsController {
       },
     },
   })
-  @ApiResponse({
-    status: 409,
-    description: 'Telefon, PINFL yoki hujjat raqami allaqachon mavjud',
-    schema: { example: CONFLICT },
-  })
   async create(
     @Body() dto: CreateStudentDto,
-    @Req() req: any,
+    @Req() req: IAuthenticatedRequest,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.studentsService.create(dto, req.user, file);
@@ -253,7 +245,12 @@ export class StudentsController {
   // GET /students
   // ─────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.SUPERADMIN)
+  @Roles(
+    UserRole.ADMIN,
+    UserRole.TEACHER,
+    UserRole.SUPERADMIN,
+    UserRole.MANAGER,
+  )
   @ApiOperation({
     summary: "Barcha talabalar ro'yxati",
     description:
@@ -298,16 +295,21 @@ export class StudentsController {
             attendances: undefined,
           },
         ],
-        meta: { totalItems: 87, totalPages: 9, currentPage: 1, itemsPerPage: 10 },
+        meta: {
+          totalItems: 87,
+          totalPages: 9,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
       }),
     },
   })
   async findAll(
+    @Req() req: IAuthenticatedRequest,
     @Query('search') search?: string,
     @Query('groupName') groupName?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page = 1,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit = 10,
-    @Req() req?: any,
     @Query('branchId') branchId?: string,
   ) {
     return this.studentsService.findAll(
@@ -324,7 +326,7 @@ export class StudentsController {
   // GET /students/deleted
   // ─────────────────────────────────────────────
   @Get('deleted')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "O'chirilgan (arxivlangan) talabalar",
     description:
@@ -347,7 +349,6 @@ export class StudentsController {
             id: 'uuid',
             fullName: 'Zulfiya Rahimova',
             phone: '+998909876543',
-            direction: 'Frontend',
             balance: -200000,
             photoUrl: null,
             enrolledGroups: [],
@@ -365,10 +366,10 @@ export class StudentsController {
     },
   })
   async findAllDeleted(
+    @Req() req: IAuthenticatedRequest,
     @Query('search') search?: string,
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page = 1,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit = 10,
-    @Req() req?: any,
   ) {
     return this.studentsService.findAllDeleted(search, page, limit, req.user);
   }
@@ -377,7 +378,7 @@ export class StudentsController {
   // GET /students/:id
   // ─────────────────────────────────────────────
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Roles(UserRole.ADMIN, UserRole.TEACHER, UserRole.MANAGER)
   @ApiOperation({
     summary: "Bitta talaba to'liq ma'lumotlari",
     description:
@@ -395,7 +396,10 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+  async findOne(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: IAuthenticatedRequest,
+  ) {
     return this.studentsService.findOne(id, req.user);
   }
 
@@ -403,7 +407,7 @@ export class StudentsController {
   // PATCH /students/:id
   // ─────────────────────────────────────────────
   @Patch(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Talaba ma'lumotlarini yangilash",
     description:
@@ -430,7 +434,6 @@ export class StudentsController {
           example: '2000-01-15',
           description: 'YYYY-MM-DD',
         },
-        direction: { type: 'string', example: 'Frontend' },
         documentType: {
           type: 'string',
           enum: ['passport', 'birth_certificate'],
@@ -520,15 +523,10 @@ export class StudentsController {
     description: 'Talaba yoki guruh topilmadi',
     schema: { example: NOT_FOUND },
   })
-  @ApiResponse({
-    status: 409,
-    description: 'Telefon, PINFL yoki hujjat raqami band',
-    schema: { example: CONFLICT },
-  })
   async update(
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateStudentDto,
-    @Req() req: any,
+    @Req() req: IAuthenticatedRequest,
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.studentsService.update(id, dto, req.user, file);
@@ -538,7 +536,7 @@ export class StudentsController {
   // DELETE /students/:id
   // ─────────────────────────────────────────────
   @Delete(':id')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Talabani arxivlash (soft delete)',
     description:
@@ -560,7 +558,10 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+  async remove(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: IAuthenticatedRequest,
+  ) {
     return this.studentsService.remove(id, req.user);
   }
 
@@ -568,7 +569,7 @@ export class StudentsController {
   // PATCH /students/:id/restore
   // ─────────────────────────────────────────────
   @Patch(':id/restore')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: 'Arxivlangan talabani tiklash',
     description: 'Soft-delete qilingan talabani faol holatga qaytaradi.',
@@ -589,7 +590,10 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async restore(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+  async restore(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: IAuthenticatedRequest,
+  ) {
     return this.studentsService.restore(id, req.user);
   }
 
@@ -597,7 +601,7 @@ export class StudentsController {
   // DELETE /students/:id/permanent
   // ─────────────────────────────────────────────
   @Delete(':id/permanent')
-  @Roles(UserRole.ADMIN)
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Arxivlangan talabani butunlay o'chirish",
     description:
@@ -630,7 +634,10 @@ export class StudentsController {
     description: 'Talaba topilmadi',
     schema: { example: NOT_FOUND },
   })
-  async hardDelete(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
+  async hardDelete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: IAuthenticatedRequest,
+  ) {
     return this.studentsService.hardDelete(id, req.user);
   }
 }

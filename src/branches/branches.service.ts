@@ -16,6 +16,7 @@ import {
   UpdateBranchLocationDto,
   ToggleTeacherManualAttendanceDto,
 } from './branches.dto';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 @Injectable()
 export class BranchesService {
@@ -90,6 +91,8 @@ export class BranchesService {
         `Yangi filial + admin yaratildi: branch[${savedBranch.id}] admin[${savedAdmin.id}]`,
       );
 
+      // SECURITY FIX: savedAdmin da password hash qolishi mumkin.
+      // Defense-in-depth: response ga chiqmasligini kafolatlash.
       return {
         branch: savedBranch,
         admin: {
@@ -138,10 +141,12 @@ export class BranchesService {
   // ────────────────────────────────────────────────────────────
   // 5. Yangilash
   // ────────────────────────────────────────────────────────────
-  async update(id: string, dto: UpdateBranchDto, user?: any) {
+  async update(id: string, dto: UpdateBranchDto, user?: AuthenticatedUser) {
     await this.findOne(id);
     if (user && user.role === UserRole.ADMIN && user.branchId !== id) {
-      throw new ForbiddenException("Siz faqat o'z filialingizni tahrirlay olasiz");
+      throw new ForbiddenException(
+        "Siz faqat o'z filialingizni tahrirlay olasiz",
+      );
     }
     await this.branchRepo.update(id, dto);
     return this.findOne(id);
@@ -160,7 +165,7 @@ export class BranchesService {
   //    Admin o'z branch'idan boshqa branch'ni o'zgartira olmaydi
   //    Faqat latitude va longitude yangilanadi, boshqa hech narsa
   // ────────────────────────────────────────────────────────────
-  async updateLocation(dto: UpdateBranchLocationDto, user: any) {
+  async updateLocation(dto: UpdateBranchLocationDto, user: AuthenticatedUser) {
     // 1) Admin o'z branch'iga biriktirilganligini tekshirish
     if (!user.branchId) {
       throw new ForbiddenException(
@@ -195,7 +200,7 @@ export class BranchesService {
   // ────────────────────────────────────────────────────────────
   async toggleTeacherManualAttendance(
     dto: ToggleTeacherManualAttendanceDto,
-    user: any,
+    user: AuthenticatedUser,
   ) {
     if (!user.branchId) {
       throw new ForbiddenException(
@@ -219,5 +224,29 @@ export class BranchesService {
     );
 
     return this.findOne(user.branchId);
+  }
+
+  // ────────────────────────────────────────────────────────────
+  // 9. O'qituvchi qo'lda davomat qila olish holatini olish
+  // ────────────────────────────────────────────────────────────
+  async getTeacherManualAttendanceStatus(user: AuthenticatedUser) {
+    if (!user.branchId) {
+      throw new ForbiddenException(
+        'Sizga hech qaysi filial biriktirilmagan. Superadminga murojaat qiling.',
+      );
+    }
+
+    const branch = await this.branchRepo.findOne({
+      where: { id: user.branchId },
+      select: ['id', 'allowTeacherManualAttendance'],
+    });
+
+    if (!branch) {
+      throw new NotFoundException('Sizga biriktirilgan filial topilmadi');
+    }
+
+    return {
+      allowTeacherManualAttendance: branch.allowTeacherManualAttendance,
+    };
   }
 }

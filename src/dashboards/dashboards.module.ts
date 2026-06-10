@@ -8,10 +8,14 @@ import { DashboardService } from './dashboards.service';
 import { DashboardController } from './dashboards.controller';
 import { ExpensesModule } from '../expenses/expenses.module';
 
+import { User } from '../entities/user.entity';
+import { SalaryModule } from '../salarys/salary.module';
+
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Student, Payment, Group, Attendance]),
-    ExpensesModule, // ExpensesService inject qilish uchun
+    TypeOrmModule.forFeature([Student, Payment, Group, Attendance, User]),
+    ExpensesModule,
+    SalaryModule,
   ],
   controllers: [DashboardController],
   providers: [DashboardService],

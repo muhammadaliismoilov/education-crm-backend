@@ -15,6 +15,7 @@ import { DashboardModule } from './dashboards/dashboards.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { redisStore } from 'cache-manager-redis-yet';
 import { CronModule } from './cron/cron.module';
+import { ScheduleModule } from '@nestjs/schedule';
 import { FaceModule } from './common/faceId/faceId.module';
 import { BranchesModule } from './branches/branches.module';
 import { ExpensesModule } from './expenses/expenses.module';
@@ -22,10 +23,13 @@ import { Branch } from './entities/branch.entity';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
+import { ContractsModule } from './contracts/contracts.module';
+import { ContractTemplatesModule } from './contract-templates/contract-templates.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 60 }]),
     CacheModule.registerAsync({
       isGlobal: true,
@@ -49,7 +53,9 @@ import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
         password: configService.get<string>('DB_PASS'),
         database: configService.get<string>('DB_NAME'),
         autoLoadEntities: true,
-        synchronize: true, //process.env.NODE_ENV !== 'production', // Production'da XAVFLI — migratsiya ishlating!
+        synchronize:
+          process.env.NODE_ENV !== 'production' &&
+          configService.get<string>('DB_SYNCHRONIZE') === 'true',
       }),
     }),
     TypeOrmModule.forFeature([Branch]),
@@ -66,6 +72,8 @@ import { IpWhitelistGuard } from './common/guards/ip-whitelist.guard';
     ExpensesModule,
     CronModule,
     FaceModule,
+    ContractsModule,
+    ContractTemplatesModule,
   ],
   providers: [
     SubdomainMiddleware,

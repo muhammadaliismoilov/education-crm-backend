@@ -14,6 +14,7 @@ import { MarkAttendanceDto } from './mark-attendance.dto';
 import { UpdateSingleAttendanceDto } from './update-single-attendance.dto';
 import { UserRole } from '../entities/user.entity';
 import { FaceService } from '../common/faceId/faceId.service';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 @Injectable()
 export class AttendanceService {
@@ -28,7 +29,12 @@ export class AttendanceService {
   ) {}
 
   private checkLessonTime(group: Group, role: UserRole): void {
-    if (role === UserRole.ADMIN || role === UserRole.SUPERADMIN) return;
+    if (
+      role === UserRole.ADMIN ||
+      role === UserRole.SUPERADMIN ||
+      role === UserRole.MANAGER
+    )
+      return;
 
     const rawStart = group.startTime?.includes('-')
       ? group.startTime.split('-')[0].trim()
@@ -87,11 +93,15 @@ export class AttendanceService {
 
   private checkLocation(
     group: Group,
-    user: any,
+    user: AuthenticatedUser,
     incomingLat?: number,
     incomingLon?: number,
   ): void {
-    if (user.role === UserRole.ADMIN || user.role === UserRole.SUPERADMIN)
+    if (
+      user.role === UserRole.ADMIN ||
+      user.role === UserRole.SUPERADMIN ||
+      user.role === UserRole.MANAGER
+    )
       return;
     if (user.role !== UserRole.TEACHER) return;
 
@@ -122,7 +132,7 @@ export class AttendanceService {
     }
   }
 
-  async getAttendanceSheet(groupId: string, date: string, user: any) {
+  async getAttendanceSheet(groupId: string, date: string, user: AuthenticatedUser) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new BadRequestException(
         "Sana formati noto'g'ri. To'g'ri format: YYYY-MM-DD",
@@ -131,7 +141,7 @@ export class AttendanceService {
 
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
-      relations: ['students', 'branch'],
+      relations: ['students', 'branch', 'teacher'],
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
@@ -141,6 +151,13 @@ export class AttendanceService {
     ) {
       throw new ForbiddenException(
         "Sizda ushbu guruh davomatini ko'rish huquqi yo'q",
+      );
+    }
+
+    // Teacher faqat o'z guruhini ko'ra oladi
+    if (user.role === UserRole.TEACHER && group.teacher?.id !== user.id) {
+      throw new ForbiddenException(
+        "Siz faqat o'z guruhingiz davomatini ko'ra olasiz",
       );
     }
 
@@ -187,7 +204,7 @@ export class AttendanceService {
     };
   }
 
-  async markBulk(dto: MarkAttendanceDto, user: any) {
+  async markBulk(dto: MarkAttendanceDto, user: AuthenticatedUser) {
     const { groupId, date, students } = dto;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -198,7 +215,7 @@ export class AttendanceService {
 
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
-      relations: ['branch', 'students'],
+      relations: ['branch', 'students', 'teacher'],
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
@@ -208,6 +225,13 @@ export class AttendanceService {
     ) {
       throw new ForbiddenException(
         "Sizda ushbu guruhga davomat qilish huquqi yo'q",
+      );
+    }
+
+    // Teacher faqat o'z guruhida davomat qila oladi
+    if (user.role === UserRole.TEACHER && group.teacher?.id !== user.id) {
+      throw new ForbiddenException(
+        "Siz faqat o'z guruhingizda davomat qila olasiz",
       );
     }
 
@@ -283,12 +307,12 @@ export class AttendanceService {
     }
   }
 
-  async updateSingleAttendance(dto: UpdateSingleAttendanceDto, user: any) {
+  async updateSingleAttendance(dto: UpdateSingleAttendanceDto, user: AuthenticatedUser) {
     const { groupId, date, studentId, isPresent } = dto;
 
     const group = await this.groupRepo.findOne({
       where: { id: groupId },
-      relations: ['branch', 'students'],
+      relations: ['branch', 'students', 'teacher'],
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
 
@@ -298,6 +322,13 @@ export class AttendanceService {
     ) {
       throw new ForbiddenException(
         "Sizda ushbu guruh davomatini tahrirlash huquqi yo'q",
+      );
+    }
+
+    // Teacher faqat o'z guruhida davomat qila oladi
+    if (user.role === UserRole.TEACHER && group.teacher?.id !== user.id) {
+      throw new ForbiddenException(
+        "Siz faqat o'z guruhingizda davomat qila olasiz",
       );
     }
 
@@ -346,7 +377,7 @@ export class AttendanceService {
     groupId: string,
     date: string,
     base64: string,
-    user: any,
+    user: AuthenticatedUser,
     latitude?: number,
     longitude?: number,
   ) {
@@ -425,8 +456,8 @@ export class AttendanceService {
       `Face verify: guruh=${group.name}, eng yuqori oxshashlik=${highestSimilarity}%`,
     );
 
-    // SENIOR: 2-QADAM - Similarity filtri xatosi to'g'irlandi. 
-    // Yuzingiz turli kundagi yorug'likda 0.45 distance gacha farq qiladi, bu bizning formula bilan 25% ga to'g'ri keladi. 
+    // SENIOR: 2-QADAM - Similarity filtri xatosi to'g'irlandi.
+    // Yuzingiz turli kundagi yorug'likda 0.45 distance gacha farq qiladi, bu bizning formula bilan 25% ga to'g'ri keladi.
     // (Bungacha u 0.27 ideal sharoit talab qilgan)
     if (!matchedStudent || highestSimilarity < 25) {
       return {
@@ -485,7 +516,7 @@ export class AttendanceService {
   async getGroupMonthlyAttendance(
     groupId: string,
     month?: string,
-    user?: any,
+    user?: AuthenticatedUser,
     page = 1,
     limit = 10,
   ) {

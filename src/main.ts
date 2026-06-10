@@ -38,7 +38,16 @@ async function bootstrap() {
   });
 
   app.use(cookieParser());
-  app.use(helmet({ contentSecurityPolicy: false }));
+
+  // SECURITY FIX: CSP faqat development da o'chiriladi (Swagger UI uchun).
+  // Production da helmet to'liq ishlaydi.
+  const isProduction = process.env.NODE_ENV === 'production';
+  app.use(
+    helmet({
+      contentSecurityPolicy: isProduction ? undefined : false,
+    }),
+  );
+
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());
 
@@ -53,40 +62,86 @@ async function bootstrap() {
     }),
   );
 
+  // ─── CORS KONFIGURATSIYA (XAVFSIZ) ────────────────────────────────
+  // SECURITY FIX: .includes() o'rniga .endsWith() ishlatiladi.
+  // Sabab: origin.includes('crm.uz') — evil-crm.uz ham ruxsat oladi.
+  // endsWith('.crm.uz') yoki === 'crm.uz' faqat aniq domenlarni qabul qiladi.
   const clientOriginConfig =
     process.env.CLIENT_ORIGIN || 'https://crm-oquv-markaz.vercel.app';
   const allowedOrigins = clientOriginConfig.split(',').map((o) => o.trim());
 
+  // Ruxsat etilgan domen suffikslari (FAQAT shu domenlar va subdomenlariga ruxsat)
+  const TRUSTED_DOMAIN_SUFFIXES = (
+    process.env.TRUSTED_DOMAINS || 'bar-bers.uz,crm.uz'
+  )
+    .split(',')
+    .map((d) => d.trim())
+    .filter((d) => d.length > 0);
+
+  /**
+   * Domenni xavfsiz tekshirish.
+   * "evil-crm.uz" kabi hujumlardan himoya qiladi.
+   * Faqat aniq domen yoki uning subdomenlariga ruxsat beradi.
+   */
+  const isDomainTrusted = (origin: string): boolean => {
+    try {
+      const url = new URL(origin);
+      const hostname = url.hostname;
+      return TRUSTED_DOMAIN_SUFFIXES.some(
+        (domain) =>
+          hostname === domain || hostname.endsWith(`.${domain}`),
+      );
+    } catch {
+      return false;
+    }
+  };
+
   app.enableCors({
     origin: (origin, callback) => {
-      // Senior Level CORS: Faqatgina tasdiqlangan origin'larga ruxsat beramiz.
-      // 1. Production frontend (yoki bir nechta domen vergul bilan yozilgan bo'lsa)
-      // 2. Localhost (development uchun)
-      const isLocalhost =
-        origin &&
-        (origin.startsWith('http://localhost') ||
-          origin.startsWith('http://127.0.0.1'));
-
-      // VPS IP to'g'ridan CORS ga kirmaydi — faqat domen orqali
-      const isAllowedDomain =
-        origin &&
-        (origin.includes('bar-bers.uz') || origin.includes('crm.uz'));
-
-      if (
-        !origin ||
-        allowedOrigins.includes(origin) ||
-        isLocalhost ||
-        isAllowedDomain
-      ) {
-        callback(null, true);
-      } else {
-        callback(new Error(`CORS: ${origin} bloklandi (Senior Security)`));
+      // SECURITY FIX: origin yo'q so'rovlar (curl, Postman, server-to-server)
+      // production da bloklanadi. Faqat development da ruxsat beriladi.
+      if (!origin) {
+        if (!isProduction) {
+          callback(null, true);
+        } else {
+          callback(
+            new Error('CORS: Origin headersiz so\'rovlar production da bloklangan'),
+          );
+        }
+        return;
       }
+
+      // 1. Aniq ro'yxatdagi originlar (CLIENT_ORIGIN env variable'dan)
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      // 2. Localhost — faqat development uchun
+      if (!isProduction) {
+        const isLocalhost =
+          origin.startsWith('http://localhost') ||
+          origin.startsWith('http://127.0.0.1');
+        if (isLocalhost) {
+          callback(null, true);
+          return;
+        }
+      }
+
+      // 3. Ishonchli domen suffikslari — xavfsiz endsWith() tekshiruvi
+      if (isDomainTrusted(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      // Barchasi rad etildi
+      logger.warn(`CORS bloklandi: ${origin}`);
+      callback(new Error(`CORS: ${origin} bloklandi`));
     },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
     allowedHeaders: 'Content-Type, Accept, Authorization, X-Branch-Subdomain',
-    exposedHeaders: ['Authorization'], // Xavfsizlik uchun faqat kerakli headerlarni ko'rsatamiz
+    exposedHeaders: ['Authorization'],
     maxAge: 3600,
   });
 

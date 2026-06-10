@@ -74,7 +74,8 @@ export class ExpenseFilterDto {
   @ApiProperty({
     required: false,
     example: '2026-01',
-    description: "Oylik filter (YYYY-MM formatida). Berilmasa barchasi qaytadi.",
+    description:
+      'Oylik filter (YYYY-MM formatida). Berilmasa barchasi qaytadi.',
   })
   @IsOptional()
   @IsString()

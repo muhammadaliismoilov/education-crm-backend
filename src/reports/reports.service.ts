@@ -8,9 +8,11 @@ import { Attendance } from '../entities/attendance.entity';
 import { Student } from '../entities/students.entity';
 import type { Cache } from 'cache-manager';
 import { User, UserRole } from '../entities/user.entity';
+import { Expense } from '../entities/expense.entity';
 import * as ExcelJS from 'exceljs';
 import * as express from 'express';
 import { SalaryService } from '../salarys/salary.service';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 //  Redis uchun sekundda (millisekund emas!)
 const CACHE_TTL = {
@@ -30,11 +32,13 @@ export class ReportsService {
     @InjectRepository(User) private userRepo: Repository<User>,
     @InjectRepository(Attendance)
     private attendanceRepo: Repository<Attendance>,
+    @InjectRepository(Expense)
+    private expenseRepo: Repository<Expense>,
     private salaryService: SalaryService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
-  async getYearlyFinancialOverview(year: number, user?: any) {
+  async getYearlyFinancialOverview(year: number, user?: AuthenticatedUser) {
     const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
     const cacheKey = `finance_yearly_${year}_${branchId || 'all'}`;
 
@@ -61,31 +65,29 @@ export class ReportsService {
       .groupBy(`EXTRACT(MONTH FROM p."createdAt")`)
       .getRawMany();
 
-    // ─── 2. QARZDORLIK - oylar bo'yicha ──────────────────────────────
-    const debtQuery = this.paymentRepo
-      .createQueryBuilder('p')
-      .leftJoin('p.student', 's')
-      .leftJoin('p.group', 'g')
-      .leftJoin(
-        'student_discounts',
-        'sd',
-        'sd."studentId" = s.id AND sd."groupId" = g.id',
-      )
+    // ─── 1.5 XARAJATLAR - oylar bo'yicha ──────────────────────────────
+    const expenseQuery = this.expenseRepo
+      .createQueryBuilder('e')
       .select([
-        `EXTRACT(MONTH FROM p."createdAt")                          AS month`,
-        `s.id                                                        AS "studentId"`,
-        `g.id                                                        AS "groupId"`,
-        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END AS "effectivePrice"`,
-        `SUM(CAST(p.amount AS DECIMAL))                             AS "totalPaid"`,
+        `EXTRACT(MONTH FROM e."createdAt") AS month`,
+        `SUM(CAST(e.amount AS DECIMAL))    AS "totalExpense"`,
       ])
-      .where(`p."createdAt" BETWEEN :start AND :end`, { start, end })
-      .andWhere('s.id IS NOT NULL');
-    if (branchId) debtQuery.andWhere('p.branchId = :branchId', { branchId });
-    const debtsByMonth = await debtQuery
-      .groupBy(
-        `EXTRACT(MONTH FROM p."createdAt"), s.id, g.id, sd."customPrice", g.price`,
-      )
+      .where(`e."createdAt" BETWEEN :start AND :end`, { start, end })
+      .andWhere('e."deletedAt" IS NULL');
+    if (branchId) expenseQuery.andWhere('e.branchId = :branchId', { branchId });
+    const expensesByMonth = await expenseQuery
+      .groupBy(`EXTRACT(MONTH FROM e."createdAt")`)
       .getRawMany();
+
+    // ─── 2. QARZDORLIK — student.balance asosida (manfiy balance = qarz) ─
+    const debtQuery = this.studentRepo
+      .createQueryBuilder('s')
+      .select('SUM(s.balance)', 'totalDebt')
+      .where('s.balance < 0')
+      .andWhere('s."deletedAt" IS NULL');
+    if (branchId) debtQuery.andWhere('s."branchId" = :branchId', { branchId });
+    const debtResult = await debtQuery.getRawOne();
+    const totalStudentDebt = Math.abs(Number(debtResult?.totalDebt || 0));
 
     // ─── 3. O'QITUVCHILAR OYLIKLARINI - oylar bo'yicha ───────────────
     const teacherQuery: any = { role: UserRole.TEACHER };
@@ -142,8 +144,11 @@ export class ReportsService {
 
     // ─── 4. 12 OYNI MAP QILISH ────────────────────────────────────────
     let summaryIncome = 0;
-    let summaryPending = 0;
     let summaryTeacherSal = 0;
+    let summaryExpenses = 0;
+
+    const currentMonth = new Date().getMonth() + 1; // 1-12
+    const currentYear = new Date().getFullYear();
 
     const monthlyData = Array.from({ length: 12 }, (_, i) => {
       const monthNum = i + 1;
@@ -151,25 +156,23 @@ export class ReportsService {
       const incomeRow = incomeByMonth.find((r) => Number(r.month) === monthNum);
       const totalIncome = Number(incomeRow?.totalIncome || 0);
 
-      const monthDebts = debtsByMonth.filter(
-        (r) => Number(r.month) === monthNum,
-      );
-      let totalPending = 0;
-      for (const row of monthDebts) {
-        const effectivePrice = Number(row.effectivePrice || 0);
-        const totalPaid = Number(row.totalPaid || 0);
-        if (effectivePrice > totalPaid) {
-          totalPending += effectivePrice - totalPaid;
-        }
-      }
+      // Qarzdorlik faqat joriy oy uchun ko'rsatiladi (student.balance asosida)
+      // O'tgan va kelasi oylar uchun 0, chunki aniq hisoblash mumkin emas
+      const totalPending =
+        year === currentYear && monthNum === currentMonth
+          ? totalStudentDebt
+          : 0;
+
+      const expenseRow = expensesByMonth.find((r) => Number(r.month) === monthNum);
+      const totalExpenses = Number(expenseRow?.totalExpense || 0);
 
       const salaryRow = monthlySalaries.find((r) => r.month === monthNum);
       const totalTeacherSalaries = salaryRow?.totalSalary || 0;
-      const netProfit = totalIncome - totalTeacherSalaries;
+      const netProfit = totalIncome - totalTeacherSalaries - totalExpenses;
 
       summaryIncome += totalIncome;
-      summaryPending += totalPending;
       summaryTeacherSal += totalTeacherSalaries;
+      summaryExpenses += totalExpenses;
 
       return {
         month: monthNum,
@@ -177,6 +180,7 @@ export class ReportsService {
         totalIncome,
         totalPending,
         totalTeacherSalaries,
+        totalExpenses,
         netProfit,
       };
     });
@@ -184,9 +188,10 @@ export class ReportsService {
     // ─── 5. YILLIK SUMMARY ────────────────────────────────────────────
     const summary = {
       totalIncome: summaryIncome,
-      totalPending: summaryPending,
+      totalPending: totalStudentDebt,
       totalTeacherSalaries: summaryTeacherSal,
-      netProfit: summaryIncome - summaryTeacherSal,
+      totalExpenses: summaryExpenses,
+      netProfit: summaryIncome - summaryTeacherSal - summaryExpenses,
       currency: "so'm",
       generatedAt: new Date(),
       period: { from: start, to: end },
@@ -206,7 +211,7 @@ export class ReportsService {
   // ─────────────────────────────────────────────
   // 1. MOLIYAVIY TAHLIL (Kunlik va Oylik)
   // ─────────────────────────────────────────────
-  async getFinancialOverview(startDate: Date, endDate: Date, user?: any) {
+  async getFinancialOverview(startDate: Date, endDate: Date, user?: AuthenticatedUser) {
     const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
     const start = new Date(startDate);
     start.setUTCHours(0, 0, 0, 0);
@@ -241,37 +246,25 @@ export class ReportsService {
       dailyIncomeRaw.map((r) => [r.date, Number(r.income || 0)]),
     );
 
-    // 2. Qarzdorlik (Pending amount)
-    const debtQuery = this.paymentRepo
-      .createQueryBuilder('p')
-      .leftJoin('p.student', 's')
-      .leftJoin('p.group', 'g')
-      .leftJoin(
-        'student_discounts',
-        'sd',
-        'sd."studentId" = s.id AND sd."groupId" = g.id',
-      )
-      .select([
-        's.id                                                  AS "studentId"',
-        'g.id                                                  AS "groupId"',
-        `CASE WHEN sd."customPrice" > 0 THEN sd."customPrice" ELSE CAST(g.price AS DECIMAL) END AS "effectivePrice"`,
-        'SUM(CAST(p.amount AS DECIMAL))                       AS "totalPaid"',
-      ])
-      .where('p."createdAt" BETWEEN :start AND :end', { start, end })
-      .andWhere('s.id IS NOT NULL');
-    if (branchId) debtQuery.andWhere('p.branchId = :branchId', { branchId });
-    const allDebts = await debtQuery
-      .groupBy('s.id, g.id, sd."customPrice", g.price')
-      .getRawMany();
+    // 1.5 Jami xarajatlar
+    const expenseQuery = this.expenseRepo
+      .createQueryBuilder('e')
+      .select('SUM(CAST(e.amount AS DECIMAL)) AS expense')
+      .where('e."createdAt" BETWEEN :start AND :end', { start, end })
+      .andWhere('e."deletedAt" IS NULL');
+    if (branchId) expenseQuery.andWhere('e.branchId = :branchId', { branchId });
+    const expenseRaw = await expenseQuery.getRawOne();
+    const totalExpenses = Number(expenseRaw?.expense || 0);
 
-    let totalPending = 0;
-    for (const row of allDebts) {
-      const effectivePrice = Number(row.effectivePrice || 0);
-      const totalPaid = Number(row.totalPaid || 0);
-      if (effectivePrice > totalPaid) {
-        totalPending += effectivePrice - totalPaid;
-      }
-    }
+    // 2. Qarzdorlik — student.balance asosida (manfiy balance = qarz)
+    const debtQuery = this.studentRepo
+      .createQueryBuilder('s')
+      .select('SUM(s.balance)', 'totalDebt')
+      .where('s.balance < 0')
+      .andWhere('s."deletedAt" IS NULL');
+    if (branchId) debtQuery.andWhere('s."branchId" = :branchId', { branchId });
+    const debtResult = await debtQuery.getRawOne();
+    const totalPending = Math.abs(Number(debtResult?.totalDebt || 0));
 
     // 3. O'qituvchilar oyligi (Salaries)
     const teacherQuery: any = { role: UserRole.TEACHER };
@@ -295,15 +288,14 @@ export class ReportsService {
     );
 
     // 4. O'qituvchilar joriy oyi uchun jami oyliklarni summaryda ko'rsatamiz
+    const totalIncome = Array.from(incomeMap.values()).reduce((a, b) => a + b, 0);
     const result = {
-      totalIncome: Math.round(
-        Array.from(incomeMap.values()).reduce((a, b) => a + b, 0),
-      ),
+      totalIncome: Math.round(totalIncome),
       totalPending,
       totalTeacherSalaries: Math.round(totalTeacherSalaries),
+      totalExpenses: Math.round(totalExpenses),
       netProfit: Math.round(
-        Array.from(incomeMap.values()).reduce((a, b) => a + b, 0) -
-          totalTeacherSalaries,
+        totalIncome - totalTeacherSalaries - totalExpenses,
       ),
       currency: "so'm",
       generatedAt: new Date(),
@@ -322,7 +314,7 @@ export class ReportsService {
   // ─────────────────────────────────────────────
   // 2. QARZDORLAR EXCEL EXPORT
   // ─────────────────────────────────────────────
-  async exportDebtorsToExcel(res: express.Response, user?: any) {
+  async exportDebtorsToExcel(res: express.Response, user?: AuthenticatedUser) {
     const branchId = user && user.role !== 'superadmin' ? user.branchId : null;
     const rawQuery = this.studentRepo.manager
       .createQueryBuilder()
@@ -436,7 +428,7 @@ export class ReportsService {
   async getTeacherPerformance(
     startDate: Date,
     endDate: Date,
-    user?: any,
+    user?: AuthenticatedUser,
     page = 1,
     limit = 10,
   ) {

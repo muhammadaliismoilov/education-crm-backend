@@ -80,21 +80,21 @@ export class PaymentController {
   // POST /payments
   // ─────────────────────────────────────────────
   @Post()
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Yangi to'lov yaratish",
     description:
+      "Ushbu API orqali talaba uchun ma'lum bir guruhga to'lov qabul qilinadi. " +
       "To'lov yaratilganda talabaning balansi avtomatik qayta hisoblanadi. " +
-      "Imtiyozli narx mavjud bo'lsa coursePrice shu narxdan hisoblanadi.",
+      "Agar talabada imtiyoz bo'lsa, kurs narxi avtomatik ravishda shu imtiyozli narx bilan hisoblanadi. " +
+      "Faqat Admin, Superadmin va Managerlar uchun ruxsat berilgan.",
   })
   @ApiResponse({
     status: 201,
-    description: "To'lov muvaffaqiyatli yaratildi",
+    description: "To'lov muvaffaqiyatli yaratildi. Javobda to'lov haqida barcha hisob-kitoblar qaytariladi.",
     schema: {
       example: WRAP(
         {
-          // TUZATISH: service { ...saved, debt, advanceBalance, coverageMonths,
-          // coursePrice, paidAmount, isFullyPaid, hasDiscount } qaytaradi
           ...PAYMENT_EXAMPLE,
           coverageMonths: 1,
         },
@@ -104,7 +104,7 @@ export class PaymentController {
   })
   @ApiResponse({
     status: 400,
-    description: 'Talaba guruhga yozilmagan yoki narx belgilanmagan',
+    description: "Noto'g'ri so'rov. Talaba guruhga a'zo emas yoki guruh narxi belgilanmagan.",
     schema: {
       example: {
         statusCode: 400,
@@ -115,7 +115,7 @@ export class PaymentController {
   })
   @ApiResponse({
     status: 404,
-    description: 'Talaba topilmadi',
+    description: "Topilmadi. Talaba yoki guruh mavjud emas.",
     schema: {
       example: {
         statusCode: 404,
@@ -132,30 +132,47 @@ export class PaymentController {
   // GET /payments
   // ─────────────────────────────────────────────
   @Get()
-  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN)
+  @Roles(UserRole.SUPERADMIN, UserRole.ADMIN, UserRole.MANAGER)
   @ApiOperation({
-    summary: "Barcha to'lovlarni filtrlash va sahifalab olish",
-    description: "Talaba ismi bo'yicha qidiruv va sahifalash imkoniyati.",
+    summary: "To'lovlarni filtrlash va ro'yxatini olish",
+    description: "Barcha to'lovlarni sahifalab va turli parametrlar bo'yicha filtrlash imkonini beradi.",
   })
   @ApiQuery({
     name: 'search',
     required: false,
-    description: "Talaba ismi bo'yicha qidiruv",
+    description: "Talabaning ismi yoki familiyasi bo'yicha qidirish uchun foydalaniladi.",
+    example: 'Alisher',
   })
-  @ApiQuery({ name: 'page', required: false, example: 1 })
-  @ApiQuery({ name: 'limit', required: false, example: 10 })
+  @ApiQuery({ 
+    name: 'page', 
+    required: false, 
+    example: 1,
+    description: "Sahifa raqami (default: 1)" 
+  })
+  @ApiQuery({ 
+    name: 'limit', 
+    required: false, 
+    example: 10,
+    description: "Bir sahifadagi elementlar soni (default: 10)" 
+  })
   @ApiQuery({
     name: 'branchId',
     required: false,
-    description: "Filial bo'yicha filter (faqat Superadmin uchun)",
+    description: "Filial bo'yicha filtrlash. FAQAT Superadmin uchun ishlaydi.",
+    format: 'uuid',
   })
   @ApiResponse({
     status: 200,
-    description: "To'lovlar ro'yxati",
+    description: "To'lovlar ro'yxati muvaffaqiyatli qaytarildi.",
     schema: {
       example: WRAP({
         data: [PAYMENT_EXAMPLE],
-        meta: { totalItems: 50, totalPages: 5, currentPage: 1, itemsPerPage: 10 },
+        meta: {
+          totalItems: 50,
+          totalPages: 5,
+          currentPage: 1,
+          itemsPerPage: 10,
+        },
       }),
     },
   })
@@ -179,16 +196,21 @@ export class PaymentController {
   // GET /payments/:id/receipt
   // ─────────────────────────────────────────────
   @Get(':id/receipt')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
-    summary: "To'lov cheki ma'lumotlarini olish",
+    summary: "To'lov cheki uchun ma'lumotlarni olish",
     description:
-      "Chek uchun kerakli barcha ma'lumotlar: talaba, guruh, to'lov holati.",
+      "Ushbu endpoint to'lovdan so'ng chekni chop etish uchun kerak bo'ladigan barcha batafsil ma'lumotlarni (talaba, guruh narxi, to'lov holati va h.k.) qaytaradi.",
   })
-  @ApiParam({ name: 'id', description: "To'lov UUID si", format: 'uuid' })
+  @ApiParam({ 
+    name: 'id', 
+    description: "Ma'lumotlari olinishi kerak bo'lgan to'lovning UUID identifikatori.", 
+    format: 'uuid',
+    example: 'f6ed8de6-1f66-4f20-b1da-aecd5bc2b5a8'
+  })
   @ApiResponse({
     status: 200,
-    description: "Chek ma'lumotlari",
+    description: "Chek uchun barcha kerakli ma'lumotlar.",
     schema: {
       example: WRAP({
         receiptNumber: 'PAY-F6ED',
@@ -217,7 +239,7 @@ export class PaymentController {
   })
   @ApiResponse({
     status: 404,
-    description: "To'lov topilmadi",
+    description: "To'lov topilmadi.",
     schema: { example: NOT_FOUND },
   })
   async getReceipt(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
@@ -228,22 +250,27 @@ export class PaymentController {
   // GET /payments/:id
   // ─────────────────────────────────────────────
   @Get(':id')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "Bitta to'lov ma'lumotini olish",
-    description: 'student va group relation bilan birga qaytariladi.',
+    description: "ID orqali to'lov haqida barcha ma'lumotlarni (talaba va guruh bilan birga) oladi.",
   })
-  @ApiParam({ name: 'id', description: "To'lov UUID si", format: 'uuid' })
+  @ApiParam({ 
+    name: 'id', 
+    description: "Olinadigan to'lovning UUID identifikatori.", 
+    format: 'uuid',
+    example: 'f6ed8de6-1f66-4f20-b1da-aecd5bc2b5a8'
+  })
   @ApiResponse({
     status: 200,
-    description: "To'lov ma'lumotlari",
+    description: "To'lov ma'lumotlari muvaffaqiyatli topildi.",
     schema: {
       example: WRAP(PAYMENT_EXAMPLE),
     },
   })
   @ApiResponse({
     status: 404,
-    description: "To'lov topilmadi",
+    description: "To'lov topilmadi.",
     schema: { example: NOT_FOUND },
   })
   findOne(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {
@@ -254,22 +281,27 @@ export class PaymentController {
   // PATCH /payments/:id
   // ─────────────────────────────────────────────
   @Patch(':id')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "To'lovni tahrirlash",
     description:
-      'amount yoki paymentDate ni yangilash mumkin. ' +
-      "amount o'zgarsa talabaning balansi avtomatik qayta hisoblanadi.",
+      "To'lovning summa miqdori yoki sanasini o'zgartirish uchun foydalaniladi. " +
+      "Agar summa o'zgarsa, talabaning umumiy balansi ham avtomatik qayta hisoblanadi.",
   })
-  @ApiParam({ name: 'id', description: "To'lov UUID si", format: 'uuid' })
+  @ApiParam({ 
+    name: 'id', 
+    description: "Tahrirlanadigan to'lovning UUID identifikatori.", 
+    format: 'uuid',
+    example: 'f6ed8de6-1f66-4f20-b1da-aecd5bc2b5a8'
+  })
   @ApiResponse({
     status: 200,
-    description: "To'lov muvaffaqiyatli yangilandi",
+    description: "To'lov muvaffaqiyatli yangilandi.",
     schema: { example: WRAP(PAYMENT_EXAMPLE) },
   })
   @ApiResponse({
     status: 404,
-    description: "To'lov topilmadi",
+    description: "To'lov topilmadi.",
     schema: { example: NOT_FOUND },
   })
   update(
@@ -284,16 +316,22 @@ export class PaymentController {
   // DELETE /payments/:id
   // ─────────────────────────────────────────────
   @Delete(':id')
-  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN)
+  @Roles(UserRole.ADMIN, UserRole.SUPERADMIN, UserRole.MANAGER)
   @ApiOperation({
     summary: "To'lovni o'chirish (bekor qilish)",
     description:
-      "To'lov o'chirilgandan so'ng talabaning balansi avtomatik qayta hisoblanadi.",
+      "Xato kiritilgan yoki bekor qilingan to'lovni o'chirish. " +
+      "O'chirilgandan so'ng talabaning balansi avtomatik ravishda to'lovdan oldingi holatiga qaytariladi.",
   })
-  @ApiParam({ name: 'id', description: "To'lov UUID si", format: 'uuid' })
+  @ApiParam({ 
+    name: 'id', 
+    description: "O'chiriladigan to'lovning UUID identifikatori.", 
+    format: 'uuid',
+    example: 'f6ed8de6-1f66-4f20-b1da-aecd5bc2b5a8'
+  })
   @ApiResponse({
     status: 200,
-    description: "To'lov muvaffaqiyatli o'chirildi",
+    description: "To'lov muvaffaqiyatli o'chirildi va balanslar yangilandi.",
     schema: {
       example: WRAP({
         success: true,
@@ -303,7 +341,7 @@ export class PaymentController {
   })
   @ApiResponse({
     status: 404,
-    description: "To'lov topilmadi",
+    description: "To'lov topilmadi.",
     schema: { example: NOT_FOUND },
   })
   remove(@Param('id', ParseUUIDPipe) id: string, @Req() req: any) {

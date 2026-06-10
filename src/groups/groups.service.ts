@@ -6,12 +6,13 @@ import {
 } from '@nestjs/common';
 import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { Group } from '../entities/group.entity';
-import { Between, DataSource, Repository } from 'typeorm';
+import { DataSource, QueryRunner, Repository } from 'typeorm';
 import { CreateGroupDto, UpdateGroupDto } from './group.dto';
 import { Student } from '../entities/students.entity';
-import { Invoice } from '../entities/invoice.entity';
+import { Invoice, InvoiceStatus } from '../entities/invoice.entity';
 import { StudentDiscount } from '../entities/studentDiscount';
 import { Payment } from '../entities/payment.entity';
+import { AuthenticatedUser } from '../common/interfaces/auth.interface';
 
 @Injectable()
 export class GroupsService {
@@ -23,23 +24,22 @@ export class GroupsService {
     @InjectDataSource() private dataSource: DataSource,
   ) {}
 
-  private getCurrentMonthBounds(): { start: Date; end: Date } {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const end = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999,
-    );
-    return { start, end };
+  private getCurrentMonthBounds(): { billingMonth: string } {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Tashkent',
+      year: 'numeric',
+      month: '2-digit',
+    }).formatToParts(new Date());
+    const year = Number(parts.find((part) => part.type === 'year')?.value);
+    const month = Number(parts.find((part) => part.type === 'month')?.value);
+
+    return {
+      billingMonth: `${year}-${String(month).padStart(2, '0')}-01`,
+    };
   }
 
   private async recalculateStudentBalance(
-    queryRunner: any,
+    queryRunner: QueryRunner,
     studentId: string,
   ): Promise<void> {
     const totalPaidRow = await queryRunner.manager
@@ -52,6 +52,7 @@ export class GroupsService {
       .createQueryBuilder(Invoice, 'i')
       .select('SUM(CAST(i.amount AS DECIMAL))', 'totalInvoiced')
       .where('i.studentId = :studentId', { studentId })
+      .andWhere('i.status = :status', { status: InvoiceStatus.ACTIVE })
       .getRawOne();
 
     const totalPaid = Number(totalPaidRow?.totalPaid || 0);
@@ -64,7 +65,7 @@ export class GroupsService {
     );
   }
 
-  async create(dto: CreateGroupDto, user: any) {
+  async create(dto: CreateGroupDto, user: AuthenticatedUser) {
     await this.checkTeacherAvailability(dto.teacherId, dto.days, dto.startTime);
 
     const group = this.groupRepo.create({
@@ -91,7 +92,7 @@ export class GroupsService {
     search?: string,
     page = 1,
     limit = 10,
-    user?: any,
+    user?: AuthenticatedUser,
     branchId?: string,
   ) {
     const query = this.groupRepo
@@ -181,7 +182,7 @@ export class GroupsService {
       // 1. Guruhdan hamma o'quvchilarni chiqaramiz (join table'dan o'chirish uchun Group'ni saqlaymiz)
       const studentsToArchive = [];
       const studentsToCheck = [...group.students]; // nusxa olamiz
-      
+
       group.students = []; // Hamma o'quvchilarni guruhdan chiqaramiz
       await queryRunner.manager.save(Group, group);
 
@@ -195,10 +196,15 @@ export class GroupsService {
           relations: ['enrolledGroups'],
         });
 
-        if (studentWithGroups && studentWithGroups.enrolledGroups.length === 0) {
+        if (
+          studentWithGroups &&
+          studentWithGroups.enrolledGroups.length === 0
+        ) {
           await queryRunner.manager.softRemove(Student, studentWithGroups);
           archivedStudentsCount++;
-          this.logger.log(`Talaba arxivlandi (guruhi qolmadi) [id: ${student.id}]`);
+          this.logger.log(
+            `Talaba arxivlandi (guruhi qolmadi) [id: ${student.id}]`,
+          );
         }
       }
 
@@ -212,9 +218,9 @@ export class GroupsService {
         `Guruh arxivlandi [id: ${id}]. ${archivedStudentsCount} ta talaba ham arxivlandi.`,
       );
 
-      return { 
-        message: 'Guruh arxivlandi', 
-        archivedStudents: archivedStudentsCount 
+      return {
+        message: 'Guruh arxivlandi',
+        archivedStudents: archivedStudentsCount,
       };
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -228,7 +234,12 @@ export class GroupsService {
   // ─────────────────────────────────────────────
   // ARCHIVED GROUPS HANDLING (SENIOR APPROACH)
   // ─────────────────────────────────────────────
-  async findAllDeleted(search?: string, page = 1, limit = 10, user?: any) {
+  async findAllDeleted(
+    search?: string,
+    page = 1,
+    limit = 10,
+    user?: AuthenticatedUser,
+  ) {
     const query = this.groupRepo
       .createQueryBuilder('group')
       .withDeleted()
@@ -272,7 +283,7 @@ export class GroupsService {
     group.isActive = true;
     await this.groupRepo.save(group);
     await this.groupRepo.restore(id);
-    
+
     this.logger.log(`Guruh arxivdan tiklandi [id: ${id}]`);
     return this.getGroupDetails(id);
   }
@@ -284,14 +295,15 @@ export class GroupsService {
     });
     if (!group) throw new NotFoundException('Guruh topilmadi');
     if (!group.deletedAt) {
-      throw new BadRequestException("Faqat arxivlangan guruhni butunlay o'chirish mumkin");
+      throw new BadRequestException(
+        "Faqat arxivlangan guruhni butunlay o'chirish mumkin",
+      );
     }
 
     await this.groupRepo.remove(group);
     this.logger.log(`Guruh butunlay o'chirildi [id: ${id}]`);
     return { message: "Guruh butunlay o'chirildi" };
   }
-
 
   async addStudentToGroup(groupId: string, studentId: string) {
     const queryRunner = this.dataSource.createQueryRunner();
@@ -301,7 +313,7 @@ export class GroupsService {
     try {
       const group = await queryRunner.manager.findOne(Group, {
         where: { id: groupId },
-        relations: ['students'],
+        relations: ['students', 'branch'],
       });
       if (!group) throw new NotFoundException('Guruh topilmadi');
 
@@ -330,13 +342,13 @@ export class GroupsService {
           : Number(group.price || 0);
 
       if (effectivePrice > 0) {
-        const { start, end } = this.getCurrentMonthBounds();
+        const { billingMonth } = this.getCurrentMonthBounds();
         const existingThisMonth = await queryRunner.manager.findOne(Invoice, {
           where: {
             student: { id: studentId },
             group: { id: groupId },
             type: 'monthly_fee',
-            createdAt: Between(start, end),
+            billingMonth,
           },
         });
 
@@ -344,8 +356,10 @@ export class GroupsService {
           const invoice = queryRunner.manager.create(Invoice, {
             amount: effectivePrice,
             type: 'monthly_fee',
+            billingMonth,
             student: { id: studentId },
             group: { id: groupId },
+            branch: group.branch ? { id: group.branch.id } : null,
           });
           await queryRunner.manager.save(invoice);
         }
@@ -369,20 +383,223 @@ export class GroupsService {
   }
 
   async removeStudentFromGroup(groupId: string, studentId: string) {
-    const group = await this.getGroupDetails(groupId);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    const studentIndex = group.students.findIndex((s) => s.id === studentId);
-    if (studentIndex === -1)
-      throw new NotFoundException('Bu talaba ushbu guruhda topilmadi');
+    try {
+      const group = await queryRunner.manager.findOne(Group, {
+        where: { id: groupId },
+        relations: ['students'],
+      });
+      if (!group) throw new NotFoundException('Guruh topilmadi');
 
-    group.students.splice(studentIndex, 1);
-    await this.groupRepo.save(group);
+      const studentIndex = group.students.findIndex((s) => s.id === studentId);
+      if (studentIndex === -1)
+        throw new NotFoundException('Bu talaba ushbu guruhda topilmadi');
 
-    this.logger.log(
-      `Talaba guruhdan chiqarildi [group: ${groupId}] [student: ${studentId}]`,
-    );
+      // Variant A: Invoice QOLADI — o'chirilmaydi, CANCELLED qilinmaydi
+      // Faqat ManyToMany relation o'chiriladi
+      group.students.splice(studentIndex, 1);
+      await queryRunner.manager.save(Group, group);
 
-    return { message: 'Talaba guruhdan muvaffaqiyatli chetlatildi' };
+      // Balance qayta hisoblanadi (yangi guruhlar ro'yxatiga mos)
+      await this.recalculateStudentBalance(queryRunner, studentId);
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(
+        `Talaba guruhdan chiqarildi [group: ${groupId}] [student: ${studentId}]`,
+      );
+
+      return { message: 'Talaba guruhdan muvaffaqiyatli chetlatildi' };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      if (
+        err instanceof NotFoundException ||
+        err instanceof BadRequestException
+      ) {
+        throw err;
+      }
+      this.logger.error('Guruhdan chiqarishda xatolik', err.stack);
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  // ─────────────────────────────────────────────
+  // TRANSFER — Talabani bir guruhdan boshqasiga o'tkazish
+  //
+  // Qoidalar:
+  //   200k→200k, to'lagan → eski CANCELLED, yangi 200k → balance 0
+  //   200k→250k, to'lagan → eski CANCELLED, yangi 250k → balance -50k (farq qarz)
+  //   200k→150k, to'lagan → eski CANCELLED, yangi 150k → balance +50k (overpayment)
+  //   To'lamagan           → eski CANCELLED, yangi to'liq → to'liq qarz
+  // ─────────────────────────────────────────────
+  async transferStudent(
+    studentId: string,
+    fromGroupId: string,
+    toGroupId: string,
+    user: AuthenticatedUser,
+  ) {
+    if (fromGroupId === toGroupId) {
+      throw new BadRequestException("Bir xil guruhga ko'chirish mumkin emas");
+    }
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // 1. Talaba va guruhlarni tekshirish
+      const student = await queryRunner.manager.findOne(Student, {
+        where: { id: studentId },
+        relations: ['enrolledGroups', 'branch'],
+      });
+      if (!student) throw new NotFoundException('Talaba topilmadi');
+
+      const fromGroup = await queryRunner.manager.findOne(Group, {
+        where: { id: fromGroupId },
+        relations: ['students', 'branch'],
+      });
+      if (!fromGroup) throw new NotFoundException('Chiqish guruhi topilmadi');
+
+      const toGroup = await queryRunner.manager.findOne(Group, {
+        where: { id: toGroupId },
+        relations: ['students', 'branch'],
+      });
+      if (!toGroup) throw new NotFoundException('Kirish guruhi topilmadi');
+
+      // Filial bo'yicha xavfsizlik tekshiruvi (superadmin bo'lmagan foydalanuvchilar uchun)
+      if (user && user.role !== 'superadmin') {
+        if (student.branch?.id !== user.branchId) {
+          throw new NotFoundException(
+            'Talaba topilmadi yoki ushbu filialga tegishli emas',
+          );
+        }
+        if (fromGroup.branch?.id !== user.branchId) {
+          throw new NotFoundException(
+            'Chiqish guruhi topilmadi yoki ushbu filialga tegishli emas',
+          );
+        }
+        if (toGroup.branch?.id !== user.branchId) {
+          throw new NotFoundException(
+            'Kirish guruhi topilmadi yoki ushbu filialga tegishli emas',
+          );
+        }
+      }
+
+      // Talaba eski guruhda bormi?
+      const isInFromGroup = fromGroup.students.some((s) => s.id === studentId);
+      if (!isInFromGroup)
+        throw new BadRequestException('Talaba chiqish guruhida topilmadi');
+
+      // Talaba allaqachon yangi guruhda bormi?
+      const isInToGroup = toGroup.students.some((s) => s.id === studentId);
+      if (isInToGroup)
+        throw new BadRequestException('Talaba allaqachon kirish guruhida bor');
+
+      // 2. Eski guruhdan chiqarish
+      fromGroup.students = fromGroup.students.filter((s) => s.id !== studentId);
+      await queryRunner.manager.save(Group, fromGroup);
+
+      // 3. Yangi guruhga qo'shish
+      await queryRunner.manager
+        .createQueryBuilder()
+        .relation(Group, 'students')
+        .of(toGroupId)
+        .add(studentId);
+
+      // 4. Invoice almashtiruvi: eski → CANCELLED, yangi → ACTIVE
+      const { billingMonth } = this.getCurrentMonthBounds();
+
+      // 4a. Eski guruhning bu oydagi ACTIVE invoicesini CANCELLED qilish
+      const oldInvoice = await queryRunner.manager.findOne(Invoice, {
+        where: {
+          student: { id: studentId },
+          group: { id: fromGroupId },
+          type: 'monthly_fee',
+          billingMonth,
+          status: InvoiceStatus.ACTIVE,
+        },
+      });
+
+      if (oldInvoice) {
+        oldInvoice.status = InvoiceStatus.CANCELLED;
+        await queryRunner.manager.save(Invoice, oldInvoice);
+        this.logger.log(
+          `Transfer: eski invoice CANCELLED [invoice: ${oldInvoice.id}] [amount: ${oldInvoice.amount}]`,
+        );
+      }
+
+      // 4b. Yangi guruh uchun invoice yaratish (toGroup narxida)
+      const toDiscount = await queryRunner.manager.findOne(StudentDiscount, {
+        where: { student: { id: studentId }, group: { id: toGroupId } },
+      });
+      const toEffectivePrice =
+        toDiscount && Number(toDiscount.customPrice) > 0
+          ? Number(toDiscount.customPrice)
+          : Number(toGroup.price || 0);
+
+      if (toEffectivePrice > 0) {
+        // Yangi guruhda allaqachon ACTIVE invoice bormi tekshirish
+        const existingToInvoice = await queryRunner.manager.findOne(Invoice, {
+          where: {
+            student: { id: studentId },
+            group: { id: toGroupId },
+            type: 'monthly_fee',
+            billingMonth,
+            status: InvoiceStatus.ACTIVE,
+          },
+        });
+
+        if (!existingToInvoice) {
+          const newInvoice = queryRunner.manager.create(Invoice, {
+            amount: toEffectivePrice,
+            type: 'monthly_fee',
+            billingMonth,
+            student: { id: studentId },
+            group: { id: toGroupId },
+            branch: toGroup.branch ? { id: toGroup.branch.id } : null,
+          });
+          await queryRunner.manager.save(Invoice, newInvoice);
+          this.logger.log(
+            `Transfer: yangi invoice yaratildi [group: ${toGroupId}] [amount: ${toEffectivePrice}]`,
+          );
+        }
+      }
+
+      // 5. Balance qayta hisoblash
+      await this.recalculateStudentBalance(queryRunner, studentId);
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(
+        `Talaba ko'chirildi [student: ${studentId}] [from: ${fromGroupId}] [to: ${toGroupId}]`,
+      );
+
+      return {
+        message: "Talaba muvaffaqiyatli ko'chirildi",
+        fromGroup: fromGroupId,
+        toGroup: toGroupId,
+      };
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      if (
+        err instanceof NotFoundException ||
+        err instanceof BadRequestException
+      ) {
+        throw err;
+      }
+      this.logger.error(
+        `Talaba ko'chirishda xatolik [student: ${studentId}]`,
+        err.stack,
+      );
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   private async checkTeacherAvailability(

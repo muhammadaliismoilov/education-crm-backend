@@ -29,8 +29,8 @@ export class AllExceptionsFilter implements ExceptionFilter {
       const res = exception.getResponse();
       message = typeof res === 'object' ? res['message'] : res;
     } else {
-      // DEBUG: Temporarily exposing error stack for debugging
-      message = exception instanceof Error ? exception.stack : 'Unknown Error: ' + String(exception);
+      // PRODUCTION: Stack trace foydalanuvchiga ko'rsatilmaydi — logger da ko'rinadi
+      message = 'Internal server error';
     }
 
     // 3. Terminalda (Log) xatoni to'liq ko'rish (Stack trace bilan)
